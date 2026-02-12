@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:wght@600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Space Grotesk', sans-serif;
+  --font-display: 'Fraunces', serif;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: #F8FAFC;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 500ms ease, transform 500ms ease;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes demoStep {
+  0%, 20% { opacity: 0.2; transform: translateY(6px); }
+  30%, 70% { opacity: 1; transform: translateY(0); }
+  80%, 100% { opacity: 0.4; transform: translateY(-4px); }
+}
+
+@keyframes demoProgress {
+  0% { width: 5%; }
+  60% { width: 72%; }
+  100% { width: 100%; }
+}
+
+.demo-step-1 { animation: demoStep 6s ease-in-out infinite; }
+.demo-step-2 { animation: demoStep 6s ease-in-out infinite 1.5s; }
+.demo-step-3 { animation: demoStep 6s ease-in-out infinite 3s; }
+.demo-progress { animation: demoProgress 6s ease-in-out infinite; }
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-soft {
+  animation: pulseSoft 1.6s ease-in-out infinite;
+}

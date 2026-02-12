@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://megaconvert.netlify.app/sitemap.xml

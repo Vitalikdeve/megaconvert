@@ -1,0 +1,27 @@
+services:
+  api:
+    build: ./server/api
+    env_file: ./server/.env
+    environment:
+      - STORAGE_MODE=local
+      - LOCAL_STORAGE_DIR=/data
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+    depends_on:
+      - redis
+  worker:
+    build: ./server/worker
+    env_file: ./server/.env
+    environment:
+      - STORAGE_MODE=local
+      - LOCAL_STORAGE_DIR=/data
+    volumes:
+      - ./data:/data
+    depends_on:
+      - redis
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
