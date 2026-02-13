@@ -229,12 +229,66 @@ const Badge = ({ children, color = "blue" }) => {
   return <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wider ${colors[color]}`}>{children}</span>;
 };
 
+const Page = ({ title, subtitle, actions, children }) => (
+  <div className="pt-32 pb-20 px-4">
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-10">
+        <h1 className="text-4xl md:text-5xl font-extrabold">{title}</h1>
+        {subtitle && <p className="text-slate-600 text-lg mt-4">{subtitle}</p>}
+        {actions && <div className="mt-6 flex flex-wrap gap-3">{actions}</div>}
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
+const PageCard = ({ children, className = "" }) => (
+  <div className={`bg-white rounded-2xl border border-slate-200 p-6 shadow-sm ${className}`}>{children}</div>
+);
+
+const BLOG_POSTS = [
+  { title: 'How we keep conversions private', desc: 'Security controls, temporary storage, and zero-access processing.', date: 'Feb 10, 2026' },
+  { title: 'PDF to Word quality guide', desc: 'Best practices to preserve layout and fonts.', date: 'Feb 02, 2026' },
+  { title: 'Video compression without losing quality', desc: 'Recommended presets for fast, clean output.', date: 'Jan 28, 2026' },
+  { title: 'OCR accuracy tips', desc: 'Improve recognition for scans and photos.', date: 'Jan 19, 2026' },
+  { title: 'Batch conversion workflows', desc: 'Save hours with queued processing and bundles.', date: 'Jan 11, 2026' },
+  { title: 'Enterprise readiness checklist', desc: 'Policies, audit logs, and SLA basics.', date: 'Jan 03, 2026' }
+];
+
+const FAQ_ITEMS = [
+  { q: 'Is MegaConvert free?', a: 'Yes. Core conversions are free with optional PRO upgrades.' },
+  { q: 'How long are files stored?', a: 'Files are auto-deleted after 24 hours by default.' },
+  { q: 'Do you read or review my files?', a: 'No. Files are processed automatically with no manual access.' },
+  { q: 'What is the maximum file size?', a: 'Up to 1 GB per file on the current plan.' },
+  { q: 'Do you support batch conversion?', a: 'Yes. Upload multiple files and receive a zipped output.' },
+  { q: 'Is my data encrypted?', a: 'Yes. Transfers are encrypted in transit and storage is protected.' },
+  { q: 'Which formats are supported?', a: 'Documents, images, audio, video, and archives. See /convert and tools list.' },
+  { q: 'Why did my conversion fail?', a: 'Common causes are corrupted files or unsupported content. Retry or choose another tool.' },
+  { q: 'Can I convert scanned PDFs to text?', a: 'Yes. Use OCR to extract text from images or scans.' },
+  { q: 'Do you keep backups of my files?', a: 'Backups are encrypted and short-lived for operational stability.' },
+  { q: 'Can I delete my account?', a: 'Yes. Use the dashboard deletion request.' },
+  { q: 'How do I export my data?', a: 'Use the dashboard export option and a link is emailed.' },
+  { q: 'Where are your servers located?', a: 'We use global infrastructure to minimize latency.' },
+  { q: 'Do you offer an API?', a: 'Yes. API access is available for teams and enterprise.' },
+  { q: 'Is there a usage limit?', a: 'Fair use applies. Heavy usage may require a PRO plan.' },
+  { q: 'Can I convert CAD files?', a: 'Yes. DXF and DWG are supported for PDF export.' },
+  { q: 'Why is OCR accuracy low?', a: 'Blurry images reduce accuracy. Use higher resolution scans.' },
+  { q: 'Do you support HEIC and AVIF?', a: 'Yes. Convert HEIC or AVIF to JPG/PNG.' },
+  { q: 'Can I compress PDFs?', a: 'Yes. Use Compress PDF for smaller file sizes.' },
+  { q: 'Are conversions deterministic?', a: 'Yes. The pipeline is designed for consistent output.' },
+  { q: 'Do you log conversions?', a: 'We log metadata for reliability and debugging, not file content.' },
+  { q: 'Do you provide an SLA?', a: 'Yes for enterprise. Contact us for details.' },
+  { q: 'Is there a status page?', a: 'Yes. Check status.megaconvert.com for uptime.' },
+  { q: 'Can I use the service commercially?', a: 'Yes, as long as files are legal and rights are respected.' },
+  { q: 'How do I report abuse?', a: 'Use the DMCA and abuse reporting forms in Support.' }
+];
+
 export default function App() {
   const [lang, setLang] = useState(defaultLang);
   const t = { ...translations.en, ...(translations[lang] || {}) };
 
   const [path, setPath] = useState(() => window.location.pathname);
-  const [view, setView] = useState('home');
+  const [errorInfo, setErrorInfo] = useState(null);
   const [user, setUser] = useState(null);
   const [isPro, setIsPro] = useState(false);
   const [twofaVerified, setTwofaVerified] = useState(false);
@@ -410,10 +464,15 @@ export default function App() {
 
 
   useEffect(() => {
-    if (path === '/pricing') setView('pricing');
-    else setView('home');
     track('page_view', { path });
+    if (path === '/login') setShowAuthModal(true);
   }, [path]);
+
+  useEffect(() => {
+    const onPopState = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   useEffect(() => {
     try {
@@ -589,7 +648,7 @@ export default function App() {
   };
 
   const reset = () => {
-    setFile(null); setFiles([]); setStatus('idle'); setProgress(0); setDownloadUrl(null); setEtaSeconds(null); setSmartSuggestion(null);
+    setFile(null); setFiles([]); setStatus('idle'); setProgress(0); setDownloadUrl(null); setEtaSeconds(null); setSmartSuggestion(null); setErrorInfo(null);
   };
 
   const selectTool = (toolId) => {
@@ -600,7 +659,7 @@ export default function App() {
   const handleProcess = async () => {
     if (user && !twofaVerified && !user.isAnon) { setShowTwofaModal(true); return; }
     if (!file && files.length === 0) { scrollToConverter(); openFilePicker(); return; }
-    setStatus('processing'); setProgress(10);
+    setStatus('processing'); setProgress(10); setErrorInfo(null);
 
     try {
       const fd = new FormData();
@@ -615,7 +674,7 @@ export default function App() {
 
       const res = await fetch(`${API_BASE}/jobs`, { method: 'POST', body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create job');
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to create job');
 
       const poll = async () => {
         const r = await fetch(`${API_BASE}/jobs/${data.jobId}`);
@@ -643,7 +702,8 @@ export default function App() {
         }
         if (j.status === 'failed') {
           setStatus('error');
-          track('job_failed', { tool: activeTab, jobId: data.jobId });
+          setErrorInfo(j.error?.message || 'Conversion failed. Try again.');
+          track('job_failed', { tool: activeTab, jobId: data.jobId, error: j.error?.code || null });
           return;
         }
         setTimeout(poll, 1200);
@@ -651,6 +711,7 @@ export default function App() {
       poll();
     } catch (e) {
       setStatus('error');
+      setErrorInfo(e.message || 'Conversion failed. Try again.');
     }
   };
 
@@ -671,6 +732,294 @@ export default function App() {
     a.click();
   };
 
+  const isHome = path === '/' || path === '';
+  const isPricing = path === '/pricing';
+  const isLogin = path === '/login';
+  const isDashboard = path === '/dashboard';
+  const isBlog = path === '/blog';
+  const isFaq = path === '/faq';
+  const isPrivacy = path === '/privacy';
+  const isTerms = path === '/terms';
+  const isLegal = path === '/legal';
+  const isAbout = path === '/about';
+  const isContact = path === '/contact';
+  const isConvert = path.startsWith('/convert/');
+  const isNotFound = !isHome && !isPricing && !isLogin && !isDashboard && !isBlog && !isFaq && !isPrivacy && !isTerms && !isLegal && !isAbout && !isContact && !isConvert;
+
+  const renderPricingPage = () => (
+    <Page
+      title="Pricing"
+      subtitle="Clear plans for individuals, teams, and enterprise."
+      actions={(
+        <>
+          <Button onClick={() => navigate('/')}>Start converting</Button>
+          <Button variant="secondary" onClick={() => scrollToId('teams')}>See team features</Button>
+        </>
+      )}
+    >
+      <div className="grid md:grid-cols-3 gap-6">
+        <PageCard>
+          <div className="text-sm uppercase tracking-widest text-slate-500">Free</div>
+          <div className="text-3xl font-bold mt-2">$0</div>
+          <div className="text-slate-500 mt-2">For personal use and quick tasks.</div>
+          <div className="mt-4 space-y-2 text-sm text-slate-600">
+            <div>Standard conversions</div>
+            <div>Batch mode</div>
+            <div>24h auto deletion</div>
+          </div>
+          <Button className="mt-6 w-full" onClick={() => navigate('/')}>Get started</Button>
+        </PageCard>
+        <PageCard className="border-2 border-blue-500">
+          <div className="text-sm uppercase tracking-widest text-blue-600">Pro</div>
+          <div className="text-3xl font-bold mt-2">$12</div>
+          <div className="text-slate-500 mt-2">For professionals and creators.</div>
+          <div className="mt-4 space-y-2 text-sm text-slate-600">
+            <div>Priority queue</div>
+            <div>Advanced settings</div>
+            <div>Extended history</div>
+          </div>
+          <Button className="mt-6 w-full" variant="primary">Upgrade to Pro</Button>
+        </PageCard>
+        <PageCard>
+          <div className="text-sm uppercase tracking-widest text-slate-500">Enterprise</div>
+          <div className="text-3xl font-bold mt-2">Custom</div>
+          <div className="text-slate-500 mt-2">Security, SLA, and audit logs.</div>
+          <div className="mt-4 space-y-2 text-sm text-slate-600">
+            <div>Dedicated workers</div>
+            <div>Custom limits</div>
+            <div>Compliance packages</div>
+          </div>
+          <Button className="mt-6 w-full" variant="secondary" onClick={() => navigate('/contact')}>Contact sales</Button>
+        </PageCard>
+      </div>
+    </Page>
+  );
+
+  const renderLoginPage = () => (
+    <Page
+      title="Sign in"
+      subtitle="Access your workspace and conversion history."
+      actions={(
+        <>
+          <Button onClick={() => setShowAuthModal(true)}>Open sign in</Button>
+          <Button variant="secondary" onClick={handleGuest}>Continue as guest</Button>
+        </>
+      )}
+    >
+      <div className="grid md:grid-cols-2 gap-6">
+        <PageCard>
+          <div className="font-semibold mb-2">Why sign in</div>
+          <div className="text-sm text-slate-600">Save recent jobs, enable 2FA, and access team features.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Security</div>
+          <div className="text-sm text-slate-600">We support two-factor authentication and session controls.</div>
+        </PageCard>
+      </div>
+    </Page>
+  );
+
+  const renderDashboardPage = () => (
+    <Page
+      title="Dashboard"
+      subtitle="Your workspace, history, and account actions."
+      actions={user ? null : <Button onClick={() => navigate('/login')}>Sign in to continue</Button>}
+    >
+      {!user && (
+        <PageCard>
+          <div className="font-semibold mb-2">Authentication required</div>
+          <div className="text-sm text-slate-600">Sign in to view recent conversions and manage account settings.</div>
+        </PageCard>
+      )}
+      {user && (
+        <div className="grid lg:grid-cols-3 gap-6">
+          <PageCard>
+            <div className="flex items-center gap-2 text-slate-700 font-semibold mb-4"><Activity size={16} /> Recent conversions</div>
+            {recentJobs.length === 0 ? (
+              <div className="text-sm text-slate-500">No jobs yet. Convert a file to see history.</div>
+            ) : (
+              <div className="space-y-3">
+                {recentJobs.slice(0, 8).map((job) => (
+                  <div key={job.id} className="flex items-center justify-between text-sm">
+                    <div className="font-medium">{tools.find((t) => t.id === job.tool)?.name || job.tool}</div>
+                    <div className="text-slate-500">{new Date(job.ts).toLocaleTimeString()}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </PageCard>
+          <PageCard>
+            <div className="flex items-center gap-2 text-slate-700 font-semibold mb-4"><ServerCog size={16} /> Account</div>
+            <div className="text-sm text-slate-600 mb-4">Signed in as {user.email || user.name}</div>
+            <div className="flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={handleExportData}>Export data</Button>
+              <Button variant="outline" className="flex-1" onClick={handleDeleteAccount}>Delete account</Button>
+            </div>
+            {accountNotice && <div className="text-xs text-slate-500 mt-3">{accountNotice}</div>}
+          </PageCard>
+          <PageCard>
+            <div className="flex items-center gap-2 text-slate-700 font-semibold mb-4"><Users2 size={16} /> Teams</div>
+            <div className="text-sm text-slate-600">Batch processing, shared workspaces, and API access.</div>
+            <Button variant="secondary" className="mt-4 w-full" onClick={() => navigate('/contact')}>Request access</Button>
+          </PageCard>
+        </div>
+      )}
+    </Page>
+  );
+
+  const renderBlogPage = () => (
+    <Page title="Blog" subtitle="Product updates, guides, and best practices.">
+      <div className="grid md:grid-cols-2 gap-6">
+        {BLOG_POSTS.map((post) => (
+          <PageCard key={post.title}>
+            <div className="text-xs uppercase tracking-widest text-slate-500">{post.date}</div>
+            <div className="font-semibold text-lg mt-2">{post.title}</div>
+            <div className="text-sm text-slate-600 mt-2">{post.desc}</div>
+            <Button variant="secondary" className="mt-4">Read more</Button>
+          </PageCard>
+        ))}
+      </div>
+    </Page>
+  );
+
+  const renderFaqPage = () => (
+    <Page title="FAQ" subtitle="Answers to common questions and conversion details.">
+      <div className="grid md:grid-cols-2 gap-6">
+        {FAQ_ITEMS.map((item) => (
+          <PageCard key={item.q}>
+            <div className="font-semibold">{item.q}</div>
+            <div className="text-sm text-slate-600 mt-2">{item.a}</div>
+          </PageCard>
+        ))}
+      </div>
+    </Page>
+  );
+
+  const renderPrivacyPage = () => (
+    <Page title="Privacy Policy" subtitle="How we collect, process, and protect data.">
+      <div className="space-y-6">
+        <PageCard>
+          <div className="font-semibold mb-2">Data we collect</div>
+          <div className="text-sm text-slate-600">Email (if registered), IP address, device metadata, and files uploaded for conversion.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Storage and retention</div>
+          <div className="text-sm text-slate-600">Files are automatically deleted after 24 hours. Logs are retained for 90 days. Backups are encrypted.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Data sharing</div>
+          <div className="text-sm text-slate-600">We do not sell personal data. We disclose subprocessors such as Stripe, Google, and Cloudflare where applicable.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">User rights</div>
+          <div className="text-sm text-slate-600">You can request data export, deletion, and account removal at any time.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Security</div>
+          <div className="text-sm text-slate-600">We use HTTPS, encryption at rest, access controls, and signed URLs for files.</div>
+        </PageCard>
+      </div>
+    </Page>
+  );
+
+  const renderTermsPage = () => (
+    <Page title="Terms of Service" subtitle="Service terms, acceptable use, and limitations.">
+      <div className="space-y-6">
+        <PageCard>
+          <div className="font-semibold mb-2">Service provided as is</div>
+          <div className="text-sm text-slate-600">We provide the service without warranties and may update features over time.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Prohibited use</div>
+          <div className="text-sm text-slate-600">No illegal files, malware, abuse, or copyright violations.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Account actions</div>
+          <div className="text-sm text-slate-600">We may suspend accounts for policy violations and security risks.</div>
+        </PageCard>
+      </div>
+    </Page>
+  );
+
+  const renderLegalPage = () => (
+    <Page title="Legal & Compliance" subtitle="Policies, standards, and compliance programs.">
+      <div className="grid md:grid-cols-2 gap-6">
+        <PageCard>
+          <div className="font-semibold mb-2">Compliance coverage</div>
+          <div className="text-sm text-slate-600">GDPR, CCPA, LGPD, PIPEDA, UK GDPR, APPI, and other regional regulations.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Security policy</div>
+          <div className="text-sm text-slate-600">HTTPS, HSTS, CSP, WAF, DDoS protection, and encryption at rest.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">DPA and SLA</div>
+          <div className="text-sm text-slate-600">Enterprise customers can request Data Processing Agreements and Service Level Agreements.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Cookie policy</div>
+          <div className="text-sm text-slate-600">We use cookies to improve experience, analytics, and security.</div>
+        </PageCard>
+      </div>
+    </Page>
+  );
+
+  const renderAboutPage = () => (
+    <Page title="About MegaConvert" subtitle="Convert anything. Anywhere. Instantly.">
+      <div className="grid md:grid-cols-2 gap-6">
+        <PageCard>
+          <div className="font-semibold mb-2">Mission</div>
+          <div className="text-sm text-slate-600">Deliver fast, reliable, and private file conversion for everyone.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Values</div>
+          <div className="text-sm text-slate-600">Determinism, stability, predictable resource usage, and transparency.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Roadmap</div>
+          <div className="text-sm text-slate-600">Year 1 SEO and product fit. Year 2 Pro and B2B. Year 3 AI and enterprise.</div>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-2">Brand</div>
+          <div className="text-sm text-slate-600">Professional, global, and neutral tone for enterprise readiness.</div>
+        </PageCard>
+      </div>
+    </Page>
+  );
+
+  const renderContactPage = () => (
+    <Page title="Contact" subtitle="Sales, support, and compliance requests.">
+      <div className="grid md:grid-cols-2 gap-6">
+        <PageCard>
+          <div className="font-semibold mb-3">General inquiry</div>
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); alert('Message sent (demo).'); }}>
+            <input className="w-full border rounded-xl px-4 py-2" placeholder="Your email" required />
+            <input className="w-full border rounded-xl px-4 py-2" placeholder="Subject" required />
+            <textarea className="w-full border rounded-xl px-4 py-2" placeholder="Message" rows="4" required></textarea>
+            <Button className="w-full">Send</Button>
+          </form>
+        </PageCard>
+        <PageCard>
+          <div className="font-semibold mb-3">Compliance</div>
+          <div className="text-sm text-slate-600">For DPA, SLA, or security reviews, contact legal@megaconvert.com.</div>
+          <div className="text-sm text-slate-600 mt-4">For abuse reports, use the DMCA form in Support.</div>
+        </PageCard>
+      </div>
+    </Page>
+  );
+
+  const renderNotFoundPage = () => (
+    <Page title="Page not found" subtitle="The page you requested does not exist.">
+      <PageCard>
+        <div className="text-sm text-slate-600">Return to the home page or explore conversions.</div>
+        <div className="mt-4 flex gap-3">
+          <Button onClick={() => navigate('/')}>Go home</Button>
+          <Button variant="secondary" onClick={() => navigate('/convert/pdf-to-word')}>Open converter</Button>
+        </div>
+      </PageCard>
+    </Page>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
       <nav className="fixed w-full z-50 bg-white/80 backdrop-blur-lg border-b px-4 h-20 flex justify-between items-center max-w-7xl mx-auto">
@@ -683,6 +1032,11 @@ export default function App() {
           <button onClick={() => { if (path !== '/') navigate('/'); setTimeout(() => scrollToId('teams'), 50); }} className="font-medium hover:text-blue-600">Teams</button>
           <button onClick={() => { if (path !== '/') navigate('/'); setTimeout(() => scrollToId('status'), 50); }} className="font-medium hover:text-blue-600">Status</button>
           <button onClick={() => navigate('/pricing')} className="font-medium hover:text-blue-600">{t.navPricing}</button>
+          <button onClick={() => navigate('/faq')} className="font-medium hover:text-blue-600">FAQ</button>
+          <button onClick={() => navigate('/contact')} className="font-medium hover:text-blue-600">Contact</button>
+          {user && (
+            <button onClick={() => navigate('/dashboard')} className="font-medium hover:text-blue-600">Dashboard</button>
+          )}
           <div className="relative" ref={langMenuRef}>
             <button onClick={() => setIsLangMenuOpen(!isLangMenuOpen)} className="flex items-center gap-1 font-medium hover:text-blue-600">
               {LANGUAGES.find(l => l.code === lang)?.flag} <ChevronDown size={14} />
@@ -698,7 +1052,7 @@ export default function App() {
             )}
           </div>
           {!user ? (
-            <Button onClick={() => setShowAuthModal(true)}>{t.navLogin}</Button>
+            <Button onClick={() => navigate('/login')}>{t.navLogin}</Button>
           ) : (
             <div className="flex items-center gap-3">
               <div className="text-right hidden md:block text-sm">
@@ -711,12 +1065,34 @@ export default function App() {
         </div>
       </nav>
 
-      {path.startsWith('/convert/') ? (
+      {isConvert ? (
         <SeoPage
           slug={path.replace('/convert/', '')}
           onSelectTool={selectTool}
           onNavigate={navigate}
         />
+      ) : isPricing ? (
+        renderPricingPage()
+      ) : isLogin ? (
+        renderLoginPage()
+      ) : isDashboard ? (
+        renderDashboardPage()
+      ) : isBlog ? (
+        renderBlogPage()
+      ) : isFaq ? (
+        renderFaqPage()
+      ) : isPrivacy ? (
+        renderPrivacyPage()
+      ) : isTerms ? (
+        renderTermsPage()
+      ) : isLegal ? (
+        renderLegalPage()
+      ) : isAbout ? (
+        renderAboutPage()
+      ) : isContact ? (
+        renderContactPage()
+      ) : isNotFound ? (
+        renderNotFoundPage()
       ) : (
         <>
           <input
@@ -919,6 +1295,19 @@ export default function App() {
                       <div className="flex gap-4 justify-center">
                         <Button variant="secondary" onClick={reset}>{t.back}</Button>
                         <Button variant="primary" onClick={download}>{t.download}</Button>
+                      </div>
+                    </div>
+                  )}
+                  {status === 'error' && (
+                    <div className="text-center py-10">
+                      <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6 text-red-600">
+                        <X size={36} />
+                      </div>
+                      <h3 className="text-2xl font-bold text-slate-800 mb-2">Conversion failed</h3>
+                      <div className="text-sm text-slate-500 mb-6">{errorInfo || 'Please try again or use another format.'}</div>
+                      <div className="flex gap-4 justify-center">
+                        <Button variant="secondary" onClick={reset}>Back</Button>
+                        <Button variant="primary" onClick={handleProcess}>Retry</Button>
                       </div>
                     </div>
                   )}
@@ -1319,25 +1708,25 @@ export default function App() {
           <div>
             <div className="font-semibold text-white mb-3">Company</div>
             <div className="space-y-2">
-              <button onClick={() => scrollToId('transparency')} className="block hover:text-white">About</button>
-              <div>Careers</div>
-              <div>Blog</div>
+              <button onClick={() => navigate('/about')} className="block hover:text-white">About</button>
+              <button onClick={() => navigate('/contact')} className="block hover:text-white">Careers</button>
+              <button onClick={() => navigate('/blog')} className="block hover:text-white">Blog</button>
             </div>
           </div>
           <div>
             <div className="font-semibold text-white mb-3">Legal</div>
             <div className="space-y-2">
-              <button onClick={() => scrollToId('security')} className="block hover:text-white">Privacy</button>
-              <div>Terms</div>
+              <button onClick={() => navigate('/privacy')} className="block hover:text-white">Privacy</button>
+              <button onClick={() => navigate('/terms')} className="block hover:text-white">Terms</button>
               <button onClick={() => scrollToId('support')} className="block hover:text-white">DMCA</button>
-              <button onClick={() => scrollToId('security')} className="block hover:text-white">Security</button>
+              <button onClick={() => navigate('/legal')} className="block hover:text-white">Security</button>
             </div>
           </div>
           <div>
             <div className="font-semibold text-white mb-3">Support</div>
             <div className="space-y-2">
-              <div>Help center</div>
-              <div>Contact</div>
+              <button onClick={() => navigate('/faq')} className="block hover:text-white">Help center</button>
+              <button onClick={() => navigate('/contact')} className="block hover:text-white">Contact</button>
               <button onClick={() => scrollToId('status')} className="block hover:text-white">Status</button>
             </div>
           </div>

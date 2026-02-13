@@ -7,7 +7,11 @@ const { execFile } = require('child_process');
 const { Worker } = require('bullmq');
 const IORedis = require('ioredis');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { TOOL_IDS } = require('../../shared/tools');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+
+const log = (payload) => console.log(JSON.stringify(payload));
+const logError = (payload) => console.error(JSON.stringify(payload));
 
 const streamToFile = async (stream, filePath) => {
   await promisify(pipeline)(stream, fs.createWriteStream(filePath));
@@ -187,6 +191,9 @@ function buildAudioArgs(settings = {}) {
 }
 
 async function convertSingle(tool, inputPath, workDir, settings) {
+  if (!TOOL_IDS.has(tool)) {
+    throw new Error(`Unsupported tool: ${tool}`);
+  }
   const baseName = path.basename(inputPath, path.extname(inputPath));
   const imageArgs = buildImageArgs(settings?.image);
   const videoArgs = buildVideoArgs(settings?.video);
@@ -376,6 +383,13 @@ async function handleSingle(job, data) {
     await zipFiles(zipPath, outputs);
     finalPath = zipPath;
   }
+  if (!fs.existsSync(finalPath)) {
+    throw new Error('Output not produced');
+  }
+  const stat = fs.statSync(finalPath);
+  if (!stat.size) {
+    throw new Error('Output is empty');
+  }
 
   job.updateProgress(80);
   if (storageMode === 's3') {
@@ -419,6 +433,9 @@ async function handleBatch(job, data) {
   } else {
     await exec('7z', ['a', '-tzip', zipPath, '.'], { cwd: outDir });
   }
+  if (!fs.existsSync(zipPath)) {
+    throw new Error('Batch output not produced');
+  }
   if (storageMode === 's3') {
     await s3.send(new PutObjectCommand({ Bucket: process.env.S3_BUCKET, Key: outputKey, Body: fs.createReadStream(zipPath) }));
   } else {
@@ -437,26 +454,39 @@ const worker = new Worker('convert', async (job) => {
   return handleSingle(job, job.data);
 }, { connection });
 
+worker.on('active', (job) => {
+  log({
+    type: 'job_started',
+    requestId: job?.data?.requestId || null,
+    jobId: job?.id,
+    tool: job?.data?.tool,
+    batch: !!job?.data?.batch,
+    inputSize: job?.data?.inputSize || null,
+    inputFormat: job?.data?.inputFormat || null
+  });
+});
+
 worker.on('failed', (job, err) => {
   const started = job?.processedOn || job?.timestamp || Date.now();
   const finished = job?.finishedOn || Date.now();
-  console.error('Job failed', job?.id, err);
-  console.log(JSON.stringify({
+  logError({
     type: 'job_failed',
+    requestId: job?.data?.requestId || null,
     jobId: job?.id,
     durationMs: finished - started,
     error: err?.message || 'unknown'
-  }));
+  });
 });
 
 worker.on('completed', (job) => {
   const started = job?.processedOn || job?.timestamp || Date.now();
   const finished = job?.finishedOn || Date.now();
-  console.log(JSON.stringify({
+  log({
     type: 'job_completed',
+    requestId: job?.data?.requestId || null,
     jobId: job?.id,
     durationMs: finished - started
-  }));
+  });
 });
 
-console.log('Worker started');
+log({ type: 'worker_started' });

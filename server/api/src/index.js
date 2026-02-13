@@ -8,6 +8,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/clien
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
+const { TOOL_EXT, TOOL_IDS } = require('../../shared/tools');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const storageMode = (process.env.STORAGE_MODE || 's3').toLowerCase();
@@ -17,23 +18,30 @@ if (storageMode === 's3') {
 }
 for (const key of required) {
   if (!process.env[key]) {
-    console.warn(`Missing env: ${key}`);
+    console.error(JSON.stringify({ type: 'config_missing', key }));
   }
 }
+
+const log = (payload) => console.log(JSON.stringify(payload));
+const logError = (payload) => console.error(JSON.stringify(payload));
 
 const app = express();
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   const start = Date.now();
+  const requestId = req.headers['x-request-id'] || uuidv4();
+  req.requestId = requestId;
+  res.setHeader('x-request-id', requestId);
   res.on('finish', () => {
-    console.log(JSON.stringify({
+    log({
       type: 'http',
+      requestId,
       method: req.method,
       path: req.path,
       status: res.statusCode,
       durationMs: Date.now() - start
-    }));
+    });
   });
   next();
 });
@@ -107,49 +115,6 @@ function localPathForKey(key) {
   return path.join(localRoot, key);
 }
 
-const TOOL_EXT = {
-  'pdf-word': 'docx',
-  'pdf-excel': 'xlsx',
-  'pdf-pptx': 'pptx',
-  'word-pdf': 'pdf',
-  'excel-pdf': 'pdf',
-  'pptx-pdf': 'pdf',
-  'pdf-txt': 'txt',
-  'txt-pdf': 'pdf',
-  'pdf-images': 'zip',
-  'image-pdf': 'pdf',
-  'jpg-webp': 'webp',
-  'png-webp': 'webp',
-  'heic-jpg': 'jpg',
-  'avif-jpg': 'jpg',
-  'avif-png': 'png',
-  'svg-png': 'png',
-  'svg-jpg': 'jpg',
-  'mp4-mp3': 'mp3',
-  'mp4-gif': 'gif',
-  'mov-mp4': 'mp4',
-  'mkv-mp4': 'mp4',
-  'avi-mp4': 'mp4',
-  'video-webm': 'webm',
-  'mp3-wav': 'wav',
-  'wav-mp3': 'mp3',
-  'm4a-mp3': 'mp3',
-  'flac-mp3': 'mp3',
-  'ogg-mp3': 'mp3',
-  'audio-aac': 'aac',
-  'zip-rar': 'rar',
-  'rar-zip': 'zip',
-  '7z-zip': 'zip',
-  'zip-tar': 'tar',
-  'png-jpg': 'jpg',
-  'jpg-png': 'png',
-  'jpg-pdf': 'pdf',
-  'compress-pdf': 'pdf',
-  'compress-video': 'mp4',
-  'ocr': 'txt',
-  'cad-pdf': 'pdf'
-};
-
 function sanitizeFileName(name) {
   return name.replace(/[\\/]/g, '_').replace(/\s+/g, '_');
 }
@@ -157,8 +122,8 @@ function sanitizeFileName(name) {
 app.get('/health', (req, res) => res.json({ ok: true, storage: storageMode }));
 app.post('/events', (req, res) => {
   const { type, payload, ts } = req.body || {};
-  if (!type) return res.status(400).json({ error: 'Missing type' });
-  console.log(JSON.stringify({ type: 'event', event: type, payload: payload || {}, ts: ts || Date.now() }));
+  if (!type) return res.status(400).json({ status: 'error', code: 'MISSING_TYPE', message: 'Missing type', requestId: req.requestId });
+  log({ type: 'event', requestId: req.requestId, event: type, payload: payload || {}, ts: ts || Date.now() });
   return res.json({ ok: true });
 });
 app.use('/files', express.static(localRoot));
@@ -166,24 +131,24 @@ app.use('/files', express.static(localRoot));
 app.post('/auth/2fa/start', async (req, res) => {
   try {
     const { email } = req.body || {};
-    if (!email) return res.status(400).json({ error: 'Missing email' });
+    if (!email) return res.status(400).json({ status: 'error', code: 'MISSING_EMAIL', message: 'Missing email', requestId: req.requestId });
     const code = generateCode();
     const expiresAt = Date.now() + 10 * 60 * 1000;
     twofaCodes.set(email, { code, expiresAt });
     await sendTwofaEmail(email, code);
     return res.json({ ok: true });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Failed to send code' });
+    logError({ type: 'twofa_start_failed', requestId: req.requestId, error: err.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'EMAIL_SEND_FAILED', message: 'Failed to send code', requestId: req.requestId });
   }
 });
 
 app.post('/auth/2fa/verify', (req, res) => {
   const { email, code } = req.body || {};
-  if (!email || !code) return res.status(400).json({ error: 'Missing email or code' });
+  if (!email || !code) return res.status(400).json({ status: 'error', code: 'MISSING_FIELDS', message: 'Missing email or code', requestId: req.requestId });
   const record = twofaCodes.get(email);
   if (!record || record.expiresAt < Date.now() || record.code !== String(code)) {
-    return res.status(400).json({ error: 'Invalid code' });
+    return res.status(400).json({ status: 'error', code: 'INVALID_CODE', message: 'Invalid code', requestId: req.requestId });
   }
   const token = generateToken();
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
@@ -208,12 +173,16 @@ app.post('/jobs', upload.any(), async (req, res) => {
     const files = req.files || [];
     const batch = String(req.body.batch || 'false') === 'true';
     const settings = req.body.settings ? JSON.parse(req.body.settings) : {};
-    if (!tool) return res.status(400).json({ error: 'Missing tool' });
-    if (!files.length) return res.status(400).json({ error: 'Missing file' });
+    if (!tool) return res.status(400).json({ status: 'error', code: 'MISSING_TOOL', message: 'Missing tool', requestId: req.requestId });
+    if (!TOOL_IDS.has(tool)) return res.status(400).json({ status: 'error', code: 'UNSUPPORTED_TOOL', message: 'Unsupported tool', requestId: req.requestId });
+    if (!files.length) return res.status(400).json({ status: 'error', code: 'MISSING_FILE', message: 'Missing file', requestId: req.requestId });
+    if (files.some((f) => f.size === 0)) return res.status(400).json({ status: 'error', code: 'EMPTY_FILE', message: 'File is empty', requestId: req.requestId });
 
     const jobId = uuidv4();
+    const inputSizeTotal = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    const inputFormats = files.map((f) => path.extname(f.originalname || '').replace('.', '').toLowerCase()).filter(Boolean);
 
-      if (batch && files.length > 1) {
+    if (batch && files.length > 1) {
       const inputItems = [];
       for (const file of files) {
         const safeName = sanitizeFileName(file.originalname || 'input');
@@ -222,6 +191,7 @@ app.post('/jobs', upload.any(), async (req, res) => {
         const ext = TOOL_EXT[tool] || (path.parse(safeName).ext.replace('.', '') || 'bin');
         const outputName = `${base}.${ext}`;
         const outputKey = `outputs/${jobId}/${outputName}`;
+        const inputFormat = path.extname(safeName).replace('.', '').toLowerCase();
 
         if (storageMode === 's3') {
           await s3.send(new PutObjectCommand({
@@ -235,18 +205,29 @@ app.post('/jobs', upload.any(), async (req, res) => {
           ensureDir(outPath);
           require('fs').writeFileSync(outPath, file.buffer);
         }
-        inputItems.push({ inputKey, outputKey, originalName: safeName });
+        inputItems.push({ inputKey, outputKey, originalName: safeName, inputFormat, inputSize: file.size || 0 });
       }
 
       const batchOutputKey = `outputs/${jobId}/batch_${tool}.zip`;
-      await queue.add('convert', { jobId, tool, batch: true, items: inputItems, outputKey: batchOutputKey, settings }, { jobId });
-      console.log(JSON.stringify({ type: 'job_created', jobId, tool, batch: true, count: inputItems.length }));
-      return res.json({ jobId });
+      await queue.add('convert', {
+        jobId,
+        tool,
+        batch: true,
+        items: inputItems,
+        outputKey: batchOutputKey,
+        settings,
+        inputFormats,
+        inputSize: inputSizeTotal,
+        requestId: req.requestId
+      }, { jobId });
+      log({ type: 'job_created', requestId: req.requestId, jobId, tool, batch: true, count: inputItems.length, inputSize: inputSizeTotal });
+      return res.json({ jobId, requestId: req.requestId });
     }
 
     const file = files[0];
     const safeName = sanitizeFileName(file.originalname || 'input');
     const inputKey = `inputs/${jobId}/${safeName}`;
+    const inputFormat = path.extname(safeName).replace('.', '').toLowerCase();
 
     const base = path.parse(safeName).name || 'output';
     const ext = TOOL_EXT[tool] || (path.parse(safeName).ext.replace('.', '') || 'bin');
@@ -266,25 +247,35 @@ app.post('/jobs', upload.any(), async (req, res) => {
       require('fs').writeFileSync(outPath, file.buffer);
     }
 
-    await queue.add('convert', { jobId, tool, inputKey, outputKey, originalName: safeName, settings }, { jobId });
-    console.log(JSON.stringify({ type: 'job_created', jobId, tool, batch: false, count: 1 }));
+    await queue.add('convert', {
+      jobId,
+      tool,
+      inputKey,
+      outputKey,
+      originalName: safeName,
+      settings,
+      inputFormat,
+      inputSize: file.size || 0,
+      requestId: req.requestId
+    }, { jobId });
+    log({ type: 'job_created', requestId: req.requestId, jobId, tool, batch: false, count: 1, inputSize: file.size || 0, inputFormat });
 
-    res.json({ jobId });
+    res.json({ jobId, requestId: req.requestId });
   } catch (err) {
-    console.error(err);
-    console.log(JSON.stringify({ type: 'job_error', error: err.message || 'unknown' }));
-    res.status(500).json({ error: 'Failed to create job' });
+    logError({ type: 'job_error', requestId: req.requestId, error: err.message || 'unknown' });
+    res.status(500).json({ status: 'error', code: 'JOB_CREATE_FAILED', message: 'Failed to create job', requestId: req.requestId });
   }
 });
 
 app.get('/jobs/:id', async (req, res) => {
   try {
     const job = await queue.getJob(req.params.id);
-    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (!job) return res.status(404).json({ status: 'error', code: 'JOB_NOT_FOUND', message: 'Job not found', requestId: req.requestId });
 
     const state = await job.getState();
     const progress = job.progress || 0;
     let downloadUrl = null;
+    let error = null;
 
     if (state === 'completed') {
       const outputKey = (job.returnvalue && job.returnvalue.outputKey) || job.data.outputKey;
@@ -298,11 +289,17 @@ app.get('/jobs/:id', async (req, res) => {
         downloadUrl = `/files/${outputKey}`;
       }
     }
+    if (state === 'failed') {
+      error = {
+        code: 'CONVERSION_FAILED',
+        message: job.failedReason || 'Conversion failed'
+      };
+    }
 
-    res.json({ status: state, progress, downloadUrl });
+    res.json({ status: state, progress, downloadUrl, error });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch job' });
+    logError({ type: 'job_fetch_failed', requestId: req.requestId, error: err.message || 'unknown' });
+    res.status(500).json({ status: 'error', code: 'JOB_FETCH_FAILED', message: 'Failed to fetch job', requestId: req.requestId });
   }
 });
 
