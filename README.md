@@ -1,16 +1,108 @@
-# React + Vite
+# MegaConvert
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Production-structured monorepo with separated frontend, API, and worker.
 
-Currently, two official plugins are available:
+## Structure
+- `frontend/` Vercel (React/Vite SPA)
+- `api/` Fly/Render (API, queue producer)
+- `worker/` Fly/Render (queue consumer + converters)
+- `shared/` shared schemas/constants
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Local Dev (recommended)
+From repo root:
+```powershell
+powershell -ExecutionPolicy Bypass -File infra/scripts/dev-up.ps1 -WithFrontend
+```
 
-## React Compiler
+Check status:
+```powershell
+powershell -ExecutionPolicy Bypass -File infra/scripts/dev-status.ps1
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Stop local services:
+```powershell
+powershell -ExecutionPolicy Bypass -File infra/scripts/dev-down.ps1
+```
 
-## Expanding the ESLint configuration
+## Toolchain requirements
+- `ffmpeg` for audio/video converters
+- `magick` (ImageMagick) for image converters
+- `soffice` (LibreOffice) for PDF/DOCX/XLSX/PPTX converters
+- `tesseract` for OCR converters
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+If `soffice` is missing, document converters will fail even when API/Redis/MinIO are healthy.
+
+### Windows dependency bootstrap
+To check/install worker dependencies on Windows host:
+```powershell
+powershell -ExecutionPolicy Bypass -File infra/scripts/ensure-worker-deps.ps1 -InstallMissing
+```
+This script also copies `tessdata/rus.traineddata` into system Tesseract (if available) for `eng+rus` OCR.
+
+## Converter Matrix Check (200/200)
+Run this from repo root to verify frontend/API/worker are aligned and every tool has a worker conversion strategy:
+```powershell
+node tests/verify-200-converters.cjs
+```
+
+## Analytics (ClickHouse)
+- Schema (raw + normalized + materialized views): `infra/clickhouse/analytics_schema_v1.sql`
+- Monitoring queries for 2-week Search UX validation: `infra/clickhouse/metrics_2week.sql`
+- Apply schema:
+```powershell
+clickhouse-client --multiquery < infra/clickhouse/analytics_schema_v1.sql
+```
+- API ingestion is wired to `POST /events` when `CLICKHOUSE_URL` is set in `api/.env` (buffered batch inserts).
+- Main envs: `ANALYTICS_ENABLED`, `CLICKHOUSE_URL`, `CLICKHOUSE_DATABASE` (or `CLICKHOUSE_DB`), `CLICKHOUSE_TABLE`, `ANALYTICS_BATCH_SIZE`, `ANALYTICS_FLUSH_INTERVAL_MS`.
+- Fallback analytics backend (works without ClickHouse): `ANALYTICS_USE_FALLBACK`, `ANALYTICS_FALLBACK_FILE`, `ANALYTICS_FALLBACK_MAX_ROWS`, `ANALYTICS_FALLBACK_INGEST_ENABLED`.
+- Admin metrics endpoints: `GET /admin/metrics/overview`, `GET /admin/metrics/search?range=24h|7d|30d`.
+- Admin posts engagement endpoint: `GET /admin/metrics/posts?range=24h|7d|30d`.
+- Admin promo analytics endpoint: `GET /admin/metrics/promo?range=24h|7d|30d`.
+- Admin auth endpoints: `POST /admin/auth/login`, `POST /admin/auth/logout`, `GET /admin/auth/me`.
+- Admin auth envs: `ADMIN_PASSWORD`, `ADMIN_JWT_SECRET`, `ADMIN_SESSION_TTL_SEC`, `ADMIN_COOKIE_NAME`, `ADMIN_COOKIE_SECURE`.
+- Admin posts CRUD: `GET /admin/posts`, `POST /admin/posts`, `PATCH /admin/posts/:id`, `DELETE /admin/posts/:id`.
+- Admin posts storage envs: `ADMIN_POSTS_FILE`, `ADMIN_POST_TITLE_MAX_LEN`, `ADMIN_POST_EXCERPT_MAX_LEN`, `ADMIN_POST_CONTENT_MAX_LEN`.
+- Public posts endpoints: `GET /posts`, `GET /posts/:slug`.
+- Likes endpoints: `GET /posts/:id/likes`, `POST /posts/:id/like` (requires `x-user-id`).
+- Likes envs: `POST_LIKES_FILE`, `POST_LIKE_RATE_LIMIT_PER_MIN`.
+
+## Promo Codes (PostgreSQL draft)
+- DDL: `infra/postgres/promo_codes_v1.sql`
+- Account identity DDL: `infra/postgres/account_identity_v1.sql`
+- Seed data: `infra/postgres/promo_seed_v1.sql`
+- Redeem transaction flow: `infra/postgres/promo_redeem_flow_v1.md`
+- Redeem endpoint: `POST /promo/redeem` (requires `x-user-id` for current auth mode)
+- Account billing endpoint: `GET /account/billing` (returns plan summary, active benefits, promo history; requires `x-user-id`)
+- Account profile endpoints: `GET /account/profile`, `PATCH /account/profile` (requires `x-user-id`)
+- Connected accounts endpoints: `GET /account/connections`, `POST /account/connections/:provider/link`, `DELETE /account/connections/:provider` (requires `x-user-id`)
+- Sessions endpoints: `GET /account/sessions`, `DELETE /account/sessions/:id`, `POST /account/sessions/logout-all` (requires `x-user-id` + `x-session-id`)
+- Telegram link endpoint: `POST /account/telegram/link-code` (generates a one-time code for linking website account with Telegram bot)
+- Telegram link envs (API): `BOT_INTERNAL_API_BASE`, `BOT_INTERNAL_LINK_SECRET`, `ACCOUNT_TELEGRAM_CODE_LENGTH`, `ACCOUNT_TELEGRAM_CODE_TTL_SEC`, `ACCOUNT_TELEGRAM_INTERNAL_TIMEOUT_MS`
+- Redeem request payload: `{ "code": "SAVE20", "idempotency_key": "optional-key" }`
+- Admin promo CRUD: `GET /admin/promo-codes`, `POST /admin/promo-codes`, `PATCH /admin/promo-codes/:id`, `DELETE /admin/promo-codes/:id`
+- Main envs: `PROMO_CODES_ENABLED` (`1/0/true/false`, default `true`), `DATABASE_URL` (or `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `PG_CONNECTION_STRING`), `PROMO_QUERY_TIMEOUT_MS`, `PROMO_DB_POOL_MAX`, `PROMO_TRIAL_MAX_DAYS`, `PROMO_ADMIN_LIST_LIMIT`
+- Note: current v1 schema allows one redemption per user per promo (`UNIQUE (promo_code_id, user_id)`).
+- Quick smoke:
+```powershell
+psql "$env:DATABASE_URL" -f infra/postgres/promo_codes_v1.sql
+psql "$env:DATABASE_URL" -f infra/postgres/account_identity_v1.sql
+psql "$env:DATABASE_URL" -f infra/postgres/promo_seed_v1.sql
+psql "$env:DATABASE_URL" -c "SELECT code, benefit_type, is_active FROM promo_codes ORDER BY code;"
+curl -i -X POST http://localhost:3000/promo/redeem -H "Content-Type: application/json" -H "x-user-id: test-user-1" -d "{\"code\":\"SEED_TRIAL_30\",\"idempotency_key\":\"seed-smoke-1\"}"
+psql "$env:DATABASE_URL" -c "SELECT count(*) AS redemptions FROM promo_redemptions;"
+```
+
+## Localization QA
+- Style guide: `frontend/src/i18n/LOCALIZATION_STYLE_GUIDE.md`
+- Glossary: `frontend/src/i18n/GLOSSARY.md`
+- Translation checklist: `frontend/src/i18n/TRANSLATION_QA_CHECKLIST.md`
+- Validation commands:
+```powershell
+npm --prefix frontend run i18n:check
+npm --prefix frontend run i18n:check:strict
+```
+
+## Notes
+- `api/` and `worker/` each include a local `shared/` copy for runtime. Source of truth is `shared/` at repo root.
+- Vercel routes `/api/*` to Fly API via `vercel.json` rewrite. In production, frontend can use `VITE_API_BASE=/api` to avoid mobile CORS issues.
+
