@@ -28,8 +28,8 @@ export const LoginPage = ({ navigate }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] flex items-center justify-center px-4">
-      <form onSubmit={onSubmit} className="w-full max-w-sm bg-white/90 backdrop-blur rounded-3xl border border-slate-200/80 p-6 shadow-lg">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center px-4">
+      <form onSubmit={onSubmit} className="w-full max-w-sm bg-white/90 backdrop-blur rounded-3xl border border-slate-200/80 p-6 shadow-xl">
         <h1 className="text-2xl font-semibold text-slate-900">{t.adminLoginTitle}</h1>
         <p className="text-sm text-slate-500 mt-2">{t.adminLoginSubtitle}</p>
         <div className="mt-5">
@@ -38,7 +38,7 @@ export const LoginPage = ({ navigate }) => {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-slate-300 rounded-xl px-3 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
+            className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200/60"
             autoFocus
             required
           />
@@ -49,7 +49,7 @@ export const LoginPage = ({ navigate }) => {
         <button
           type="submit"
           disabled={loading}
-          className="mt-5 w-full rounded-xl bg-blue-600 text-white py-2.5 font-medium disabled:opacity-50"
+          className="pressable mt-5 w-full rounded-xl bg-blue-600 text-white py-2.5 font-medium disabled:opacity-50 hover:bg-blue-500 transition"
         >
           {loading ? t.adminSigningIn : t.navLogin}
         </button>

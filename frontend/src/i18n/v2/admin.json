@@ -1,0 +1,15 @@
+{
+  "admin.title": "Admin Control Center",
+  "admin.dashboard": "Dashboard",
+  "admin.operations": "Operations",
+  "admin.users": "Users",
+  "admin.jobs": "Jobs",
+  "admin.ai": "AI Control",
+  "admin.billing": "Billing",
+  "admin.analytics": "Analytics",
+  "admin.content": "Content",
+  "admin.security": "Security",
+  "admin.logs": "Logs",
+  "admin.settings": "Settings"
+}
+

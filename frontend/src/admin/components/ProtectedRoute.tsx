@@ -17,8 +17,8 @@ export const ProtectedRoute = ({ navigate, children }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-100 p-6 flex items-center justify-center">
-        <div className="bg-white border border-slate-200 rounded-2xl p-8 text-slate-600 text-sm">
+      <div className="min-h-screen bg-slate-950 p-6 flex items-center justify-center">
+        <div className="mc-card p-8 text-slate-600 text-sm">
           {t.adminCheckingSession}
         </div>
       </div>

@@ -66,7 +66,7 @@ export const SearchInsightsPage = () => {
 
   return (
     <>
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white/90 backdrop-blur rounded-3xl border border-slate-200/80 p-5 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">{t.adminSearchInsightsTitle}</h1>
           <p className="text-sm text-slate-500 mt-1">{t.adminSearchInsightsSubtitle}</p>
@@ -75,7 +75,7 @@ export const SearchInsightsPage = () => {
           <select
             value={range}
             onChange={(e) => setRange(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            className="border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200/60"
           >
             {SEARCH_RANGES.map((option) => (
               <option key={option} value={option}>{option}</option>
@@ -83,7 +83,7 @@ export const SearchInsightsPage = () => {
           </select>
           <button
             onClick={() => void refresh()}
-            className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium hover:bg-slate-50"
+            className="pressable px-4 py-2 rounded-xl border border-slate-300 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
           >
             {loading ? t.adminRefreshing : t.adminRefresh}
           </button>
@@ -91,7 +91,7 @@ export const SearchInsightsPage = () => {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl p-3 shadow-sm">
           {error}
         </div>
       )}

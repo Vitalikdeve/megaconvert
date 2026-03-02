@@ -8,18 +8,24 @@
     "prerender": "node scripts/prerender.js",
     "build": "npm run prerender && vite build",
     "lint": "eslint .",
+    "check:interactions": "node scripts/check-dead-interactions.mjs",
     "i18n:check": "node scripts/i18n-check.mjs",
     "i18n:check:strict": "node scripts/i18n-check.mjs --strict",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:seo": "playwright test tests/seo-smoke.spec.js",
+    "test:buttons": "playwright test tests/no-dead-buttons.spec.js",
+    "verify:smoke": "npm run prerender && npm run lint && npm run check:interactions && npm run test:seo && npm run test:buttons"
   },
   "dependencies": {
+    "core-js": "^3.42.0",
     "firebase": "^12.9.0",
     "jspdf": "^4.1.0",
     "lucide-react": "^0.563.0",
     "pdfjs-dist": "^5.4.624",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "regenerator-runtime": "^0.14.1",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {

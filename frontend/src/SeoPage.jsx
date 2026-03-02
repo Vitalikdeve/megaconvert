@@ -23,6 +23,21 @@ const upsertProperty = (property, content) => {
   tag.setAttribute('content', content);
 };
 
+const upsertLink = (rel, href, hreflang = '') => {
+  if (!href) return;
+  const selector = hreflang
+    ? `link[rel="${rel}"][hreflang="${hreflang}"]`
+    : `link[rel="${rel}"]:not([hreflang])`;
+  let tag = document.head.querySelector(selector);
+  if (!tag) {
+    tag = document.createElement('link');
+    tag.setAttribute('rel', rel);
+    if (hreflang) tag.setAttribute('hreflang', hreflang);
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('href', href);
+};
+
 const upsertJsonLd = (data) => {
   const id = 'seo-jsonld';
   let tag = document.getElementById(id);
@@ -46,21 +61,78 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
       upsertMeta('description', 'Convert files online with MegaConvert. Fast, secure, and free.');
       return;
     }
+    const origin = window.location.origin;
+    const canonicalUrl = `${origin}/convert/${conversion.slug}`;
+    const localeAlternates = ['en', 'es', 'de'];
     const title = `${conversion.from} to ${conversion.to} Converter | MegaConvert`;
     const desc = `Convert ${conversion.from} to ${conversion.to} online in seconds. Fast, secure, and high-quality conversions.`;
     document.title = title;
     upsertMeta('description', desc);
+    upsertMeta('robots', 'index,follow,max-image-preview:large');
     upsertProperty('og:title', title);
     upsertProperty('og:description', desc);
     upsertProperty('og:type', 'website');
-    upsertJsonLd({
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": `${conversion.from} to ${conversion.to} Converter`,
-      "applicationCategory": "UtilityApplication",
-      "operatingSystem": "Web",
-      "description": desc
-    });
+    upsertProperty('og:url', canonicalUrl);
+    upsertLink('canonical', canonicalUrl);
+    upsertLink('alternate', canonicalUrl, 'x-default');
+    for (const locale of localeAlternates) {
+      upsertLink('alternate', `${origin}/${locale}/convert/${conversion.slug}`, locale);
+    }
+    upsertJsonLd([
+      {
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: `${conversion.from} to ${conversion.to} Converter`,
+        applicationCategory: 'UtilityApplication',
+        operatingSystem: 'Web',
+        description: desc,
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD'
+        }
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'HowTo',
+        name: `How to convert ${conversion.from} to ${conversion.to}`,
+        step: [
+          { '@type': 'HowToStep', name: `Upload your ${conversion.from} file` },
+          { '@type': 'HowToStep', name: `Convert to ${conversion.to}` },
+          { '@type': 'HowToStep', name: `Download the result file` }
+        ]
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: `Is ${conversion.from} to ${conversion.to} conversion free?`,
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Yes, free conversion is available with optional PRO capabilities.'
+            }
+          },
+          {
+            '@type': 'Question',
+            name: 'How long does conversion take?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Most files finish in seconds. Large files may take longer depending on size and format.'
+            }
+          },
+          {
+            '@type': 'Question',
+            name: 'Are my files secure?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Files are processed over secure channels and are not published publicly.'
+            }
+          }
+        ]
+      }
+    ]);
   }, [conversion]);
 
   if (!conversion) {

@@ -10,6 +10,29 @@ import ja from './ja.json';
 import hi from './hi.json';
 import ko from './ko.json';
 import be from './be.json';
+import it from './it.json';
+import nl from './nl.json';
+import pl from './pl.json';
+import tr from './tr.json';
+import zhTw from './zh-tw.json';
 
-export const translations = { en, ru, es, zh, fr, de, ar, pt, ja, hi, ko, be };
+export const translations = {
+  en,
+  ru,
+  es,
+  zh,
+  'zh-tw': zhTw,
+  fr,
+  de,
+  it,
+  nl,
+  pl,
+  tr,
+  ar,
+  pt,
+  ja,
+  hi,
+  ko,
+  be
+};
 export const defaultLang = 'en';

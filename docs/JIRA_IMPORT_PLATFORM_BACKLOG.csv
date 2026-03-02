@@ -1,0 +1,644 @@
+﻿"Summary","Issue Type","Priority","Description","Labels","Story Points"
+"S1-001 Apply Platform DB Extension Migration","Task","Highest","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Add migration for `docs/DB_SCHEMA_PLATFORM_EXTENSION_V2.sql`.
+- Ensure idempotent and reversible migration scripts.
+- Validate index creation and foreign keys.
+Acceptance Criteria:
+- Migration applies successfully on clean and existing DB.
+- Rollback script restores pre-migration state without orphan objects.
+- Migration execution documented in runbook.","platform-rollout,sprint1_execution_issues,megaconvert","5"
+"S1-002 Define and Enforce Event Envelope Standard","Task","Highest","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Introduce shared event schema with fields: `event_id`, `correlation_id`, `event_type`, `payload`, `ts`.
+- Update event publishers (API + worker-facing producers) to use standard envelope.
+- Add schema validation for event publish path.
+Acceptance Criteria:
+- All new emitted events match schema.
+- Invalid envelope is rejected with clear error.
+- Unit tests cover valid/invalid event payloads.","platform-rollout,sprint1_execution_issues,megaconvert","5"
+"S1-003 Correlation ID Middleware for API","Task","Highest","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Add request middleware that accepts incoming `x-correlation-id` or generates new UUID.
+- Attach correlation id to request context and structured logs.
+- Return correlation id in response headers.
+Acceptance Criteria:
+- Every API request log contains `correlation_id`.
+- Response includes `x-correlation-id`.
+- Existing endpoints behavior unchanged.","platform-rollout,sprint1_execution_issues,megaconvert","3"
+"S1-004 Correlation ID Propagation to Worker Jobs","Task","Highest","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Propagate correlation id from API job creation into queue payload.
+- Ensure worker logs include same correlation id across job lifecycle.
+Acceptance Criteria:
+- One job traceable end-to-end by single correlation id.
+- Worker logs and API logs can be joined by `correlation_id`.","platform-rollout,sprint1_execution_issues,megaconvert","3"
+"S1-005 Base Repository Layer for Platform Tables","Task","High","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement minimal repository methods for:
+- `feature_flags`
+- `experiments`
+- `job_snapshots`
+- `alerts_rules`
+- `rate_limit_policies`
+- Add basic CRUD/insertion operations used in later sprints.
+Acceptance Criteria:
+- Repositories covered by unit tests for happy path + not-found handling.
+- No direct SQL usage outside repository for these entities in new code.","platform-rollout,sprint1_execution_issues,megaconvert","5"
+"S1-006 Admin Navigation Placeholders (Flags/Experiments/Health)","Task","High","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Add left-nav entries in admin SPA:
+- Feature Flags
+- Experiments
+- System Health
+- Add placeholder pages with loading/error empty states.
+Acceptance Criteria:
+- Routes open without 404.
+- Navigation works on desktop and mobile breakpoints.
+- Placeholder pages are RBAC-protected.","platform-rollout,sprint1_execution_issues,megaconvert","3"
+"S1-007 Shared Admin API Client Contracts (Type Stubs)","Task","High","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Add typed client interfaces for upcoming endpoints:
+- `/admin/flags`
+- `/admin/experiments`
+- `/admin/alerts/*`
+- `/admin/synthetic/*`
+- Add response and error types for consistent UI handling.
+Acceptance Criteria:
+- Types compile and are imported by placeholder pages.
+- No `any` usage for new admin platform payloads.","platform-rollout,sprint1_execution_issues,megaconvert","3"
+"S1-008 Provision Env/Secrets for Platform Foundation","Task","Highest","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Add environment variables and secret placeholders for platform services.
+- Update deployment config templates for all environments.
+- Document secure secret rotation path.
+Acceptance Criteria:
+- Dev/staging/prod config keys defined and versioned in templates.
+- Secrets are not committed in plaintext.","platform-rollout,sprint1_execution_issues,megaconvert","3"
+"S1-009 Migration Runbook and Rollback Procedure","Task","High","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Write step-by-step migration runbook with prechecks/postchecks.
+- Include rollback flow and safety conditions.
+Acceptance Criteria:
+- Runbook can be executed by on-call without tribal knowledge.
+- Includes explicit verification SQL checks.","platform-rollout,sprint1_execution_issues,megaconvert","2"
+"S1-010 QA Foundation Validation Pack","Task","Highest","Source: docs/SPRINT1_EXECUTION_ISSUES.md
+Owner: QA1
+Scope:
+- Validate no regressions in critical flow `upload -> convert -> download`.
+- Validate correlation id presence across API and worker logs.
+- Execute pre-release smoke subset for routes and core actions.
+Acceptance Criteria:
+- Core conversion path passes.
+- Correlation id trace collected for at least one successful and one failed job.
+- QA report attached with pass/fail and blockers.
+- Backend total: `16 SP`
+- Frontend total: `6 SP`
+- QA total: `5 SP`
+- SRE total: `5 SP`
+- Total: `32 SP`
+- All `P0` issues completed.
+- No blocker regression in conversion flow.
+- Migration and rollback tested in staging.
+- Correlation id visible in logs for API + worker.","platform-rollout,sprint1_execution_issues,megaconvert","5"
+"S2-001 Feature Flags CRUD API (Admin)","Task","Highest","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement endpoints:
+- `GET /admin/flags`
+- `POST /admin/flags`
+- `PATCH /admin/flags/:id`
+- `DELETE /admin/flags/:id`
+- Support environment scoping and rollout percentage.
+- Validate payloads and prevent duplicate flag keys.
+Acceptance Criteria:
+- CRUD operations pass integration tests.
+- Invalid payload returns validation errors with stable format.
+- Deleted flags are not returned by list endpoint.","platform-rollout,sprint2_execution_issues,megaconvert","5"
+"S2-002 Flags Evaluation Endpoint (Runtime)","Task","Highest","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Implement `POST /flags/evaluate`.
+- Accept keys + subject context (`type`, `id`) + environment.
+- Return deterministic evaluation for same input and flag config.
+Acceptance Criteria:
+- Endpoint responds within agreed SLO for p95.
+- Deterministic behavior verified by repeat tests.
+- Unknown keys return explicit false/absent policy.","platform-rollout,sprint2_execution_issues,megaconvert","5"
+"S2-003 Feature Flag Cache Layer","Task","High","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Add in-memory/Redis-backed cache for flag reads.
+- Add cache invalidation on flag mutation.
+- Add cache metrics (`hit`, `miss`, `stale`).
+Acceptance Criteria:
+- Cache hit ratio visible in metrics.
+- Mutated flags become visible without restart.
+- No stale config beyond configured TTL.","platform-rollout,sprint2_execution_issues,megaconvert","3"
+"S2-004 Rate Limit Policy Engine (Per User/API Key/Burst)","Task","Highest","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement policy lookup from `rate_limit_policies`.
+- Enforce limits using Redis counters/window semantics.
+- Support per-user and per-API key scopes.
+- Add burst handling and fallback behavior when Redis is degraded.
+Acceptance Criteria:
+- Limited requests return `429` with clear error payload.
+- Allow/deny behavior matches configured policy windows.
+- Fallback mode is explicit and logged.","platform-rollout,sprint2_execution_issues,megaconvert","8"
+"S2-005 Standard Rate Limit Headers and Error Contract","Task","Highest","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Add response headers on protected endpoints (`X-RateLimit-*`, `Retry-After`).
+- Standardize `429` error body for frontend handling.
+Acceptance Criteria:
+- Headers present and correct on both allowed and limited responses.
+- Frontend can reliably parse retry timeout.","platform-rollout,sprint2_execution_issues,megaconvert","3"
+"S2-006 Audit Log Enforcement for Admin Mutations","Task","Highest","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Wrap admin mutation handlers with audit write middleware/hook.
+- Persist who/what/when and target metadata into `audit_logs`.
+- Include correlation id for traceability.
+Acceptance Criteria:
+- Every admin write action creates one audit record.
+- Audit record includes actor, action, target, timestamp.
+- Missing actor context is rejected or marked by policy.","platform-rollout,sprint2_execution_issues,megaconvert","5"
+"S2-007 Admin Feature Flags UI (List/Edit/Toggle)","Task","High","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Build flags list table with search/filter by env.
+- Add create/edit modal and enable toggle.
+- Show save loading, success, and error states.
+Acceptance Criteria:
+- User can create, edit, toggle, and delete flags from UI.
+- UI reflects backend updates without hard reload.
+- No dead buttons in flags module.","platform-rollout,sprint2_execution_issues,megaconvert","5"
+"S2-008 Frontend Flag Evaluation Helper Integration","Task","High","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Implement `isEnabled(flagKey, context)` helper using evaluate endpoint.
+- Add fallback for API timeout/unavailable scenarios.
+- Wire helper into at least one non-critical gated feature.
+Acceptance Criteria:
+- Feature gate behavior matches backend evaluation.
+- API failure falls back safely without UI crash.","platform-rollout,sprint2_execution_issues,megaconvert","3"
+"S2-009 Rate Limit UX Handling","Task","High","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Add standardized UI handling for `429` responses.
+- Show retry timing and action guidance.
+Acceptance Criteria:
+- Users see clear limit feedback (not generic failure).
+- Retry becomes available after timeout window.","platform-rollout,sprint2_execution_issues,megaconvert","2"
+"S2-010 Security/RBAC Hardening for New Admin Endpoints","Task","Highest","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Enforce RBAC on all new `/admin/flags` operations.
+- Add role-based negative tests.
+Acceptance Criteria:
+- Unauthorized users receive `403`.
+- No privilege escalation path for flag mutations.","platform-rollout,sprint2_execution_issues,megaconvert","3"
+"S2-011 Observability for Controls Layer","Task","High","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Add dashboards for flag evaluate latency and rate-limit reject count.
+- Add logs/alerts for sudden `429` spikes.
+Acceptance Criteria:
+- Dashboard panels available in staging.
+- Spike alert triggers under load-test threshold.","platform-rollout,sprint2_execution_issues,megaconvert","3"
+"S2-012 QA Validation Pack for Controls Layer","Task","Highest","Source: docs/SPRINT2_EXECUTION_ISSUES.md
+Owner: QA1
+Scope:
+- End-to-end tests for flag CRUD + evaluate + UI behavior.
+- Rate-limit scenarios: below limit, at limit, above limit, after reset.
+- Audit completeness checks for admin writes.
+Acceptance Criteria:
+- All `P0` flows pass in staging.
+- QA report includes proof for audit coverage and rate-limit contracts.
+- Backend total: `29 SP`
+- Frontend total: `10 SP`
+- QA total: `5 SP`
+- SRE total: `3 SP`
+- Total: `47 SP`
+- All `P0` issues completed.
+- Feature flag runtime toggling works without deploy.
+- Rate-limit enforcement and headers validated.
+- Admin write actions are fully audited.
+- No blocker defects in controls layer modules.","platform-rollout,sprint2_execution_issues,megaconvert","5"
+"S3-001 Snapshot Capture on Job Lifecycle","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Capture `job_snapshots` on `create`, `start`, `failure`.
+- Store payload/settings/inputs/correlation id.
+- Avoid storing sensitive plaintext by policy.
+Acceptance Criteria:
+- Snapshot rows created for all three trigger types.
+- Sensitive fields are masked/redacted.
+- Snapshot insertion failures are logged and non-blocking to core flow.","platform-rollout,sprint3_execution_issues,megaconvert","5"
+"S3-002 Replay Endpoint (Requeue from Snapshot)","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Implement `POST /admin/jobs/:id/replay`.
+- Use latest or selected snapshot to recreate job request.
+- Preserve correlation chain (`parent_correlation_id`).
+Acceptance Criteria:
+- Replay creates a new job with link to source job/snapshot.
+- Idempotency guards prevent duplicate side effects.
+- Replay request/response contracts covered by integration tests.","platform-rollout,sprint3_execution_issues,megaconvert","8"
+"S3-003 Snapshots Query API","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement `GET /admin/jobs/:id/snapshots`.
+- Add pagination and basic filtering by trigger type.
+Acceptance Criteria:
+- Snapshot list is returned sorted by time desc.
+- Empty state returns clean 200 with empty list.","platform-rollout,sprint3_execution_issues,megaconvert","3"
+"S3-004 Debug Bundle Assembly Service","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Build debug bundle payload from snapshot + effective config + log refs + trace ids.
+- Provide sanitized JSON export format.
+Acceptance Criteria:
+- Bundle contains required sections and schema version.
+- Sensitive data redacted consistently.
+- Export completes within timeout budget.","platform-rollout,sprint3_execution_issues,megaconvert","5"
+"S3-005 Debug Bundle Download Endpoint","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement `GET /admin/jobs/:id/debug-bundle`.
+- Support JSON download with content-disposition.
+Acceptance Criteria:
+- Endpoint returns downloadable file for authorized user.
+- Unauthorized requests return `403`.","platform-rollout,sprint3_execution_issues,megaconvert","3"
+"S3-006 RBAC Guardrails for Replay/Export","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Restrict replay/export to privileged roles.
+- Add audit entries for replay and export actions.
+Acceptance Criteria:
+- Every replay/export action is audited with actor + timestamp.
+- Negative tests verify RBAC denial paths.","platform-rollout,sprint3_execution_issues,megaconvert","3"
+"S3-007 Admin UI: Replay Action on Job Details","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Add `Replay` button with confirmation and loading state.
+- Show success link to new replayed job.
+Acceptance Criteria:
+- Replay action is clickable and produces visible outcome.
+- Errors are displayed with retry option.","platform-rollout,sprint3_execution_issues,megaconvert","3"
+"S3-008 Admin UI: Snapshot Timeline","Task","Medium","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Show snapshot timeline/list in job details.
+- Display trigger type, time, and correlation id.
+Acceptance Criteria:
+- Timeline reflects API data and supports empty state.
+- No layout regressions on tablet/mobile.","platform-rollout,sprint3_execution_issues,megaconvert","3"
+"S3-009 Admin UI: Debug Bundle Download Action","Task","Medium","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Add `Download debug bundle` action.
+- Show progress, success, and error states.
+Acceptance Criteria:
+- Download starts on click and returns valid JSON.
+- UI clearly reports failures.","platform-rollout,sprint3_execution_issues,megaconvert","2"
+"S3-010 Replay Observability Metrics","Task","Medium","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Add counters: replay requests, replay success, replay failures.
+- Add latency metric for bundle export.
+Acceptance Criteria:
+- Metrics visible in staging dashboards.
+- Alerts optional but dashboard panels present.","platform-rollout,sprint3_execution_issues,megaconvert","2"
+"S3-011 QA Validation Pack (Replay + Export)","Task","High","Source: docs/SPRINT3_EXECUTION_ISSUES.md
+Owner: QA1
+Scope:
+- Validate replay correctness (payload parity + status path).
+- Validate debug bundle completeness and redaction.
+- Validate RBAC and audit coverage.
+Acceptance Criteria:
+- One failed job successfully replayed end-to-end.
+- QA evidence includes exported bundle sample and audit entries.
+- Backend total: `27 SP`
+- Frontend total: `8 SP`
+- QA total: `5 SP`
+- SRE total: `2 SP`
+- Total: `42 SP`
+- Replay from admin works for failed jobs.
+- Debug bundle export is available and sanitized.
+- Replay/export actions are RBAC-protected and audited.
+- No regressions in upload -> convert -> download flow.","platform-rollout,sprint3_execution_issues,megaconvert","5"
+"S4-001 Experiments CRUD API (Admin)","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement:
+- `GET /admin/experiments`
+- `POST /admin/experiments`
+- `PATCH /admin/experiments/:id`
+- Support variants, traffic split, status (`draft`, `active`, `paused`, `completed`).
+Acceptance Criteria:
+- CRUD operations pass integration tests.
+- Invalid split/variant payloads rejected with clear validation errors.
+- Active experiments are queryable by key.","platform-rollout,sprint4_execution_issues,megaconvert","5"
+"S4-002 Assignment Engine (Deterministic Bucketing)","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Implement `POST /experiments/assign`.
+- Deterministic assignment by stable hash of subject id + experiment key.
+- Persist assignment in `experiment_assignments`.
+Acceptance Criteria:
+- Repeated calls for same subject/experiment return same variant.
+- Traffic split approximates configured percentages under load sample.
+- Assignment failures are logged with correlation id.","platform-rollout,sprint4_execution_issues,megaconvert","8"
+"S4-003 Exposure and Outcome Event Tracking","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Emit events for experiment exposure and conversion outcomes.
+- Add minimal aggregation endpoint/source for admin metrics panel.
+Acceptance Criteria:
+- Exposure and outcome counts are available per experiment/variant.
+- Events include experiment key and variant.","platform-rollout,sprint4_execution_issues,megaconvert","3"
+"S4-004 Synthetic Runner Service (Core Scenario)","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Implement synthetic flow runner for `upload -> convert -> download`.
+- Persist run results in `synthetic_runs` (status, latency, error).
+- Tag runs with scenario key and environment.
+Acceptance Criteria:
+- Manual trigger run completes end-to-end in staging.
+- Failed run stores actionable error details.
+- Runner has timeout guards and cleanup.","platform-rollout,sprint4_execution_issues,megaconvert","8"
+"S4-005 Synthetic Scheduler Integration","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Configure scheduled execution (cron/worker schedule).
+- Ensure one active run lock to avoid overlaps.
+Acceptance Criteria:
+- Runs execute on schedule in staging.
+- Overlapping runs are prevented.","platform-rollout,sprint4_execution_issues,megaconvert","3"
+"S4-006 Synthetic Admin APIs","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement:
+- `POST /admin/synthetic/run`
+- `GET /admin/synthetic/runs`
+- `GET /admin/synthetic/runs/:id`
+Acceptance Criteria:
+- Manual trigger works and returns run id.
+- Runs list supports pagination and latest-first ordering.","platform-rollout,sprint4_execution_issues,megaconvert","3"
+"S4-007 Admin UI: Experiments Module","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Build experiments table with status and split.
+- Add create/edit flows and activate/pause controls.
+- Add loading/success/error feedback for all actions.
+Acceptance Criteria:
+- No dead controls in experiments UI.
+- State updates without hard reload.
+- Invalid form input is blocked with validation messaging.","platform-rollout,sprint4_execution_issues,megaconvert","5"
+"S4-008 Admin UI: Synthetic Health Widget","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Show latest synthetic run status, latency, and timestamp.
+- Add quick link to run history page.
+Acceptance Criteria:
+- Widget refreshes correctly and reflects latest run.
+- Failure state is visually explicit and readable.","platform-rollout,sprint4_execution_issues,megaconvert","3"
+"S4-009 Admin UI: Synthetic Runs History Page","Task","Medium","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Render runs table with status, duration, started/ended times.
+- Support drill-down to single run details.
+Acceptance Criteria:
+- History view handles empty, loading, and error states.
+- Detail page shows error context when run fails.","platform-rollout,sprint4_execution_issues,megaconvert","3"
+"S4-010 SRE Dashboards for Experiments and Synthetic","Task","Medium","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Add dashboard panels:
+- assignment volume by experiment
+- variant split
+- synthetic success rate
+- synthetic p95 latency
+Acceptance Criteria:
+- Panels available and populated in staging.
+- Dashboard links documented for QA and on-call.","platform-rollout,sprint4_execution_issues,megaconvert","3"
+"S4-011 QA Validation Pack (Experiments + Synthetic)","Task","High","Source: docs/SPRINT4_EXECUTION_ISSUES.md
+Owner: QA1
+Scope:
+- Validate deterministic assignment and split behavior.
+- Validate synthetic success/failure paths and admin visibility.
+- Validate critical user flow remains stable with active experiments.
+Acceptance Criteria:
+- QA report includes deterministic assignment evidence.
+- Synthetic failure is visible in admin within SLA target.
+- No blocker regressions in conversion flow.
+- Backend total: `27 SP`
+- Frontend total: `11 SP`
+- QA total: `5 SP`
+- SRE total: `6 SP`
+- Total: `49 SP`
+- Experiment assignment is deterministic and persisted.
+- Synthetic runner executes on schedule and stores results.
+- Admin can trigger/view synthetic runs and manage experiments.
+- Core upload -> convert -> download remains green.","platform-rollout,sprint4_execution_issues,megaconvert","5"
+"S5-001 Alert Rules CRUD API","Task","Highest","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement:
+- `GET /admin/alerts/rules`
+- `POST /admin/alerts/rules`
+- `PATCH /admin/alerts/rules/:id`
+- Validate severity, conditions, cooldown, and channel definitions.
+Acceptance Criteria:
+- CRUD passes integration tests.
+- Invalid rules are rejected with stable validation errors.","platform-rollout,sprint5_execution_issues,megaconvert","5"
+"S5-002 Rules Engine Evaluation Pipeline","Task","Highest","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Evaluate incoming metrics/events against active rules.
+- Produce `alerts_events` with correlation to source signal.
+- Support threshold and rate-of-change predicates.
+Acceptance Criteria:
+- Matching conditions produce alert events reliably.
+- Non-matching signals do not produce false positives.","platform-rollout,sprint5_execution_issues,megaconvert","8"
+"S5-003 Alert Dedupe and Cooldown Controls","Task","High","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Add dedupe key strategy.
+- Enforce cooldown windows from rule config.
+Acceptance Criteria:
+- Duplicate events within cooldown are suppressed.
+- Suppression behavior is observable in logs/metrics.","platform-rollout,sprint5_execution_issues,megaconvert","3"
+"S5-004 Notification Delivery Adapters (Email + Webhook/Slack)","Task","Highest","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement notification fan-out for enabled channels.
+- Add retry with bounded backoff and dead-letter marker.
+Acceptance Criteria:
+- Fired alert reaches configured channels.
+- Delivery failures are retried and logged.","platform-rollout,sprint5_execution_issues,megaconvert","5"
+"S5-005 Alert Events Query API","Task","High","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Implement `GET /admin/alerts/events` with filters by severity/status/time range.
+Acceptance Criteria:
+- Events list is pageable and sorted by fired time desc.
+- Filters return correct subsets.","platform-rollout,sprint5_execution_issues,megaconvert","3"
+"S5-006 Admin UI: Alert Rules Management","Task","High","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Build rules list and create/edit form.
+- Add enable/disable toggle and feedback states.
+Acceptance Criteria:
+- All rule actions are interactive and persisted.
+- Validation errors are shown inline.","platform-rollout,sprint5_execution_issues,megaconvert","5"
+"S5-007 Admin UI: Recent Alert Events Feed","Task","High","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Build events table with severity badges, status, and timestamps.
+- Add quick filters and event detail drawer.
+Acceptance Criteria:
+- New alerts appear without full page reload.
+- Event details include source context and correlation id.","platform-rollout,sprint5_execution_issues,megaconvert","3"
+"S5-008 System Health Dashboard Summary Cards","Task","Medium","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Add cards for success rate, queue depth, error rate, and p95 latency.
+Acceptance Criteria:
+- Cards render current values with fallback state on API outage.
+- No layout break across desktop/tablet/mobile.","platform-rollout,sprint5_execution_issues,megaconvert","3"
+"S5-009 On-Call Notification Routing Setup","Task","Highest","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Configure webhook/email routes for staging and production.
+- Document ownership/escalation rules.
+Acceptance Criteria:
+- Test alert reaches on-call channels in staging.
+- Routing docs stored and discoverable.","platform-rollout,sprint5_execution_issues,megaconvert","3"
+"S5-010 Initial SLO Threshold and Alert Policy Pack","Task","High","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Define initial threshold values for latency, error rate, and synthetic failures.
+- Create baseline alert rules in staging.
+Acceptance Criteria:
+- Baseline rules are active and versioned.
+- Threshold rationale documented.","platform-rollout,sprint5_execution_issues,megaconvert","2"
+"S5-011 QA Validation Pack (Alerts + Notifications)","Task","Highest","Source: docs/SPRINT5_EXECUTION_ISSUES.md
+Owner: QA1
+Scope:
+- Trigger synthetic/API failure conditions and verify alert creation.
+- Verify channel delivery and dedupe behavior.
+- Verify admin visibility for rules/events.
+Acceptance Criteria:
+- At least one auto-fired alert is delivered to channel.
+- QA evidence includes fired event id and delivery proof.
+- Backend total: `24 SP`
+- Frontend total: `11 SP`
+- QA total: `5 SP`
+- SRE total: `5 SP`
+- Total: `45 SP`
+- Alert rules are manageable from admin.
+- Alert firing pipeline works from signal to notification.
+- Dedupe/cooldown prevents alert storms.
+- System health summary and alert events are visible in admin.","platform-rollout,sprint5_execution_issues,megaconvert","5"
+"S6-001 Orchestrator Sandbox Routing","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Add routing branch: `sandbox=true` -> sandbox queue namespace.
+- Preserve default production routing when sandbox flag is absent.
+- Include routing decision in job events/logs.
+Acceptance Criteria:
+- Sandbox jobs always enter sandbox queue.
+- Production jobs are not rerouted accidentally.","platform-rollout,sprint6_execution_issues,megaconvert","5"
+"S6-002 Storage Namespace Isolation for Sandbox","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Add dedicated storage prefix/bucket namespace for sandbox inputs/results.
+- Enforce namespace at read/write paths.
+Acceptance Criteria:
+- Sandbox artifacts never appear in production namespace.
+- Namespace policy covered by integration tests.","platform-rollout,sprint6_execution_issues,megaconvert","5"
+"S6-003 Sandbox Safety Quotas","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: BE2
+Scope:
+- Add quota limits for sandbox jobs (count/size/runtime).
+- Emit clear errors when limits are exceeded.
+Acceptance Criteria:
+- Over-limit sandbox requests fail gracefully.
+- Quota violations are observable in logs and metrics.","platform-rollout,sprint6_execution_issues,megaconvert","3"
+"S6-004 Replay-to-Sandbox Support","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: BE1
+Scope:
+- Extend replay endpoint with optional `sandbox=true`.
+- Audit replay target environment.
+Acceptance Criteria:
+- Admin can replay failed job directly to sandbox.
+- Replay audit includes target environment.","platform-rollout,sprint6_execution_issues,megaconvert","3"
+"S6-005 Admin UI: Sandbox Toggle for Job/Replay Actions","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Add sandbox toggle on relevant admin job actions.
+- Show explicit target environment before confirm.
+Acceptance Criteria:
+- Toggle state is reflected in API request.
+- UI prevents ambiguous target execution.","platform-rollout,sprint6_execution_issues,megaconvert","3"
+"S6-006 Admin UI: Sandbox Job Labeling and Filters","Task","Medium","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: FE1
+Scope:
+- Label sandbox jobs in lists/details.
+- Add filter by environment (`prod`, `sandbox`).
+Acceptance Criteria:
+- Users can quickly distinguish sandbox vs production jobs.
+- Filtering works with pagination.","platform-rollout,sprint6_execution_issues,megaconvert","3"
+"S6-007 Provision Isolated Sandbox Worker Pool","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Provision separate worker deployment/namespace for sandbox.
+- Apply queue and storage credentials scoped to sandbox.
+Acceptance Criteria:
+- Sandbox workers cannot read production queue/storage credentials.
+- Deployment runbook updated.","platform-rollout,sprint6_execution_issues,megaconvert","5"
+"S6-008 Namespace Policies and Access Controls","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Enforce network/storage policies that block cross-environment access.
+- Add policy validation checks in CI or deployment gate.
+Acceptance Criteria:
+- Cross-env access attempts are blocked.
+- Policy checks produce pass/fail artifact.","platform-rollout,sprint6_execution_issues,megaconvert","3"
+"S6-009 Observability Split by Environment","Task","Medium","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: SRE1
+Scope:
+- Add environment dimension to dashboards/metrics/log queries.
+- Provide quick view for sandbox error/latency trends.
+Acceptance Criteria:
+- Dashboards can filter and compare `prod` vs `sandbox`.","platform-rollout,sprint6_execution_issues,megaconvert","2"
+"S6-010 QA Isolation Validation Pack","Task","High","Source: docs/SPRINT6_EXECUTION_ISSUES.md
+Owner: QA1
+Scope:
+- Validate queue and storage isolation end-to-end.
+- Validate sandbox replay and admin flows.
+- Validate no regressions in production critical flows.
+Acceptance Criteria:
+- QA evidence confirms zero cross-contamination.
+- Production upload -> convert -> download remains green.
+- Backend total: `16 SP`
+- Frontend total: `6 SP`
+- QA total: `5 SP`
+- SRE total: `10 SP`
+- Total: `37 SP`
+- Sandbox jobs are isolated at queue and storage levels.
+- Admin can intentionally route jobs/replays to sandbox.
+- Environment-specific observability is available.
+- Full pre-release smoke suite passes.","platform-rollout,sprint6_execution_issues,megaconvert","5"

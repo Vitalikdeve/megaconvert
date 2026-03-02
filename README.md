@@ -2,6 +2,33 @@
 
 Production-structured monorepo with separated frontend, API, and worker.
 
+Enterprise + AI baseline blueprint: `ENTERPRISE_PLATFORM_BLUEPRINT.md`
+Production checklist: `PRODUCTION_READINESS_CHECKLIST.md`
+Implementation rollout blueprint: `IMPLEMENTATION_BLUEPRINT.md`
+Engineering platform architecture: `docs/ENGINEERING_PLATFORM_ARCHITECTURE.md`
+Platform rollout sprint plan: `docs/PLATFORM_ROLLOUT_SPRINT_PLAN.md`
+Sprint 1 execution issues: `docs/SPRINT1_EXECUTION_ISSUES.md`
+Sprint 2 execution issues: `docs/SPRINT2_EXECUTION_ISSUES.md`
+Sprint 3 execution issues: `docs/SPRINT3_EXECUTION_ISSUES.md`
+Sprint 4 execution issues: `docs/SPRINT4_EXECUTION_ISSUES.md`
+Sprint 5 execution issues: `docs/SPRINT5_EXECUTION_ISSUES.md`
+Sprint 6 execution issues: `docs/SPRINT6_EXECUTION_ISSUES.md`
+Jira import CSV (S1-S6): `docs/JIRA_IMPORT_PLATFORM_BACKLOG.csv`
+Jira import guide: `docs/JIRA_IMPORT_INSTRUCTIONS.md`
+SEO growth package: `docs/SEO_GROWTH_PACKAGE.md`
+SEO execution backlog: `docs/SEO_EXECUTION_BACKLOG.md`
+Audience growth feature matrix: `docs/AUDIENCE_GROWTH_FEATURE_MATRIX.md`
+Audience growth execution issues: `docs/AUDIENCE_GROWTH_EXECUTION_ISSUES.md`
+Audience growth Jira CSV: `docs/AUDIENCE_GROWTH_JIRA_IMPORT.csv`
+Audience growth Jira import guide: `docs/AUDIENCE_GROWTH_JIRA_IMPORT_INSTRUCTIONS.md`
+API keys platform design and endpoints: `docs/API_KEYS_PLATFORM.md`
+Admin design package: `docs/ADMIN_DESIGN_PACKAGE.md`
+DB schema draft: `docs/DB_SCHEMA_V1.sql`
+DB platform extension: `docs/DB_SCHEMA_PLATFORM_EXTENSION_V2.sql`
+OpenAPI draft: `docs/openapi.yaml`
+User flows: `docs/USER_FLOWS.md`
+Design stability spec: `docs/DESIGN_STABILITY_SPEC.md`
+
 ## Structure
 - `frontend/` Vercel (React/Vite SPA)
 - `api/` Fly/Render (API, queue producer)
@@ -43,6 +70,25 @@ This script also copies `tessdata/rus.traineddata` into system Tesseract (if ava
 Run this from repo root to verify frontend/API/worker are aligned and every tool has a worker conversion strategy:
 ```powershell
 node tests/verify-200-converters.cjs
+```
+
+## Operational smoke checks
+Run backend health/control checks:
+```powershell
+node tests/operational-smoke.cjs
+```
+Run extended platform checks (flags/share presets/audit/settings):
+```powershell
+$env:MC_STRICT_EXTENDED='1'; node tests/operational-smoke.cjs
+```
+
+Run frontend smoke verification (SEO + lint + prerender):
+```powershell
+npm --prefix frontend run verify:smoke
+```
+Run interaction guard (fails on button/link stubs):
+```powershell
+npm --prefix frontend run check:interactions
 ```
 
 ## Analytics (ClickHouse)
