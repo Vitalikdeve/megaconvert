@@ -47,6 +47,35 @@ async function fetchAccountBilling({ apiBaseUrl, appUserId, sessionId }) {
   return payload && typeof payload === 'object' ? payload : {};
 }
 
+async function redeemPromoCode({ apiBaseUrl, appUserId, sessionId, code }) {
+  const base = String(apiBaseUrl || '').trim().replace(/\/+$/, '');
+  if (!base) throw new Error('API base url is not configured');
+  const userId = String(appUserId || '').trim();
+  if (!userId) throw new Error('App user id is missing');
+  const promoCode = String(code || '').trim();
+  if (!promoCode) throw new Error('Promo code is missing');
+
+  const response = await withTimeout(fetch(`${base}/promo/redeem`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-user-id': userId,
+      'x-session-id': String(sessionId || 'tg-session').trim() || 'tg-session'
+    },
+    body: JSON.stringify({ code: promoCode })
+  }), JOB_TIMEOUT_MS);
+
+  const payload = await parseJsonSafe(response);
+  if (!response.ok) {
+    const message = payload?.message || `Promo API error (${response.status})`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
+  }
+  return payload && typeof payload === 'object' ? payload : {};
+}
+
 function normalizeBase(apiBaseUrl) {
   const base = String(apiBaseUrl || '').trim().replace(/\/+$/, '');
   if (!base) throw new Error('API base url is not configured');
@@ -156,6 +185,7 @@ async function downloadFileBuffer({ apiBaseUrl, downloadUrl }) {
 
 module.exports = {
   fetchAccountBilling,
+  redeemPromoCode,
   uploadInputViaProxy,
   createConversionJob,
   fetchConversionJob,

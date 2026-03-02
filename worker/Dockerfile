@@ -7,6 +7,7 @@ RUN set -e; \
   apt-get update && apt-get install -y \
   ffmpeg \
   libreoffice \
+  calibre \
   imagemagick \
   ghostscript \
   poppler-utils \

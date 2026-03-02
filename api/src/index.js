@@ -38,6 +38,7 @@ const logError = (payload) => console.error(JSON.stringify(payload));
 
 const app = express();
 app.set('etag', false);
+app.set('trust proxy', true);
 app.use((req, res, next) => {
   const start = Date.now();
   const requestId = req.headers['x-request-id'] || uuidv4();
@@ -100,6 +101,23 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+const rawSecurityHeadersEnabled = String(process.env.SECURITY_HEADERS_ENABLED || 'true').trim().toLowerCase();
+const rawHstsEnabled = String(process.env.HSTS_ENABLED || 'true').trim().toLowerCase();
+const SECURITY_HEADERS_ENABLED = !['0', 'false', 'no', 'off', 'disabled'].includes(rawSecurityHeadersEnabled);
+const HSTS_ENABLED = !['0', 'false', 'no', 'off', 'disabled'].includes(rawHstsEnabled);
+const HSTS_MAX_AGE = Math.max(300, Number(process.env.HSTS_MAX_AGE || 31536000));
+app.use((req, res, next) => {
+  if (!SECURITY_HEADERS_ENABLED) return next();
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  const proto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  if (HSTS_ENABLED && (req.secure || proto === 'https')) {
+    res.setHeader('Strict-Transport-Security', `max-age=${HSTS_MAX_AGE}; includeSubDomains; preload`);
+  }
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 
 // Ensure middleware-level failures (invalid JSON/CORS) are returned as JSON.
@@ -150,6 +168,10 @@ const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 const RATE_LIMIT_UPLOADS_PER_MIN = Number(process.env.RATE_LIMIT_UPLOADS_PER_MIN || 30);
 const RATE_LIMIT_JOBS_PER_MIN = Number(process.env.RATE_LIMIT_JOBS_PER_MIN || 20);
 const ZK_SESSION_TTL_SEC = Number(process.env.ZK_SESSION_TTL_SEC || 180);
+const ENCRYPTION_KEY_VERSION = String(process.env.ENCRYPTION_KEY_VERSION || 'v1').trim() || 'v1';
+const ENCRYPTION_MIN_CHUNK_SIZE = Math.max(16 * 1024, Number(process.env.ENCRYPTION_MIN_CHUNK_SIZE || 64 * 1024));
+const ENCRYPTION_MAX_CHUNK_SIZE = Math.max(ENCRYPTION_MIN_CHUNK_SIZE, Number(process.env.ENCRYPTION_MAX_CHUNK_SIZE || 16 * 1024 * 1024));
+const ENCRYPTION_MAX_TOTAL_CHUNKS = Math.max(1, Number(process.env.ENCRYPTION_MAX_TOTAL_CHUNKS || 20000));
 const REDIS_OP_TIMEOUT_MS = Number(process.env.REDIS_OP_TIMEOUT_MS || 2000);
 const QUEUE_ADD_TIMEOUT_MS = Number(process.env.QUEUE_ADD_TIMEOUT_MS || 2000);
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
@@ -223,13 +245,75 @@ const SEARCH_RANGE_DURATIONS_MS = {
 const ADMIN_POSTS_FILE = String(
   process.env.ADMIN_POSTS_FILE || path.join(__dirname, '..', 'data', 'admin_posts.json')
 ).trim();
+const DEVELOPERS_FILE = String(
+  process.env.DEVELOPERS_FILE || path.join(__dirname, '..', 'data', 'developers.json')
+).trim();
 const POST_LIKES_FILE = String(
   process.env.POST_LIKES_FILE || path.join(__dirname, '..', 'data', 'post_likes.json')
 ).trim();
+const CONTENT_PAGES_FILE = String(
+  process.env.CONTENT_PAGES_FILE || path.join(__dirname, '..', 'data', 'content_pages.json')
+).trim();
+const CONTENT_BLOCKS_FILE = String(
+  process.env.CONTENT_BLOCKS_FILE || path.join(__dirname, '..', 'data', 'content_blocks.json')
+).trim();
+const PLATFORM_SETTINGS_FILE = String(
+  process.env.PLATFORM_SETTINGS_FILE || path.join(__dirname, '..', 'data', 'platform_settings.json')
+).trim();
+const API_KEYS_FILE = String(
+  process.env.API_KEYS_FILE || path.join(__dirname, '..', 'data', 'api_keys.json')
+).trim();
+const API_USAGE_FILE = String(
+  process.env.API_USAGE_FILE || path.join(__dirname, '..', 'data', 'api_usage.json')
+).trim();
+const API_WEBHOOKS_FILE = String(
+  process.env.API_WEBHOOKS_FILE || path.join(__dirname, '..', 'data', 'api_webhooks.json')
+).trim();
+const API_WEBHOOK_DELIVERIES_FILE = String(
+  process.env.API_WEBHOOK_DELIVERIES_FILE || path.join(__dirname, '..', 'data', 'api_webhook_deliveries.json')
+).trim();
+const SHARE_LINKS_FILE = String(
+  process.env.SHARE_LINKS_FILE || path.join(__dirname, '..', 'data', 'share_links.json')
+).trim();
+const AUDIT_LOGS_FILE = String(
+  process.env.AUDIT_LOGS_FILE || path.join(__dirname, '..', 'data', 'audit_logs.json')
+).trim();
+const LOCALIZATION_OVERRIDES_FILE = String(
+  process.env.LOCALIZATION_OVERRIDES_FILE || path.join(__dirname, '..', 'data', 'localization_overrides.json')
+).trim();
+const WORKER_HEALTH_CHECKS_FILE = String(
+  process.env.WORKER_HEALTH_CHECKS_FILE || path.join(__dirname, '..', 'data', 'worker_health_checks.json')
+).trim();
+const SYNTHETIC_TEST_RESULTS_FILE = String(
+  process.env.SYNTHETIC_TEST_RESULTS_FILE || path.join(__dirname, '..', 'data', 'synthetic_test_results.json')
+).trim();
+const FORMAT_HEALTH_STATE_FILE = String(
+  process.env.FORMAT_HEALTH_STATE_FILE || path.join(__dirname, '..', 'data', 'format_health_state.json')
+).trim();
+const WORKER_ALERT_EVENTS_FILE = String(
+  process.env.WORKER_ALERT_EVENTS_FILE || path.join(__dirname, '..', 'data', 'worker_alert_events.json')
+).trim();
+const WORKER_JOB_RESULTS_FILE = String(
+  process.env.WORKER_JOB_RESULTS_FILE || path.join(__dirname, '..', 'data', 'worker_job_results.json')
+).trim();
+const WORKSPACE_PLATFORM_FILE = String(
+  process.env.WORKSPACE_PLATFORM_FILE || path.join(__dirname, '..', 'data', 'workspace_platform.json')
+).trim();
+const ADMIN_ASSETS_DIR = String(
+  process.env.ADMIN_ASSETS_DIR || path.join(__dirname, '..', 'data', 'admin_assets')
+).trim();
+const ADMIN_ASSET_IMAGE_MAX_BYTES = Math.max(64 * 1024, Number(process.env.ADMIN_ASSET_IMAGE_MAX_BYTES || 5 * 1024 * 1024));
+const FRONTEND_I18N_DIR = String(
+  process.env.FRONTEND_I18N_DIR || path.join(__dirname, '..', '..', 'frontend', 'src', 'i18n')
+).trim();
+const ADMIN_DEFAULT_ROLE = String(process.env.ADMIN_DEFAULT_ROLE || 'super_admin').trim().toLowerCase() || 'super_admin';
 const ADMIN_POST_STATUSES = new Set(['draft', 'published', 'archived']);
 const ADMIN_POST_TITLE_MAX_LEN = Math.max(32, Number(process.env.ADMIN_POST_TITLE_MAX_LEN || 160));
 const ADMIN_POST_EXCERPT_MAX_LEN = Math.max(64, Number(process.env.ADMIN_POST_EXCERPT_MAX_LEN || 280));
 const ADMIN_POST_CONTENT_MAX_LEN = Math.max(256, Number(process.env.ADMIN_POST_CONTENT_MAX_LEN || 200000));
+const DEVELOPER_NAME_MAX_LEN = Math.max(32, Number(process.env.DEVELOPER_NAME_MAX_LEN || 120));
+const DEVELOPER_ROLE_MAX_LEN = Math.max(16, Number(process.env.DEVELOPER_ROLE_MAX_LEN || 120));
+const DEVELOPER_BIO_MAX_LEN = Math.max(64, Number(process.env.DEVELOPER_BIO_MAX_LEN || 500));
 const POST_LIKE_RATE_LIMIT_PER_MIN = Math.max(1, Number(process.env.POST_LIKE_RATE_LIMIT_PER_MIN || 10));
 const PROMO_CODE_ALLOWED = /^[A-Z0-9][A-Z0-9_-]*$/;
 const PROMO_BENEFIT_TYPES = new Set(['percent_discount', 'trial_days', 'lifetime_access', 'credits', 'feature_access']);
@@ -255,6 +339,27 @@ const ACCOUNT_TELEGRAM_CODE_LENGTH = Math.min(
 );
 const ACCOUNT_TELEGRAM_CODE_TTL_SEC = Math.max(60, Number(process.env.ACCOUNT_TELEGRAM_CODE_TTL_SEC || 600));
 const ACCOUNT_TELEGRAM_INTERNAL_TIMEOUT_MS = Math.max(500, Number(process.env.ACCOUNT_TELEGRAM_INTERNAL_TIMEOUT_MS || 5000));
+const API_KEY_DEFAULT_PREFIX = String(process.env.API_KEY_PREFIX || 'mk_live_').trim() || 'mk_live_';
+const API_KEY_MAX_PER_USER = Math.max(1, Number(process.env.API_KEY_MAX_PER_USER || 20));
+const API_USAGE_MAX_ROWS = Math.max(1000, Number(process.env.API_USAGE_MAX_ROWS || 200000));
+const API_WEBHOOKS_MAX_PER_KEY = Math.max(1, Number(process.env.API_WEBHOOKS_MAX_PER_KEY || 20));
+const API_WEBHOOK_DELIVERY_LIST_LIMIT = Math.max(10, Number(process.env.API_WEBHOOK_DELIVERY_LIST_LIMIT || 200));
+const API_WEBHOOK_TIMEOUT_MS = Math.max(1000, Number(process.env.API_WEBHOOK_TIMEOUT_MS || 8000));
+const INTERNAL_WORKER_TOKEN = String(process.env.INTERNAL_WORKER_TOKEN || process.env.WORKER_INTERNAL_TOKEN || '').trim();
+const WORKER_HEALTH_MAX_ROWS = Math.max(100, Number(process.env.WORKER_HEALTH_MAX_ROWS || 10000));
+const SYNTHETIC_RESULTS_MAX_ROWS = Math.max(100, Number(process.env.SYNTHETIC_RESULTS_MAX_ROWS || 10000));
+const WORKER_ALERT_MAX_ROWS = Math.max(100, Number(process.env.WORKER_ALERT_MAX_ROWS || 5000));
+const WORKER_JOB_RESULTS_MAX_ROWS = Math.max(1000, Number(process.env.WORKER_JOB_RESULTS_MAX_ROWS || 200000));
+const WORKSPACE_PLATFORM_MAX_ROWS = Math.max(1000, Number(process.env.WORKSPACE_PLATFORM_MAX_ROWS || 200000));
+const SYNTHETIC_ALERT_WINDOW = Math.max(5, Number(process.env.SYNTHETIC_ALERT_WINDOW || 20));
+const SYNTHETIC_SUCCESS_RATE_THRESHOLD = Math.max(0.5, Math.min(1, Number(process.env.SYNTHETIC_SUCCESS_RATE_THRESHOLD || 0.95)));
+const SYNTHETIC_LATENCY_THRESHOLD_MS = Math.max(100, Number(process.env.SYNTHETIC_LATENCY_THRESHOLD_MS || 20000));
+const FORMAT_FAILURE_DISABLE_STREAK = Math.max(1, Number(process.env.FORMAT_FAILURE_DISABLE_STREAK || 3));
+const API_KEY_PLAN_LIMITS = {
+  free: { rate_limit_per_min: 60, quota_monthly: 5000 },
+  pro: { rate_limit_per_min: 300, quota_monthly: 100000 },
+  enterprise: { rate_limit_per_min: 1200, quota_monthly: 1000000 }
+};
 const BOT_INTERNAL_API_BASE = String(process.env.BOT_INTERNAL_API_BASE || '').trim().replace(/\/+$/, '');
 const BOT_INTERNAL_LINK_SECRET = String(
   process.env.BOT_INTERNAL_LINK_SECRET || process.env.INTERNAL_LINK_SECRET || ''
@@ -270,11 +375,40 @@ let analyticsFlushInFlight = false;
 const analyticsBuffer = [];
 let analyticsFallbackWriteQueue = Promise.resolve();
 let adminPostsStore = null;
+let developersStore = null;
 let postLikesStore = null;
+let contentPagesStore = null;
+let contentBlocksStore = null;
+let platformSettingsStore = null;
+let apiKeysStore = null;
+let apiUsageStore = null;
+let apiWebhooksStore = null;
+let apiWebhookDeliveriesStore = null;
+let shareLinksStore = null;
+let auditLogsStore = null;
+let localizationOverridesStore = null;
+let workerHealthChecksStore = null;
+let syntheticTestResultsStore = null;
+let formatHealthStateStore = null;
+let workerAlertEventsStore = null;
+let workerJobResultsStore = null;
+let workspacePlatformStore = null;
 let postLikesMutationQueue = Promise.resolve();
 let pgPool = null;
 let pgModuleLoadAttempted = false;
 let pgPoolInitError = null;
+let workerHeartbeatAt = 0;
+const opsCounters = {
+  eventsAccepted: 0,
+  workerPings: 0
+};
+const SHARE_EXPIRY_PRESETS = {
+  one_hour: 60 * 60,
+  one_day: 24 * 60 * 60,
+  seven_days: 7 * 24 * 60 * 60,
+  thirty_days: 30 * 24 * 60 * 60,
+  never: 0
+};
 
 const withTimeout = (promise, timeoutMs, timeoutMessage) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
@@ -396,6 +530,55 @@ function sanitizeFileName(name) {
 }
 
 const bytesToB64 = (bytes) => Buffer.from(bytes).toString('base64');
+const isBase64Text = (value) => /^[A-Za-z0-9+/=]+$/.test(String(value || '').trim());
+
+function validateEncryptionMeta(meta) {
+  const src = meta && typeof meta === 'object' ? meta : {};
+  const chunkSize = Number(src.chunkSize || 0);
+  const totalChunks = Number(src.totalChunks || 0);
+  const ivBase = String(src.ivBase || '').trim();
+  const alg = String(src.alg || 'AES-256-GCM').trim().toUpperCase();
+  if (alg !== 'AES-256-GCM') {
+    return { ok: false, code: 'INVALID_ENCRYPTION_ALG', message: 'Unsupported encryption algorithm' };
+  }
+  if (!Number.isInteger(chunkSize) || chunkSize < ENCRYPTION_MIN_CHUNK_SIZE || chunkSize > ENCRYPTION_MAX_CHUNK_SIZE) {
+    return { ok: false, code: 'INVALID_ENCRYPTION_CHUNK', message: 'Invalid encryption chunk size' };
+  }
+  if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > ENCRYPTION_MAX_TOTAL_CHUNKS) {
+    return { ok: false, code: 'INVALID_ENCRYPTION_CHUNKS', message: 'Invalid encryption chunks count' };
+  }
+  if (!ivBase || !isBase64Text(ivBase)) {
+    return { ok: false, code: 'INVALID_ENCRYPTION_IV', message: 'Invalid encryption ivBase' };
+  }
+  let ivBytes = null;
+  try {
+    ivBytes = Buffer.from(ivBase, 'base64');
+  } catch {
+    return { ok: false, code: 'INVALID_ENCRYPTION_IV', message: 'Invalid encryption ivBase' };
+  }
+  if (!ivBytes || ivBytes.length !== 8) {
+    return { ok: false, code: 'INVALID_ENCRYPTION_IV', message: 'Invalid encryption ivBase length' };
+  }
+  return { ok: true };
+}
+
+function validateEncryptionEnvelope(encryption, { requireKeyWrap = false } = {}) {
+  if (!encryption || encryption.enabled !== true) return { ok: true };
+  const keyWrap = encryption.keyWrap && typeof encryption.keyWrap === 'object' ? encryption.keyWrap : null;
+  if (requireKeyWrap) {
+    if (!keyWrap) return { ok: false, code: 'MISSING_KEY_WRAP', message: 'Missing key wrapping metadata' };
+    const wrappedKey = String(keyWrap.wrappedKey || '').trim();
+    const nonce = String(keyWrap.nonce || '').trim();
+    const clientPublicKey = String(keyWrap.clientPublicKey || '').trim();
+    if (!wrappedKey || !nonce || !clientPublicKey) {
+      return { ok: false, code: 'MISSING_KEY_WRAP', message: 'Incomplete key wrapping metadata' };
+    }
+    if (!isBase64Text(wrappedKey) || !isBase64Text(nonce) || !isBase64Text(clientPublicKey)) {
+      return { ok: false, code: 'INVALID_KEY_WRAP', message: 'Invalid key wrapping metadata' };
+    }
+  }
+  return { ok: true };
+}
 
 async function rateLimit(key, limit, windowSec) {
   const count = await withTimeout(connection.incr(key), REDIS_OP_TIMEOUT_MS, 'redis_incr_timeout');
@@ -406,9 +589,13 @@ async function rateLimit(key, limit, windowSec) {
 }
 
 function getClientId(req) {
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  const ip = getRequestIp(req);
   const userId = req.headers['x-user-id'];
   return userId ? `user:${userId}` : `ip:${ip}`;
+}
+
+function getRequestIp(req) {
+  return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
 }
 
 function timingSafeEqualText(left, right) {
@@ -524,6 +711,19 @@ function requireAdminAuth(req, res, next) {
   return next();
 }
 
+function requireAdminAuthIfEnabled(req, res, next) {
+  if (!ADMIN_AUTH_ENABLED) {
+    req.admin = {
+      sub: 'admin',
+      role: ADMIN_DEFAULT_ROLE || 'super_admin',
+      sid: null,
+      mode: 'auth_disabled'
+    };
+    return next();
+  }
+  return requireAdminAuth(req, res, next);
+}
+
 function getRequestUserId(req) {
   const raw = req.headers['x-user-id'];
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -561,6 +761,179 @@ function requireUserAuth(req, res, next) {
     });
   }
   req.user = { id: userId };
+  return next();
+}
+
+function requireInternalWorkerAuth(req, res, next) {
+  if (!INTERNAL_WORKER_TOKEN) {
+    return next();
+  }
+  const header = String(req.headers['x-worker-token'] || '').trim();
+  if (!header || header !== INTERNAL_WORKER_TOKEN) {
+    return res.status(401).json({
+      status: 'error',
+      code: 'WORKER_UNAUTHORIZED',
+      message: 'Worker auth failed',
+      requestId: req.requestId
+    });
+  }
+  return next();
+}
+
+function resolveToolAvailability(toolId) {
+  const tool = String(toolId || '').trim();
+  const state = loadFormatHealthStateStore();
+  const item = asObject(state[tool]);
+  if (!item.disabled) {
+    return { allowed: true, tool, fallback_applied: false, reason: null };
+  }
+  const fallback = String(item.fallback_tool || '').trim();
+  if (fallback && TOOL_IDS.has(fallback)) {
+    return {
+      allowed: true,
+      tool: fallback,
+      fallback_applied: true,
+      reason: String(item.reason || '').trim() || 'Tool disabled, fallback applied'
+    };
+  }
+  return {
+    allowed: false,
+    tool,
+    fallback_applied: false,
+    reason: String(item.reason || '').trim() || 'Tool temporarily disabled'
+  };
+}
+
+function extractApiKeyFromRequest(req) {
+  const authHeaderRaw = req.headers.authorization;
+  const authHeader = Array.isArray(authHeaderRaw) ? authHeaderRaw[0] : authHeaderRaw;
+  const value = String(authHeader || '').trim();
+  if (value.toLowerCase().startsWith('bearer ')) {
+    return value.slice(7).trim();
+  }
+  const xApiKeyRaw = req.headers['x-api-key'];
+  if (Array.isArray(xApiKeyRaw)) return String(xApiKeyRaw[0] || '').trim();
+  return String(xApiKeyRaw || '').trim();
+}
+
+function requireApiKeyAuth(req, res, next) {
+  const token = extractApiKeyFromRequest(req);
+  if (!token) {
+    return res.status(401).json({
+      status: 'error',
+      code: 'API_KEY_REQUIRED',
+      message: 'Missing API key',
+      requestId: req.requestId
+    });
+  }
+  const item = getApiKeyByToken(token);
+  if (!item) {
+    return res.status(401).json({
+      status: 'error',
+      code: 'INVALID_API_KEY',
+      message: 'Invalid API key',
+      requestId: req.requestId
+    });
+  }
+  if (item.revoked_at) {
+    return res.status(401).json({
+      status: 'error',
+      code: 'API_KEY_REVOKED',
+      message: 'API key revoked',
+      requestId: req.requestId
+    });
+  }
+  if (item.expires_at && Date.now() > Date.parse(item.expires_at)) {
+    return res.status(401).json({
+      status: 'error',
+      code: 'API_KEY_EXPIRED',
+      message: 'API key expired',
+      requestId: req.requestId
+    });
+  }
+
+  const limits = resolveApiKeyLimits(item.plan, item);
+  const allowedIps = sanitizeIpAllowlist(item.allowed_ips);
+  const requestIp = getRequestIp(req);
+  if (allowedIps.length > 0 && !allowedIps.includes(requestIp)) {
+    return res.status(403).json({
+      status: 'error',
+      code: 'API_IP_NOT_ALLOWED',
+      message: 'IP is not allowed for this API key',
+      requestId: req.requestId
+    });
+  }
+  req.apiKey = {
+    ...item,
+    ...limits,
+    allowed_ips: allowedIps
+  };
+  req.apiKeyToken = token;
+  return next();
+}
+
+async function enforceApiKeyLimits(req, res, next) {
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) return res.status(503).json(redis.payload);
+
+    const apiKey = req.apiKey;
+    const minuteBucket = Math.floor(Date.now() / 60000);
+    const redisKey = `rl:apikey:${apiKey.id}:${minuteBucket}`;
+    const allowed = await rateLimit(redisKey, apiKey.rate_limit_per_min, 60);
+    if (!allowed) {
+      return res.status(429).json({
+        status: 'error',
+        code: 'API_RATE_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded',
+        requestId: req.requestId
+      });
+    }
+    const monthId = monthIdFromDate();
+    const usageCount = getApiKeyMonthlyUsageCount(apiKey.id, monthId);
+    if (usageCount >= apiKey.quota_monthly) {
+      return res.status(429).json({
+        status: 'error',
+        code: 'API_QUOTA_EXCEEDED',
+        message: 'Monthly quota exceeded',
+        requestId: req.requestId
+      });
+    }
+    req.apiKeyUsageMonth = monthId;
+    return next();
+  } catch (error) {
+    logError({ type: 'api_key_limit_enforce_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({
+      status: 'error',
+      code: 'API_KEY_LIMIT_FAILED',
+      message: 'Failed to evaluate API limits',
+      requestId: req.requestId
+    });
+  }
+}
+
+function apiKeyUsageTracker(req, res, next) {
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    if (!req.apiKey?.id) return;
+    const keys = loadApiKeysStore().slice();
+    const index = keys.findIndex((item) => item.id === req.apiKey.id);
+    if (index >= 0) {
+      keys[index] = {
+        ...keys[index],
+        last_used_at: new Date().toISOString()
+      };
+      saveApiKeysStore(keys);
+    }
+    appendApiUsageEvent({
+      api_key_id: req.apiKey.id,
+      endpoint: req.path,
+      status: res.statusCode,
+      response_time_ms: Date.now() - startedAt,
+      bytes_processed: Number(req.headers['content-length'] || 0),
+      created_at: Date.now()
+    });
+  });
   return next();
 }
 
@@ -900,6 +1273,1038 @@ function normalizeStoredPostLike(raw) {
     user_id: userId,
     created_at: toIsoOrDefault(value.created_at || value.createdAt, nowIso) || nowIso
   };
+}
+
+function sanitizeOptionalUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  // Allow relative API-proxied asset paths served via the web app origin.
+  if (raw.startsWith('/api/admin/assets/')) return raw;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+function normalizeStoredDeveloper(raw) {
+  const value = asObject(raw);
+  const nowIso = new Date().toISOString();
+  return {
+    id: String(value.id || uuidv4()).trim() || uuidv4(),
+    name: clampText(String(value.name || '').trim() || 'Unnamed', DEVELOPER_NAME_MAX_LEN),
+    role: clampText(String(value.role || '').trim() || 'Engineer', DEVELOPER_ROLE_MAX_LEN),
+    bio: clampText(String(value.bio || '').trim(), DEVELOPER_BIO_MAX_LEN),
+    avatar_url: sanitizeOptionalUrl(value.avatar_url),
+    github_url: sanitizeOptionalUrl(value.github_url),
+    linkedin_url: sanitizeOptionalUrl(value.linkedin_url),
+    twitter_url: sanitizeOptionalUrl(value.twitter_url),
+    website_url: sanitizeOptionalUrl(value.website_url),
+    order_index: Number.isFinite(Number(value.order_index)) ? Number(value.order_index) : 0,
+    is_active: value.is_active !== false,
+    created_at: toIsoOrDefault(value.created_at, nowIso) || nowIso,
+    updated_at: toIsoOrDefault(value.updated_at, null)
+  };
+}
+
+function loadDevelopersStore() {
+  if (Array.isArray(developersStore)) return developersStore;
+  try {
+    if (!fs.existsSync(DEVELOPERS_FILE)) {
+      developersStore = [];
+      return developersStore;
+    }
+    const raw = fs.readFileSync(DEVELOPERS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      developersStore = [];
+      return developersStore;
+    }
+    developersStore = parsed.map((item) => normalizeStoredDeveloper(item));
+    return developersStore;
+  } catch (error) {
+    logError({
+      type: 'developers_load_failed',
+      file: DEVELOPERS_FILE,
+      error: error?.message || 'unknown'
+    });
+    developersStore = [];
+    return developersStore;
+  }
+}
+
+function saveDevelopersStore(items) {
+  const next = Array.isArray(items) ? items.map((item) => normalizeStoredDeveloper(item)) : [];
+  const dir = path.dirname(DEVELOPERS_FILE);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = `${DEVELOPERS_FILE}.tmp-${process.pid}`;
+  fs.writeFileSync(tmpPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  fs.renameSync(tmpPath, DEVELOPERS_FILE);
+  developersStore = next;
+}
+
+function listPublicDevelopers() {
+  return loadDevelopersStore()
+    .filter((item) => item.is_active !== false)
+    .slice()
+    .sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0));
+}
+
+function writeJsonAtomic(filePath, value) {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = `${filePath}.tmp-${process.pid}`;
+  fs.writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  fs.renameSync(tmpPath, filePath);
+}
+
+function safeSlug(input, fallback = 'item') {
+  const normalized = String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || fallback;
+}
+
+function normalizeContentPage(raw) {
+  const value = asObject(raw);
+  const nowIso = new Date().toISOString();
+  const slug = safeSlug(value.slug || value.title || 'page', 'page');
+  return {
+    id: String(value.id || uuidv4()).trim() || uuidv4(),
+    slug,
+    title: clampText(String(value.title || slug).trim(), 140),
+    description: clampText(String(value.description || '').trim(), 500),
+    order_index: Number.isFinite(Number(value.order_index)) ? Number(value.order_index) : 0,
+    is_active: value.is_active !== false,
+    created_at: toIsoOrDefault(value.created_at, nowIso) || nowIso,
+    updated_at: toIsoOrDefault(value.updated_at, null)
+  };
+}
+
+function normalizeContentBlock(raw) {
+  const value = asObject(raw);
+  const nowIso = new Date().toISOString();
+  const type = safeSlug(value.type || 'text', 'text');
+  const pageSlug = safeSlug(value.page_slug || 'home', 'home');
+  const content = asObject(value.content || value.content_json || {});
+  return {
+    id: String(value.id || uuidv4()).trim() || uuidv4(),
+    page_slug: pageSlug,
+    type,
+    title: clampText(String(value.title || '').trim(), 160),
+    content_json: content,
+    order_index: Number.isFinite(Number(value.order_index)) ? Number(value.order_index) : 0,
+    is_active: value.is_active !== false,
+    created_at: toIsoOrDefault(value.created_at, nowIso) || nowIso,
+    updated_at: toIsoOrDefault(value.updated_at, null)
+  };
+}
+
+function defaultPlatformSettings() {
+  return {
+    feature_flags: {
+      ai_recommendations: true,
+      batch_upload: true,
+      public_api: true,
+      smart_auto_convert: true,
+      public_share_links: true,
+      instant_preview: true,
+      transparency_panel: true,
+      one_click_best_convert: true
+    },
+    limits: {
+      max_file_mb_free: 250,
+      max_file_mb_pro: 2048,
+      max_batch_files: 100
+    },
+    queues: {
+      default_priority: 'normal',
+      enterprise_priority: 'high'
+    },
+    ai: {
+      enabled: true,
+      confidence_threshold: 0.65,
+      fallback_mode: 'rules'
+    },
+    updated_at: new Date().toISOString()
+  };
+}
+
+function normalizePlatformSettings(raw) {
+  const incoming = asObject(raw);
+  const base = defaultPlatformSettings();
+  return {
+    feature_flags: { ...base.feature_flags, ...asObject(incoming.feature_flags) },
+    limits: { ...base.limits, ...asObject(incoming.limits) },
+    queues: { ...base.queues, ...asObject(incoming.queues) },
+    ai: { ...base.ai, ...asObject(incoming.ai) },
+    updated_at: toIsoOrDefault(incoming.updated_at, new Date().toISOString()) || new Date().toISOString()
+  };
+}
+
+function loadContentPagesStore() {
+  if (Array.isArray(contentPagesStore)) return contentPagesStore;
+  try {
+    if (!fs.existsSync(CONTENT_PAGES_FILE)) {
+      contentPagesStore = [];
+      return contentPagesStore;
+    }
+    const raw = fs.readFileSync(CONTENT_PAGES_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    contentPagesStore = Array.isArray(parsed) ? parsed.map((item) => normalizeContentPage(item)) : [];
+    return contentPagesStore;
+  } catch (error) {
+    logError({ type: 'content_pages_load_failed', file: CONTENT_PAGES_FILE, error: error?.message || 'unknown' });
+    contentPagesStore = [];
+    return contentPagesStore;
+  }
+}
+
+function saveContentPagesStore(items) {
+  const next = Array.isArray(items) ? items.map((item) => normalizeContentPage(item)) : [];
+  writeJsonAtomic(CONTENT_PAGES_FILE, next);
+  contentPagesStore = next;
+}
+
+function loadContentBlocksStore() {
+  if (Array.isArray(contentBlocksStore)) return contentBlocksStore;
+  try {
+    if (!fs.existsSync(CONTENT_BLOCKS_FILE)) {
+      contentBlocksStore = [];
+      return contentBlocksStore;
+    }
+    const raw = fs.readFileSync(CONTENT_BLOCKS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    contentBlocksStore = Array.isArray(parsed) ? parsed.map((item) => normalizeContentBlock(item)) : [];
+    return contentBlocksStore;
+  } catch (error) {
+    logError({ type: 'content_blocks_load_failed', file: CONTENT_BLOCKS_FILE, error: error?.message || 'unknown' });
+    contentBlocksStore = [];
+    return contentBlocksStore;
+  }
+}
+
+function saveContentBlocksStore(items) {
+  const next = Array.isArray(items) ? items.map((item) => normalizeContentBlock(item)) : [];
+  writeJsonAtomic(CONTENT_BLOCKS_FILE, next);
+  contentBlocksStore = next;
+}
+
+function loadPlatformSettingsStore() {
+  if (platformSettingsStore && typeof platformSettingsStore === 'object') return platformSettingsStore;
+  try {
+    if (!fs.existsSync(PLATFORM_SETTINGS_FILE)) {
+      platformSettingsStore = defaultPlatformSettings();
+      return platformSettingsStore;
+    }
+    const raw = fs.readFileSync(PLATFORM_SETTINGS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    platformSettingsStore = normalizePlatformSettings(parsed);
+    return platformSettingsStore;
+  } catch (error) {
+    logError({ type: 'platform_settings_load_failed', file: PLATFORM_SETTINGS_FILE, error: error?.message || 'unknown' });
+    platformSettingsStore = defaultPlatformSettings();
+    return platformSettingsStore;
+  }
+}
+
+function savePlatformSettingsStore(next) {
+  const normalized = normalizePlatformSettings(next);
+  writeJsonAtomic(PLATFORM_SETTINGS_FILE, normalized);
+  platformSettingsStore = normalized;
+}
+
+function defaultWorkspacePlatformStore() {
+  return {
+    workspaces: [],
+    projects: [],
+    folders: [],
+    items: [],
+    pipelines: [],
+    automation_rules: [],
+    comments: [],
+    integrations: []
+  };
+}
+
+function normalizeWorkspacePlatformStore(raw) {
+  const src = asObject(raw);
+  const base = defaultWorkspacePlatformStore();
+  return {
+    workspaces: Array.isArray(src.workspaces) ? src.workspaces : base.workspaces,
+    projects: Array.isArray(src.projects) ? src.projects : base.projects,
+    folders: Array.isArray(src.folders) ? src.folders : base.folders,
+    items: Array.isArray(src.items) ? src.items : base.items,
+    pipelines: Array.isArray(src.pipelines) ? src.pipelines : base.pipelines,
+    automation_rules: Array.isArray(src.automation_rules) ? src.automation_rules : base.automation_rules,
+    comments: Array.isArray(src.comments) ? src.comments : base.comments,
+    integrations: Array.isArray(src.integrations) ? src.integrations : base.integrations
+  };
+}
+
+function trimWorkspacePlatformStore(store) {
+  const maxRows = WORKSPACE_PLATFORM_MAX_ROWS;
+  const trim = (arr) => (arr.length > maxRows ? arr.slice(-maxRows) : arr);
+  return {
+    workspaces: trim(store.workspaces),
+    projects: trim(store.projects),
+    folders: trim(store.folders),
+    items: trim(store.items),
+    pipelines: trim(store.pipelines),
+    automation_rules: trim(store.automation_rules),
+    comments: trim(store.comments),
+    integrations: trim(store.integrations)
+  };
+}
+
+function loadWorkspacePlatformStore() {
+  if (workspacePlatformStore && typeof workspacePlatformStore === 'object') return workspacePlatformStore;
+  try {
+    if (!fs.existsSync(WORKSPACE_PLATFORM_FILE)) {
+      workspacePlatformStore = defaultWorkspacePlatformStore();
+      return workspacePlatformStore;
+    }
+    const raw = fs.readFileSync(WORKSPACE_PLATFORM_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    workspacePlatformStore = normalizeWorkspacePlatformStore(parsed);
+    return workspacePlatformStore;
+  } catch (error) {
+    logError({ type: 'workspace_platform_load_failed', file: WORKSPACE_PLATFORM_FILE, error: error?.message || 'unknown' });
+    workspacePlatformStore = defaultWorkspacePlatformStore();
+    return workspacePlatformStore;
+  }
+}
+
+function saveWorkspacePlatformStore(next) {
+  const normalized = trimWorkspacePlatformStore(normalizeWorkspacePlatformStore(next));
+  writeJsonAtomic(WORKSPACE_PLATFORM_FILE, normalized);
+  workspacePlatformStore = normalized;
+  return normalized;
+}
+
+function normalizeWorkspaceRole(value) {
+  const role = String(value || '').trim().toLowerCase();
+  if (role === 'owner') return 'owner';
+  if (role === 'editor') return 'editor';
+  return 'viewer';
+}
+
+function getWorkspaceById(store, workspaceId, userId) {
+  const id = String(workspaceId || '').trim();
+  const uid = String(userId || '').trim();
+  if (!id || !uid) return null;
+  const ws = store.workspaces.find((item) => String(item.id || '') === id);
+  if (!ws) return null;
+  const members = Array.isArray(ws.members) ? ws.members : [];
+  const isMember = members.some((member) => String(member.user_id || '') === uid);
+  return isMember ? ws : null;
+}
+
+function canEditWorkspace(workspace, userId) {
+  const uid = String(userId || '').trim();
+  const members = Array.isArray(workspace?.members) ? workspace.members : [];
+  const role = normalizeWorkspaceRole((members.find((item) => String(item.user_id || '') === uid) || {}).role);
+  return role === 'owner' || role === 'editor';
+}
+
+function workspaceMemberRole(workspace, userId) {
+  const uid = String(userId || '').trim();
+  const members = Array.isArray(workspace?.members) ? workspace.members : [];
+  return normalizeWorkspaceRole((members.find((item) => String(item.user_id || '') === uid) || {}).role);
+}
+
+function normalizePipelineSteps(steps) {
+  if (!Array.isArray(steps)) return [];
+  return steps
+    .map((step, idx) => {
+      const src = asObject(step);
+      const action = String(src.action || '').trim().toLowerCase();
+      const tool = String(src.tool || '').trim();
+      const settings = asObject(src.settings || {});
+      if (!action) return null;
+      return {
+        id: String(src.id || `step_${idx + 1}`),
+        action,
+        tool: tool || null,
+        settings
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function applyAutomationRulesForJob({ userId, tool, inputSize, settings }) {
+  const uid = String(userId || '').trim();
+  if (!uid) return { tool, settings, matched_rules: [] };
+  const store = loadWorkspacePlatformStore();
+  const rules = store.automation_rules
+    .filter((rule) => String(rule.user_id || '') === uid && rule.enabled !== false)
+    .sort((a, b) => Number(a.priority || 0) - Number(b.priority || 0));
+  let nextTool = tool;
+  const nextSettings = { ...asObject(settings || {}) };
+  const matchedRules = [];
+  for (const rule of rules) {
+    const condition = asObject(rule.condition || {});
+    const matchTool = !condition.tool || String(condition.tool) === String(tool);
+    const minSize = Number(condition.min_input_size || 0);
+    const maxSize = Number(condition.max_input_size || 0);
+    const matchMin = !minSize || Number(inputSize || 0) >= minSize;
+    const matchMax = !maxSize || Number(inputSize || 0) <= maxSize;
+    if (!matchTool || !matchMin || !matchMax) continue;
+    const action = asObject(rule.action || {});
+    if (action.override_tool && TOOL_IDS.has(String(action.override_tool))) {
+      nextTool = String(action.override_tool);
+    }
+    if (action.merge_settings && typeof action.merge_settings === 'object') {
+      Object.assign(nextSettings, asObject(action.merge_settings));
+    }
+    matchedRules.push({
+      id: String(rule.id || ''),
+      name: String(rule.name || ''),
+      applied_at: new Date().toISOString()
+    });
+  }
+  return { tool: nextTool, settings: nextSettings, matched_rules: matchedRules };
+}
+
+function loadApiKeysStore() {
+  if (Array.isArray(apiKeysStore)) return apiKeysStore;
+  try {
+    if (!fs.existsSync(API_KEYS_FILE)) {
+      apiKeysStore = [];
+      return apiKeysStore;
+    }
+    const raw = fs.readFileSync(API_KEYS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    apiKeysStore = Array.isArray(parsed) ? parsed : [];
+    return apiKeysStore;
+  } catch (error) {
+    logError({ type: 'api_keys_load_failed', file: API_KEYS_FILE, error: error?.message || 'unknown' });
+    apiKeysStore = [];
+    return apiKeysStore;
+  }
+}
+
+function saveApiKeysStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  writeJsonAtomic(API_KEYS_FILE, normalized);
+  apiKeysStore = normalized;
+  return normalized;
+}
+
+function loadApiUsageStore() {
+  if (Array.isArray(apiUsageStore)) return apiUsageStore;
+  try {
+    if (!fs.existsSync(API_USAGE_FILE)) {
+      apiUsageStore = [];
+      return apiUsageStore;
+    }
+    const raw = fs.readFileSync(API_USAGE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    apiUsageStore = Array.isArray(parsed) ? parsed : [];
+    return apiUsageStore;
+  } catch (error) {
+    logError({ type: 'api_usage_load_failed', file: API_USAGE_FILE, error: error?.message || 'unknown' });
+    apiUsageStore = [];
+    return apiUsageStore;
+  }
+}
+
+function saveApiUsageStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  const trimmed = normalized.length > API_USAGE_MAX_ROWS ? normalized.slice(-API_USAGE_MAX_ROWS) : normalized;
+  writeJsonAtomic(API_USAGE_FILE, trimmed);
+  apiUsageStore = trimmed;
+  return trimmed;
+}
+
+function loadApiWebhooksStore() {
+  if (Array.isArray(apiWebhooksStore)) return apiWebhooksStore;
+  try {
+    if (!fs.existsSync(API_WEBHOOKS_FILE)) {
+      apiWebhooksStore = [];
+      return apiWebhooksStore;
+    }
+    const raw = fs.readFileSync(API_WEBHOOKS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    apiWebhooksStore = Array.isArray(parsed) ? parsed : [];
+    return apiWebhooksStore;
+  } catch (error) {
+    logError({ type: 'api_webhooks_load_failed', file: API_WEBHOOKS_FILE, error: error?.message || 'unknown' });
+    apiWebhooksStore = [];
+    return apiWebhooksStore;
+  }
+}
+
+function saveApiWebhooksStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  writeJsonAtomic(API_WEBHOOKS_FILE, normalized);
+  apiWebhooksStore = normalized;
+  return normalized;
+}
+
+function loadApiWebhookDeliveriesStore() {
+  if (Array.isArray(apiWebhookDeliveriesStore)) return apiWebhookDeliveriesStore;
+  try {
+    if (!fs.existsSync(API_WEBHOOK_DELIVERIES_FILE)) {
+      apiWebhookDeliveriesStore = [];
+      return apiWebhookDeliveriesStore;
+    }
+    const raw = fs.readFileSync(API_WEBHOOK_DELIVERIES_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    apiWebhookDeliveriesStore = Array.isArray(parsed) ? parsed : [];
+    return apiWebhookDeliveriesStore;
+  } catch (error) {
+    logError({ type: 'api_webhook_deliveries_load_failed', file: API_WEBHOOK_DELIVERIES_FILE, error: error?.message || 'unknown' });
+    apiWebhookDeliveriesStore = [];
+    return apiWebhookDeliveriesStore;
+  }
+}
+
+function saveApiWebhookDeliveriesStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  const trimmed = normalized.length > API_USAGE_MAX_ROWS ? normalized.slice(-API_USAGE_MAX_ROWS) : normalized;
+  writeJsonAtomic(API_WEBHOOK_DELIVERIES_FILE, trimmed);
+  apiWebhookDeliveriesStore = trimmed;
+  return trimmed;
+}
+
+function loadWorkerHealthChecksStore() {
+  if (Array.isArray(workerHealthChecksStore)) return workerHealthChecksStore;
+  try {
+    if (!fs.existsSync(WORKER_HEALTH_CHECKS_FILE)) {
+      workerHealthChecksStore = [];
+      return workerHealthChecksStore;
+    }
+    const raw = fs.readFileSync(WORKER_HEALTH_CHECKS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    workerHealthChecksStore = Array.isArray(parsed) ? parsed : [];
+    return workerHealthChecksStore;
+  } catch (error) {
+    logError({ type: 'worker_health_checks_load_failed', file: WORKER_HEALTH_CHECKS_FILE, error: error?.message || 'unknown' });
+    workerHealthChecksStore = [];
+    return workerHealthChecksStore;
+  }
+}
+
+function saveWorkerHealthChecksStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  const trimmed = normalized.length > WORKER_HEALTH_MAX_ROWS ? normalized.slice(-WORKER_HEALTH_MAX_ROWS) : normalized;
+  writeJsonAtomic(WORKER_HEALTH_CHECKS_FILE, trimmed);
+  workerHealthChecksStore = trimmed;
+  return trimmed;
+}
+
+function loadSyntheticTestResultsStore() {
+  if (Array.isArray(syntheticTestResultsStore)) return syntheticTestResultsStore;
+  try {
+    if (!fs.existsSync(SYNTHETIC_TEST_RESULTS_FILE)) {
+      syntheticTestResultsStore = [];
+      return syntheticTestResultsStore;
+    }
+    const raw = fs.readFileSync(SYNTHETIC_TEST_RESULTS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    syntheticTestResultsStore = Array.isArray(parsed) ? parsed : [];
+    return syntheticTestResultsStore;
+  } catch (error) {
+    logError({ type: 'synthetic_test_results_load_failed', file: SYNTHETIC_TEST_RESULTS_FILE, error: error?.message || 'unknown' });
+    syntheticTestResultsStore = [];
+    return syntheticTestResultsStore;
+  }
+}
+
+function saveSyntheticTestResultsStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  const trimmed = normalized.length > SYNTHETIC_RESULTS_MAX_ROWS ? normalized.slice(-SYNTHETIC_RESULTS_MAX_ROWS) : normalized;
+  writeJsonAtomic(SYNTHETIC_TEST_RESULTS_FILE, trimmed);
+  syntheticTestResultsStore = trimmed;
+  return trimmed;
+}
+
+function normalizeFormatHealthState(raw) {
+  const source = asObject(raw);
+  const out = {};
+  for (const toolId of TOOL_IDS) {
+    const current = asObject(source[toolId]);
+    out[toolId] = {
+      tool: toolId,
+      disabled: current.disabled === true,
+      reason: String(current.reason || '').trim() || null,
+      fallback_tool: String(current.fallback_tool || '').trim() || null,
+      last_success_at: current.last_success_at || null,
+      last_failure_at: current.last_failure_at || null,
+      failure_streak: Math.max(0, Number(current.failure_streak || 0)),
+      success_count: Math.max(0, Number(current.success_count || 0)),
+      failure_count: Math.max(0, Number(current.failure_count || 0)),
+      avg_latency_ms: Math.max(0, Number(current.avg_latency_ms || 0)),
+      updated_at: current.updated_at || null
+    };
+  }
+  return out;
+}
+
+function loadFormatHealthStateStore() {
+  if (formatHealthStateStore && typeof formatHealthStateStore === 'object') return formatHealthStateStore;
+  try {
+    if (!fs.existsSync(FORMAT_HEALTH_STATE_FILE)) {
+      formatHealthStateStore = normalizeFormatHealthState({});
+      return formatHealthStateStore;
+    }
+    const raw = fs.readFileSync(FORMAT_HEALTH_STATE_FILE, 'utf8');
+    formatHealthStateStore = normalizeFormatHealthState(JSON.parse(raw));
+    return formatHealthStateStore;
+  } catch (error) {
+    logError({ type: 'format_health_state_load_failed', file: FORMAT_HEALTH_STATE_FILE, error: error?.message || 'unknown' });
+    formatHealthStateStore = normalizeFormatHealthState({});
+    return formatHealthStateStore;
+  }
+}
+
+function saveFormatHealthStateStore(next) {
+  const normalized = normalizeFormatHealthState(next);
+  writeJsonAtomic(FORMAT_HEALTH_STATE_FILE, normalized);
+  formatHealthStateStore = normalized;
+  return normalized;
+}
+
+function loadWorkerAlertEventsStore() {
+  if (Array.isArray(workerAlertEventsStore)) return workerAlertEventsStore;
+  try {
+    if (!fs.existsSync(WORKER_ALERT_EVENTS_FILE)) {
+      workerAlertEventsStore = [];
+      return workerAlertEventsStore;
+    }
+    const raw = fs.readFileSync(WORKER_ALERT_EVENTS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    workerAlertEventsStore = Array.isArray(parsed) ? parsed : [];
+    return workerAlertEventsStore;
+  } catch (error) {
+    logError({ type: 'worker_alert_events_load_failed', file: WORKER_ALERT_EVENTS_FILE, error: error?.message || 'unknown' });
+    workerAlertEventsStore = [];
+    return workerAlertEventsStore;
+  }
+}
+
+function saveWorkerAlertEventsStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  const trimmed = normalized.length > WORKER_ALERT_MAX_ROWS ? normalized.slice(-WORKER_ALERT_MAX_ROWS) : normalized;
+  writeJsonAtomic(WORKER_ALERT_EVENTS_FILE, trimmed);
+  workerAlertEventsStore = trimmed;
+  return trimmed;
+}
+
+function loadWorkerJobResultsStore() {
+  if (Array.isArray(workerJobResultsStore)) return workerJobResultsStore;
+  try {
+    if (!fs.existsSync(WORKER_JOB_RESULTS_FILE)) {
+      workerJobResultsStore = [];
+      return workerJobResultsStore;
+    }
+    const raw = fs.readFileSync(WORKER_JOB_RESULTS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    workerJobResultsStore = Array.isArray(parsed) ? parsed : [];
+    return workerJobResultsStore;
+  } catch (error) {
+    logError({ type: 'worker_job_results_load_failed', file: WORKER_JOB_RESULTS_FILE, error: error?.message || 'unknown' });
+    workerJobResultsStore = [];
+    return workerJobResultsStore;
+  }
+}
+
+function saveWorkerJobResultsStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  const trimmed = normalized.length > WORKER_JOB_RESULTS_MAX_ROWS ? normalized.slice(-WORKER_JOB_RESULTS_MAX_ROWS) : normalized;
+  writeJsonAtomic(WORKER_JOB_RESULTS_FILE, trimmed);
+  workerJobResultsStore = trimmed;
+  return trimmed;
+}
+
+function appendWorkerAlertEvent(event) {
+  const row = {
+    id: uuidv4(),
+    type: String(event?.type || 'worker_alert').trim() || 'worker_alert',
+    severity: String(event?.severity || 'warning').trim() || 'warning',
+    tool: event?.tool ? String(event.tool) : null,
+    worker_id: event?.worker_id ? String(event.worker_id) : null,
+    message: clampText(String(event?.message || '').trim(), 500) || 'Worker alert',
+    details: asObject(event?.details || {}),
+    created_at: new Date().toISOString()
+  };
+  const current = loadWorkerAlertEventsStore().slice();
+  current.push(row);
+  saveWorkerAlertEventsStore(current);
+  return row;
+}
+
+function evaluateSyntheticAlertsForTool(toolId) {
+  const results = loadSyntheticTestResultsStore()
+    .filter((item) => String(item.tool || '') === String(toolId || ''))
+    .slice(-SYNTHETIC_ALERT_WINDOW);
+  if (!results.length) return;
+  const successCount = results.filter((item) => item.success === true).length;
+  const successRate = successCount / results.length;
+  const avgLatency = results.length
+    ? (results.reduce((sum, item) => sum + Math.max(0, Number(item.latency_ms || 0)), 0) / results.length)
+    : 0;
+  if (successRate < SYNTHETIC_SUCCESS_RATE_THRESHOLD) {
+    appendWorkerAlertEvent({
+      type: 'synthetic_success_rate_low',
+      severity: 'critical',
+      tool: toolId,
+      message: `Synthetic success rate below threshold for ${toolId}`,
+      details: { success_rate: Number(successRate.toFixed(4)), threshold: SYNTHETIC_SUCCESS_RATE_THRESHOLD, window: results.length }
+    });
+  }
+  if (avgLatency > SYNTHETIC_LATENCY_THRESHOLD_MS) {
+    appendWorkerAlertEvent({
+      type: 'synthetic_latency_high',
+      severity: 'warning',
+      tool: toolId,
+      message: `Synthetic latency exceeded threshold for ${toolId}`,
+      details: { avg_latency_ms: Number(avgLatency.toFixed(1)), threshold_ms: SYNTHETIC_LATENCY_THRESHOLD_MS, window: results.length }
+    });
+  }
+}
+
+function updateFormatHealthFromSynthetic(result) {
+  const toolId = String(result?.tool || '').trim();
+  if (!toolId || !TOOL_IDS.has(toolId)) return null;
+  const state = loadFormatHealthStateStore();
+  const current = asObject(state[toolId]);
+  const nowIso = new Date().toISOString();
+  const success = result.success === true;
+  const next = {
+    ...current,
+    tool: toolId,
+    last_success_at: success ? (result.created_at || nowIso) : current.last_success_at || null,
+    last_failure_at: success ? current.last_failure_at || null : (result.created_at || nowIso),
+    failure_streak: success ? 0 : Math.max(0, Number(current.failure_streak || 0)) + 1,
+    success_count: Math.max(0, Number(current.success_count || 0)) + (success ? 1 : 0),
+    failure_count: Math.max(0, Number(current.failure_count || 0)) + (success ? 0 : 1),
+    avg_latency_ms: Math.max(0, Number(result.latency_ms || 0)),
+    updated_at: nowIso
+  };
+  if (!success && next.failure_streak >= FORMAT_FAILURE_DISABLE_STREAK) {
+    next.disabled = true;
+    next.reason = `Auto-disabled after ${next.failure_streak} synthetic failures`;
+    appendWorkerAlertEvent({
+      type: 'format_auto_disabled',
+      severity: 'critical',
+      tool: toolId,
+      worker_id: result?.worker_id || null,
+      message: `Format ${toolId} was auto-disabled`,
+      details: { failure_streak: next.failure_streak, threshold: FORMAT_FAILURE_DISABLE_STREAK, last_error: result?.error || null }
+    });
+  }
+  if (success && next.disabled && String(next.reason || '').startsWith('Auto-disabled')) {
+    next.disabled = false;
+    next.reason = null;
+  }
+  const merged = { ...state, [toolId]: next };
+  saveFormatHealthStateStore(merged);
+  evaluateSyntheticAlertsForTool(toolId);
+  return next;
+}
+
+function applyFormatStateFromWorkerChecks(checks, workerId) {
+  if (!Array.isArray(checks) || !checks.length) return;
+  const state = loadFormatHealthStateStore();
+  const nowIso = new Date().toISOString();
+  let changed = false;
+  for (const check of checks) {
+    const ok = check?.ok === true;
+    const dependency = String(check?.key || '').trim();
+    const requiredFor = Array.isArray(check?.requiredFor) ? check.requiredFor.filter((item) => TOOL_IDS.has(String(item || '').trim())) : [];
+    if (!dependency || !requiredFor.length) continue;
+    for (const toolId of requiredFor) {
+      const current = asObject(state[toolId]);
+      const reasonText = `Auto-disabled: missing dependency ${dependency}`;
+      if (!ok) {
+        state[toolId] = {
+          ...current,
+          tool: toolId,
+          disabled: true,
+          reason: reasonText,
+          updated_at: nowIso,
+          dependency
+        };
+        changed = true;
+      } else if (current.disabled && String(current.reason || '').startsWith('Auto-disabled: missing dependency')) {
+        state[toolId] = {
+          ...current,
+          tool: toolId,
+          disabled: false,
+          reason: null,
+          updated_at: nowIso,
+          dependency: null
+        };
+        changed = true;
+      }
+    }
+    if (!ok) {
+      appendWorkerAlertEvent({
+        type: 'format_dependency_missing',
+        severity: 'critical',
+        worker_id: workerId || null,
+        message: `Dependency ${dependency} is missing`,
+        details: { dependency, tools: requiredFor }
+      });
+    }
+  }
+  if (changed) {
+    saveFormatHealthStateStore(state);
+  }
+}
+
+const normalizeApiKeyPlan = (raw) => {
+  const value = String(raw || '').trim().toLowerCase();
+  if (value === 'enterprise') return 'enterprise';
+  if (value === 'pro') return 'pro';
+  return 'free';
+};
+
+const resolveApiKeyLimits = (plan, override = {}) => {
+  const normalizedPlan = normalizeApiKeyPlan(plan);
+  const base = API_KEY_PLAN_LIMITS[normalizedPlan] || API_KEY_PLAN_LIMITS.free;
+  return {
+    plan: normalizedPlan,
+    rate_limit_per_min: Math.max(1, Number(override.rate_limit_per_min || base.rate_limit_per_min)),
+    quota_monthly: Math.max(1, Number(override.quota_monthly || base.quota_monthly))
+  };
+};
+
+const sanitizeIpAllowlist = (raw) => {
+  if (!Array.isArray(raw)) return [];
+  const allowed = [];
+  const seen = new Set();
+  for (const entry of raw) {
+    const ip = String(entry || '').trim();
+    if (!ip) continue;
+    if (ip.length > 64) continue;
+    if (!/^[0-9a-fA-F:.\/]+$/.test(ip)) continue;
+    if (seen.has(ip)) continue;
+    seen.add(ip);
+    allowed.push(ip);
+  }
+  return allowed.slice(0, 50);
+};
+
+const WEBHOOK_EVENT_SET = new Set(['job.completed', 'job.failed']);
+const sanitizeWebhookEvents = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) return ['job.completed'];
+  const out = [];
+  const seen = new Set();
+  for (const value of raw) {
+    const ev = String(value || '').trim().toLowerCase();
+    if (!WEBHOOK_EVENT_SET.has(ev)) continue;
+    if (seen.has(ev)) continue;
+    seen.add(ev);
+    out.push(ev);
+  }
+  return out.length ? out : ['job.completed'];
+};
+
+const normalizeWebhookTargetUrl = (rawValue) => {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    const protocol = String(parsed.protocol || '').toLowerCase();
+    const hostname = String(parsed.hostname || '').toLowerCase();
+    const isLocalhost = hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '::1'
+      || hostname.endsWith('.local');
+    if (protocol !== 'https:' && !(protocol === 'http:' && isLocalhost)) return '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+};
+
+const hashApiKeyToken = (token) => crypto
+  .createHash('sha256')
+  .update(String(token || ''))
+  .digest('hex');
+
+const buildApiKeyPrefix = () => {
+  const random = crypto.randomBytes(18).toString('hex');
+  return `${API_KEY_DEFAULT_PREFIX}${random}`;
+};
+
+const monthIdFromDate = (value = Date.now()) => {
+  const d = new Date(value);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+};
+
+function getApiKeyByToken(rawToken) {
+  const token = String(rawToken || '').trim();
+  if (!token) return null;
+  const tokenHash = hashApiKeyToken(token);
+  const keys = loadApiKeysStore();
+  const item = keys.find((entry) => entry.key_hash === tokenHash) || null;
+  if (!item) return null;
+  return item;
+}
+
+function getApiKeyMonthlyUsageCount(apiKeyId, monthId) {
+  const usage = loadApiUsageStore();
+  return usage.reduce((sum, row) => {
+    if (String(row?.api_key_id || '') !== String(apiKeyId || '')) return sum;
+    if (String(row?.month || '') !== String(monthId || '')) return sum;
+    return sum + 1;
+  }, 0);
+}
+
+function appendApiUsageEvent(event) {
+  const row = {
+    id: uuidv4(),
+    api_key_id: String(event?.api_key_id || ''),
+    endpoint: String(event?.endpoint || ''),
+    status: Number(event?.status || 0),
+    response_time_ms: Math.max(0, Number(event?.response_time_ms || 0)),
+    bytes_processed: Math.max(0, Number(event?.bytes_processed || 0)),
+    month: monthIdFromDate(event?.created_at || Date.now()),
+    created_at: new Date(event?.created_at || Date.now()).toISOString()
+  };
+  const current = loadApiUsageStore().slice();
+  current.push(row);
+  saveApiUsageStore(current);
+  return row;
+}
+
+function loadShareLinksStore() {
+  if (shareLinksStore && typeof shareLinksStore === 'object') return shareLinksStore;
+  try {
+    if (!fs.existsSync(SHARE_LINKS_FILE)) {
+      shareLinksStore = {};
+      return shareLinksStore;
+    }
+    const raw = fs.readFileSync(SHARE_LINKS_FILE, 'utf8');
+    shareLinksStore = asObject(JSON.parse(raw));
+    return shareLinksStore;
+  } catch (error) {
+    logError({ type: 'share_links_load_failed', file: SHARE_LINKS_FILE, error: error?.message || 'unknown' });
+    shareLinksStore = {};
+    return shareLinksStore;
+  }
+}
+
+function saveShareLinksStore(next) {
+  const normalized = asObject(next);
+  writeJsonAtomic(SHARE_LINKS_FILE, normalized);
+  shareLinksStore = normalized;
+  return normalized;
+}
+
+function loadAuditLogsStore() {
+  if (Array.isArray(auditLogsStore)) return auditLogsStore;
+  try {
+    if (!fs.existsSync(AUDIT_LOGS_FILE)) {
+      auditLogsStore = [];
+      return auditLogsStore;
+    }
+    const raw = fs.readFileSync(AUDIT_LOGS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    auditLogsStore = Array.isArray(parsed) ? parsed : [];
+    return auditLogsStore;
+  } catch (error) {
+    logError({ type: 'audit_logs_load_failed', file: AUDIT_LOGS_FILE, error: error?.message || 'unknown' });
+    auditLogsStore = [];
+    return auditLogsStore;
+  }
+}
+
+function saveAuditLogsStore(next) {
+  const normalized = Array.isArray(next) ? next : [];
+  writeJsonAtomic(AUDIT_LOGS_FILE, normalized);
+  auditLogsStore = normalized;
+  return normalized;
+}
+
+function appendAuditLog(req, action, details = {}) {
+  try {
+    const actor = req?.admin && typeof req.admin === 'object' ? req.admin : {};
+    const current = loadAuditLogsStore().slice();
+    current.push({
+      id: uuidv4(),
+      action: String(action || 'unknown'),
+      actor: {
+        sub: String(actor.sub || 'admin'),
+        role: String(actor.role || ADMIN_DEFAULT_ROLE || 'super_admin'),
+        sid: actor.sid || null
+      },
+      method: req?.method || null,
+      path: req?.path || null,
+      request_id: req?.requestId || null,
+      details: asObject(details),
+      created_at: new Date().toISOString()
+    });
+    saveAuditLogsStore(current.length > 5000 ? current.slice(-5000) : current);
+  } catch (error) {
+    logError({ type: 'audit_log_append_failed', action: String(action || 'unknown'), error: error?.message || 'unknown' });
+  }
+}
+
+function loadLocalizationOverridesStore() {
+  if (localizationOverridesStore && typeof localizationOverridesStore === 'object') return localizationOverridesStore;
+  try {
+    if (!fs.existsSync(LOCALIZATION_OVERRIDES_FILE)) {
+      localizationOverridesStore = {};
+      return localizationOverridesStore;
+    }
+    const raw = fs.readFileSync(LOCALIZATION_OVERRIDES_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    localizationOverridesStore = asObject(parsed);
+    return localizationOverridesStore;
+  } catch (error) {
+    logError({ type: 'localization_overrides_load_failed', file: LOCALIZATION_OVERRIDES_FILE, error: error?.message || 'unknown' });
+    localizationOverridesStore = {};
+    return localizationOverridesStore;
+  }
+}
+
+function saveLocalizationOverridesStore(next) {
+  const normalized = asObject(next);
+  writeJsonAtomic(LOCALIZATION_OVERRIDES_FILE, normalized);
+  localizationOverridesStore = normalized;
+}
+
+function detectImageExtFromMime(mime) {
+  const normalized = String(mime || '').toLowerCase();
+  if (normalized.includes('png')) return 'png';
+  if (normalized.includes('jpeg') || normalized.includes('jpg')) return 'jpg';
+  if (normalized.includes('webp')) return 'webp';
+  if (normalized.includes('gif')) return 'gif';
+  if (normalized.includes('svg')) return 'svg';
+  return '';
+}
+
+function parseDataUrlImage(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([a-zA-Z0-9+/=\s]+)$/);
+  if (!match) return null;
+  const mime = match[1];
+  const ext = detectImageExtFromMime(mime);
+  if (!ext) return null;
+  const buffer = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
+  if (!buffer.length) return null;
+  return { mime, ext, buffer };
+}
+
+function getRequestBaseUrl(req) {
+  const protoHeader = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const proto = protoHeader || req.protocol || 'https';
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  if (!host) return '';
+  return `${proto}://${host}`;
 }
 
 function dedupePostLikes(items) {
@@ -2677,6 +4082,109 @@ async function ensureBucketAvailable() {
   }
 }
 
+async function putObjectBuffer(key, buffer, contentType = 'application/octet-stream') {
+  if (storageMode === 's3') {
+    await ensureBucketAvailable();
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType
+    }));
+    return;
+  }
+  const diskPath = path.join(localRoot, key);
+  fs.mkdirSync(path.dirname(diskPath), { recursive: true });
+  fs.writeFileSync(diskPath, buffer);
+}
+
+function inferExtFromUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || ''));
+    const pathname = String(parsed.pathname || '');
+    const ext = path.extname(pathname).replace('.', '').toLowerCase();
+    return ext || '';
+  } catch {
+    return '';
+  }
+}
+
+function resolveToolByFormats(inputExt, toFormat) {
+  const input = String(inputExt || '').trim().toLowerCase();
+  const target = String(toFormat || '').trim().toLowerCase();
+  if (!input || !target) return null;
+  for (const [toolId, meta] of Object.entries(TOOL_META)) {
+    const output = String(meta?.outputExt || '').trim().toLowerCase();
+    const inputExts = Array.isArray(meta?.inputExts) ? meta.inputExts : [];
+    if (output === target && inputExts.includes(input)) return toolId;
+  }
+  return null;
+}
+
+function buildWebhookSignature(secret, payloadText) {
+  return crypto.createHmac('sha256', String(secret || '')).update(String(payloadText || '')).digest('hex');
+}
+
+async function dispatchApiWebhooks({ apiKeyId, eventName, payload }) {
+  const hooks = loadApiWebhooksStore().filter((hook) => (
+    String(hook.api_key_id || '') === String(apiKeyId || '')
+    && hook.is_active !== false
+    && Array.isArray(hook.events)
+    && hook.events.includes(eventName)
+  ));
+  if (!hooks.length) return;
+  const body = {
+    id: uuidv4(),
+    event: eventName,
+    ts: new Date().toISOString(),
+    payload: asObject(payload || {})
+  };
+  const bodyText = JSON.stringify(body);
+  const deliveries = loadApiWebhookDeliveriesStore().slice();
+  for (const hook of hooks) {
+    const dedupeKey = `${hook.id}:${eventName}:${String(payload?.job_id || payload?.jobId || '')}`;
+    if (deliveries.some((row) => String(row?.dedupe_key || '') === dedupeKey && Number(row.status || 0) >= 200 && Number(row.status || 0) < 300)) {
+      continue;
+    }
+    let status = 0;
+    let error = null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), API_WEBHOOK_TIMEOUT_MS);
+    try {
+      const response = await fetch(String(hook.url || ''), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-megaconvert-event': eventName,
+          'x-megaconvert-signature': buildWebhookSignature(hook.secret || '', bodyText)
+        },
+        body: bodyText,
+        signal: controller.signal
+      });
+      status = response.status;
+      if (!response.ok) {
+        error = `HTTP_${response.status}`;
+      }
+    } catch (dispatchError) {
+      status = 0;
+      error = dispatchError?.message || 'dispatch_failed';
+    } finally {
+      clearTimeout(timeout);
+    }
+    deliveries.push({
+      id: uuidv4(),
+      webhook_id: hook.id,
+      api_key_id: apiKeyId,
+      dedupe_key: dedupeKey,
+      event: eventName,
+      status,
+      error,
+      created_at: new Date().toISOString()
+    });
+  }
+  saveApiWebhookDeliveriesStore(deliveries);
+}
+
 app.get('/health', async (req, res) => {
   const redis = await ensureRedisAvailable(req.requestId);
   if (!redis.ok) {
@@ -2684,6 +4192,323 @@ app.get('/health', async (req, res) => {
   }
   return res.json({ ok: true, storage: storageMode, redis: 'up' });
 });
+
+app.post('/health/worker/ping', (req, res) => {
+  workerHeartbeatAt = Date.now();
+  opsCounters.workerPings += 1;
+  return res.json({ ok: true, ts: workerHeartbeatAt });
+});
+
+app.post('/internal/worker/health-check', requireInternalWorkerAuth, (req, res) => {
+  try {
+    const payload = asObject(req.body || {});
+    const row = {
+      id: uuidv4(),
+      worker_id: String(payload.worker_id || 'unknown').trim() || 'unknown',
+      version: String(payload.version || '').trim() || null,
+      status: String(payload.status || 'unknown').trim() || 'unknown',
+      duration_ms: Math.max(0, Number(payload.duration_ms || 0)),
+      checks: Array.isArray(payload.checks) ? payload.checks.slice(0, 100) : [],
+      created_at: payload.created_at || new Date().toISOString()
+    };
+    const rows = loadWorkerHealthChecksStore().slice();
+    rows.push(row);
+    saveWorkerHealthChecksStore(rows);
+    applyFormatStateFromWorkerChecks(row.checks, row.worker_id);
+    if (row.status !== 'ok') {
+      appendWorkerAlertEvent({
+        type: 'worker_startup_check_failed',
+        severity: 'critical',
+        worker_id: row.worker_id,
+        message: `Worker startup checks failed for ${row.worker_id}`,
+        details: { checks: row.checks }
+      });
+    }
+    return res.json({ ok: true, id: row.id });
+  } catch (error) {
+    logError({ type: 'internal_worker_health_check_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKER_HEALTH_WRITE_FAILED', message: 'Failed to store worker health check', requestId: req.requestId });
+  }
+});
+
+app.post('/internal/worker/synthetic-result', requireInternalWorkerAuth, (req, res) => {
+  try {
+    const payload = asObject(req.body || {});
+    const row = {
+      id: uuidv4(),
+      worker_id: String(payload.worker_id || 'unknown').trim() || 'unknown',
+      format_pair: clampText(String(payload.format_pair || '').trim(), 120),
+      tool: clampText(String(payload.tool || '').trim(), 120),
+      success: payload.success === true,
+      validation_status: clampText(String(payload.validation_status || '').trim(), 32) || null,
+      latency_ms: Math.max(0, Number(payload.latency_ms || 0)),
+      output_ext: clampText(String(payload.output_ext || '').trim(), 32) || null,
+      output_size: Math.max(0, Number(payload.output_size || 0)),
+      error: clampText(String(payload.error || '').trim(), 500) || null,
+      created_at: payload.created_at || new Date().toISOString()
+    };
+    const rows = loadSyntheticTestResultsStore().slice();
+    rows.push(row);
+    saveSyntheticTestResultsStore(rows);
+    updateFormatHealthFromSynthetic(row);
+    return res.json({ ok: true, id: row.id });
+  } catch (error) {
+    logError({ type: 'internal_synthetic_result_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'SYNTHETIC_RESULT_WRITE_FAILED', message: 'Failed to store synthetic result', requestId: req.requestId });
+  }
+});
+
+app.post('/internal/worker/job-result', requireInternalWorkerAuth, (req, res) => {
+  try {
+    const payload = asObject(req.body || {});
+    const success = payload.success === true;
+    const row = {
+      id: uuidv4(),
+      worker_id: String(payload.worker_id || 'unknown').trim() || 'unknown',
+      job_id: clampText(String(payload.job_id || '').trim(), 128) || null,
+      tool: clampText(String(payload.tool || '').trim(), 120) || null,
+      batch: payload.batch === true,
+      success,
+      duration_ms: Math.max(0, Number(payload.duration_ms || 0)),
+      error: clampText(String(payload.error || '').trim(), 500) || null,
+      request_id: clampText(String(payload.request_id || '').trim(), 128) || null,
+      user_id: clampText(String(payload.user_id || '').trim(), 128) || null,
+      api_key_id: clampText(String(payload.api_key_id || '').trim(), 128) || null,
+      created_at: payload.created_at || new Date().toISOString()
+    };
+    const results = loadWorkerJobResultsStore().slice();
+    results.push(row);
+    saveWorkerJobResultsStore(results);
+    if (!success && payload.tool) {
+      appendWorkerAlertEvent({
+        type: 'job_failed',
+        severity: 'warning',
+        worker_id: payload.worker_id ? String(payload.worker_id) : null,
+        tool: String(payload.tool || '').trim() || null,
+        message: `Job failed for tool ${String(payload.tool || '').trim() || 'unknown'}`,
+        details: {
+          job_id: payload.job_id || null,
+          duration_ms: Math.max(0, Number(payload.duration_ms || 0)),
+          error: clampText(String(payload.error || '').trim(), 500) || null
+        }
+      });
+    }
+    return res.json({ ok: true, id: row.id });
+  } catch (error) {
+    logError({ type: 'internal_worker_job_result_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKER_JOB_RESULT_WRITE_FAILED', message: 'Failed to process worker job result', requestId: req.requestId });
+  }
+});
+
+app.get('/health/worker', async (req, res) => {
+  const redis = await ensureRedisAvailable(req.requestId);
+  if (!redis.ok) {
+    return res.status(503).json({ ok: false, worker: 'unknown', redis: 'down', error: redis.payload });
+  }
+  const now = Date.now();
+  const ageMs = workerHeartbeatAt > 0 ? now - workerHeartbeatAt : null;
+  const heartbeatTtlMs = 120_000;
+  const workerUp = ageMs !== null && ageMs <= heartbeatTtlMs;
+  const latestStartup = loadWorkerHealthChecksStore().slice(-1)[0] || null;
+  const recentSynthetic = loadSyntheticTestResultsStore().slice(-20);
+  const recentSuccessRate = recentSynthetic.length
+    ? Number((recentSynthetic.filter((item) => item.success === true).length / recentSynthetic.length).toFixed(4))
+    : null;
+  return res.json({
+    ok: true,
+    worker: workerUp ? 'up' : 'stale',
+    degraded: !workerUp,
+    last_heartbeat_at: workerHeartbeatAt || null,
+    heartbeat_age_ms: ageMs,
+    startup_check: latestStartup ? {
+      status: latestStartup.status,
+      created_at: latestStartup.created_at,
+      worker_id: latestStartup.worker_id
+    } : null,
+    synthetic: {
+      recent_count: recentSynthetic.length,
+      success_rate: recentSuccessRate
+    }
+  });
+});
+
+app.get('/health/storage', async (_req, res) => {
+  if (storageMode !== 's3') {
+    return res.json({ ok: true, storage: storageMode });
+  }
+  try {
+    await ensureBucketAvailable();
+    return res.json({ ok: true, storage: 's3' });
+  } catch (error) {
+    return res.json({
+      ok: true,
+      storage: 's3',
+      degraded: true,
+      error: String(error?.message || 'storage unavailable')
+    });
+  }
+});
+
+app.get('/health/ai', (_req, res) => {
+  return res.json({ ok: true, ai: 'available' });
+});
+
+function percentile(values, p) {
+  if (!Array.isArray(values) || !values.length) return null;
+  const sorted = values
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item) && item >= 0)
+    .sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[idx];
+}
+
+app.get('/metrics/product', (_req, res) => {
+  const rangeDaysRaw = Number(_req.query?.range_days || _req.query?.range || 30);
+  const rangeDays = Math.max(1, Math.min(365, Number.isFinite(rangeDaysRaw) ? rangeDaysRaw : 30));
+  const sinceTs = Date.now() - (rangeDays * 24 * 60 * 60 * 1000);
+
+  const allResults = loadWorkerJobResultsStore();
+  const scoped = allResults.filter((item) => {
+    const ts = Date.parse(String(item?.created_at || ''));
+    return Number.isFinite(ts) && ts >= sinceTs;
+  });
+  const total = scoped.length;
+  const success = scoped.filter((item) => item.success === true);
+  const failed = scoped.filter((item) => item.success !== true);
+  const successRate = total ? Number((success.length / total).toFixed(4)) : null;
+
+  const successDurations = success
+    .map((item) => Math.max(0, Number(item.duration_ms || 0)))
+    .filter((value) => Number.isFinite(value));
+  const avgTimeToResultMs = successDurations.length
+    ? Math.round(successDurations.reduce((sum, value) => sum + value, 0) / successDurations.length)
+    : null;
+  const p95TimeToResultMs = percentile(successDurations, 95);
+
+  const actorCounts = new Map();
+  for (const item of success) {
+    const actor = String(item.api_key_id || item.request_id || '').trim();
+    if (!actor) continue;
+    actorCounts.set(actor, (actorCounts.get(actor) || 0) + 1);
+  }
+  const activeUsers = actorCounts.size;
+  const repeatUsers = [...actorCounts.values()].filter((count) => count >= 2).length;
+  const repeatRate = activeUsers ? Number((repeatUsers / activeUsers).toFixed(4)) : null;
+
+  return res.json({
+    ok: true,
+    range_days: rangeDays,
+    generated_at: new Date().toISOString(),
+    product: {
+      total_jobs: total,
+      success_jobs: success.length,
+      failed_jobs: failed.length,
+      success_rate: successRate,
+      avg_time_to_result_ms: avgTimeToResultMs,
+      p95_time_to_result_ms: p95TimeToResultMs
+    },
+    retention: {
+      active_users: activeUsers,
+      repeat_users: repeatUsers,
+      repeat_rate: repeatRate
+    }
+  });
+});
+
+app.get('/metrics/ops', (_req, res) => {
+  const now = Date.now();
+  const workerAgeMs = workerHeartbeatAt > 0 ? now - workerHeartbeatAt : null;
+  const synthetic = loadSyntheticTestResultsStore().slice(-SYNTHETIC_ALERT_WINDOW);
+  const syntheticSuccessRate = synthetic.length
+    ? Number((synthetic.filter((item) => item.success === true).length / synthetic.length).toFixed(4))
+    : null;
+  const disabledFormats = Object.values(loadFormatHealthStateStore()).filter((item) => item.disabled === true).length;
+  return res.json({
+    ok: true,
+    events_accepted: opsCounters.eventsAccepted,
+    worker_pings: opsCounters.workerPings,
+    worker_heartbeat_age_ms: workerAgeMs,
+    synthetic_recent_count: synthetic.length,
+    synthetic_success_rate: syntheticSuccessRate,
+    disabled_formats: disabledFormats
+  });
+});
+
+app.get('/share-expiry-presets', (_req, res) => {
+  return res.json({ ok: true, presets: SHARE_EXPIRY_PRESETS, default: 'seven_days' });
+});
+
+app.get('/share/expiry-presets', (_req, res) => {
+  return res.json({ ok: true, presets: SHARE_EXPIRY_PRESETS, default: 'seven_days' });
+});
+
+app.post('/flags/evaluate', (req, res) => {
+  const payload = asObject(req.body || {});
+  const requested = Array.isArray(payload.flags) ? payload.flags.map((item) => String(item || '').trim()).filter(Boolean) : [];
+  const allFlags = asObject(loadPlatformSettingsStore().feature_flags || {});
+  if (!requested.length) {
+    return res.json({ ok: true, flags: allFlags });
+  }
+  const subset = {};
+  requested.forEach((key) => {
+    subset[key] = Boolean(allFlags[key]);
+  });
+  return res.json({ ok: true, flags: subset });
+});
+
+app.post('/share', (req, res) => {
+  const payload = asObject(req.body || {});
+  const fileUrl = String(payload.file_url || '').trim();
+  if (!fileUrl) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID',
+      message: 'file_url is required',
+      requestId: req.requestId
+    });
+  }
+  const preset = String(payload.expires_preset || '').trim().toLowerCase();
+  const presetSeconds = Object.prototype.hasOwnProperty.call(SHARE_EXPIRY_PRESETS, preset)
+    ? SHARE_EXPIRY_PRESETS[preset]
+    : null;
+  const explicitSeconds = Number(payload.expires_in);
+  const ttlSeconds = Number.isFinite(explicitSeconds) && explicitSeconds >= 0
+    ? explicitSeconds
+    : (presetSeconds !== null ? presetSeconds : SHARE_EXPIRY_PRESETS.seven_days);
+  const token = crypto.randomBytes(9).toString('hex');
+  const now = Date.now();
+  const item = {
+    id: token,
+    file_id: payload.file_id ? String(payload.file_id) : null,
+    url: fileUrl,
+    expires_preset: preset || (ttlSeconds === 0 ? 'never' : 'custom'),
+    expires_in: ttlSeconds,
+    expires_at: ttlSeconds > 0 ? now + (ttlSeconds * 1000) : null,
+    created_at: now
+  };
+  const shares = { ...loadShareLinksStore(), [token]: item };
+  saveShareLinksStore(shares);
+  return res.json({ token, url: item.url, expires_in: item.expires_in, expires_at: item.expires_at });
+});
+
+app.get('/share/:token', (req, res) => {
+  const token = String(req.params?.token || '').trim();
+  const shares = loadShareLinksStore();
+  const item = asObject(shares[token]);
+  if (!token || !item.id) {
+    return res.status(404).json({ status: 'error', code: 'NOT_FOUND', message: 'Share not found', requestId: req.requestId });
+  }
+  if (item.expires_at && Date.now() > Number(item.expires_at)) {
+    const next = { ...shares };
+    delete next[token];
+    saveShareLinksStore(next);
+    return res.status(410).json({ status: 'error', code: 'EXPIRED', message: 'Share expired', requestId: req.requestId });
+  }
+  return res.json(item);
+});
+
 app.post('/events', (req, res) => {
   const body = asObject(req.body);
   if (!body.type && !body.event) {
@@ -2693,6 +4518,7 @@ app.post('/events', (req, res) => {
   const envelope = normalizeAnalyticsEnvelope(req, body);
   const rows = buildAnalyticsRowsFromEnvelope(envelope);
   enqueueAnalyticsRows(rows);
+  opsCounters.eventsAccepted += rows.length;
 
   log({
     type: 'event',
@@ -2737,6 +4563,7 @@ app.post('/admin/auth/login', (req, res) => {
   const nowSec = Math.floor(Date.now() / 1000);
   const token = signAdminJwt({
     sub: 'admin',
+    role: ADMIN_DEFAULT_ROLE,
     sid: uuidv4(),
     iat: nowSec,
     exp: nowSec + ADMIN_SESSION_TTL_SEC
@@ -2754,6 +4581,7 @@ app.get('/admin/auth/me', requireAdminAuth, (req, res) => {
   return res.json({
     ok: true,
     admin: {
+      role: String(req.admin.role || ADMIN_DEFAULT_ROLE || 'super_admin'),
       sid: req.admin.sid || null,
       exp: req.admin.exp || null
     }
@@ -2872,7 +4700,9 @@ app.post('/admin/promo-codes', requireAdminAuth, async (req, res) => {
       ]
     );
 
-    return res.status(201).json(mapPromoCodeRow(result.rows[0]));
+    const created = mapPromoCodeRow(result.rows[0]);
+    appendAuditLog(req, 'admin.promo_codes.create', { promo_id: created?.id || null, code: created?.code || null });
+    return res.status(201).json(created);
   } catch (error) {
     if (error instanceof PromoApiError) {
       return res.status(error.statusCode).json({
@@ -3080,7 +4910,9 @@ app.patch('/admin/promo-codes/:id', requireAdminAuth, async (req, res) => {
     );
 
     await client.query('COMMIT');
-    return res.json(mapPromoCodeRow(updateResult.rows[0]));
+    const updated = mapPromoCodeRow(updateResult.rows[0]);
+    appendAuditLog(req, 'admin.promo_codes.update', { promo_id: updated?.id || promoId, code: updated?.code || null });
+    return res.json(updated);
   } catch (error) {
     try {
       await client.query('ROLLBACK');
@@ -3179,6 +5011,7 @@ app.delete('/admin/promo-codes/:id', requireAdminAuth, async (req, res) => {
 
     await client.query('DELETE FROM promo_codes WHERE id = $1', [promoId]);
     await client.query('COMMIT');
+    appendAuditLog(req, 'admin.promo_codes.delete', { promo_id: promoId, code: String(promoResult.rows[0]?.code || '').trim() || null });
     return res.json({
       ok: true,
       id: promoId,
@@ -3316,6 +5149,7 @@ app.post('/admin/posts', requireAdminAuth, (req, res) => {
 
     posts.push(post);
     saveAdminPostsStore(posts);
+    appendAuditLog(req, 'admin.posts.create', { post_id: post.id, slug: post.slug, status: post.status });
     return res.status(201).json(post);
   } catch (error) {
     logError({
@@ -3442,6 +5276,7 @@ app.patch('/admin/posts/:id', requireAdminAuth, (req, res) => {
 
     posts[index] = next;
     saveAdminPostsStore(posts);
+    appendAuditLog(req, 'admin.posts.update', { post_id: next.id, slug: next.slug, status: next.status });
     return res.json(next);
   } catch (error) {
     logError({
@@ -3486,6 +5321,7 @@ app.delete('/admin/posts/:id', requireAdminAuth, async (req, res) => {
       const likes = loadPostLikesStore().filter((like) => like.post_id !== removed.id);
       savePostLikesStore(likes);
     });
+    appendAuditLog(req, 'admin.posts.delete', { post_id: removed.id, slug: removed.slug });
     return res.json({ ok: true, id: removed.id });
   } catch (error) {
     logError({
@@ -3500,6 +5336,824 @@ app.delete('/admin/posts/:id', requireAdminAuth, async (req, res) => {
       message: 'Failed to delete post',
       requestId: req.requestId
     });
+  }
+});
+
+app.get('/admin/developers', requireAdminAuth, (req, res) => {
+  try {
+    return res.json({ ok: true, items: loadDevelopersStore().slice() });
+  } catch (error) {
+    logError({
+      type: 'admin_developers_list_failed',
+      requestId: req.requestId,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'DEVELOPERS_READ_FAILED',
+      message: 'Failed to load developers',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.post('/admin/developers', requireAdminAuth, (req, res) => {
+  try {
+    const body = asObject(req.body);
+    const name = clampText(String(body.name || '').trim(), DEVELOPER_NAME_MAX_LEN);
+    if (!name) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_NAME',
+        message: 'Developer name is required',
+        requestId: req.requestId
+      });
+    }
+    const items = loadDevelopersStore().slice();
+    const nowIso = new Date().toISOString();
+    const item = normalizeStoredDeveloper({
+      id: uuidv4(),
+      name,
+      role: body.role,
+      bio: body.bio,
+      avatar_url: body.avatar_url,
+      github_url: body.github_url,
+      linkedin_url: body.linkedin_url,
+      twitter_url: body.twitter_url,
+      website_url: body.website_url,
+      order_index: body.order_index,
+      is_active: body.is_active !== false,
+      created_at: nowIso,
+      updated_at: nowIso
+    });
+    items.push(item);
+    saveDevelopersStore(items);
+    appendAuditLog(req, 'admin.developers.create', { developer_id: item.id, name: item.name });
+    return res.status(201).json({ ok: true, item });
+  } catch (error) {
+    logError({
+      type: 'admin_developers_create_failed',
+      requestId: req.requestId,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'DEVELOPERS_WRITE_FAILED',
+      message: 'Failed to create developer',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.put('/admin/developers/:id', requireAdminAuth, (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_DEVELOPER_ID',
+        message: 'Missing developer id',
+        requestId: req.requestId
+      });
+    }
+    const body = asObject(req.body);
+    const items = loadDevelopersStore().slice();
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return res.status(404).json({
+        status: 'error',
+        code: 'DEVELOPER_NOT_FOUND',
+        message: 'Developer not found',
+        requestId: req.requestId
+      });
+    }
+    const current = items[index];
+    const updated = normalizeStoredDeveloper({
+      ...current,
+      ...body,
+      id: current.id,
+      updated_at: new Date().toISOString()
+    });
+    items[index] = updated;
+    saveDevelopersStore(items);
+    appendAuditLog(req, 'admin.developers.update', { developer_id: updated.id, name: updated.name });
+    return res.json({ ok: true, item: updated });
+  } catch (error) {
+    logError({
+      type: 'admin_developers_update_failed',
+      requestId: req.requestId,
+      developerId: req.params?.id || null,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'DEVELOPERS_WRITE_FAILED',
+      message: 'Failed to update developer',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.delete('/admin/developers/:id', requireAdminAuth, (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_DEVELOPER_ID',
+        message: 'Missing developer id',
+        requestId: req.requestId
+      });
+    }
+    const items = loadDevelopersStore().slice();
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return res.status(404).json({
+        status: 'error',
+        code: 'DEVELOPER_NOT_FOUND',
+        message: 'Developer not found',
+        requestId: req.requestId
+      });
+    }
+    const removed = items.splice(index, 1)[0];
+    saveDevelopersStore(items);
+    appendAuditLog(req, 'admin.developers.delete', { developer_id: removed.id, name: removed.name });
+    return res.json({ ok: true, id: removed.id });
+  } catch (error) {
+    logError({
+      type: 'admin_developers_delete_failed',
+      requestId: req.requestId,
+      developerId: req.params?.id || null,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'DEVELOPERS_WRITE_FAILED',
+      message: 'Failed to delete developer',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.patch('/admin/developers/:id/toggle', requireAdminAuth, (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_DEVELOPER_ID',
+        message: 'Missing developer id',
+        requestId: req.requestId
+      });
+    }
+    const items = loadDevelopersStore().slice();
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return res.status(404).json({
+        status: 'error',
+        code: 'DEVELOPER_NOT_FOUND',
+        message: 'Developer not found',
+        requestId: req.requestId
+      });
+    }
+    const next = {
+      ...items[index],
+      is_active: !items[index].is_active,
+      updated_at: new Date().toISOString()
+    };
+    items[index] = normalizeStoredDeveloper(next);
+    saveDevelopersStore(items);
+    appendAuditLog(req, 'admin.developers.toggle', { developer_id: items[index].id, is_active: items[index].is_active });
+    return res.json({ ok: true, item: items[index] });
+  } catch (error) {
+    logError({
+      type: 'admin_developers_toggle_failed',
+      requestId: req.requestId,
+      developerId: req.params?.id || null,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'DEVELOPERS_WRITE_FAILED',
+      message: 'Failed to toggle developer',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.get('/developers', (req, res) => {
+  try {
+    return res.json({ ok: true, items: listPublicDevelopers() });
+  } catch (error) {
+    logError({
+      type: 'developers_public_list_failed',
+      requestId: req.requestId,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'DEVELOPERS_READ_FAILED',
+      message: 'Failed to load developers',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.post('/admin/assets/image', requireAdminAuth, (req, res) => {
+  try {
+    const dataUrl = String(req.body?.data_url || req.body?.dataUrl || '').trim();
+    if (!dataUrl) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_IMAGE',
+        message: 'Missing image payload',
+        requestId: req.requestId
+      });
+    }
+    const parsed = parseDataUrlImage(dataUrl);
+    if (!parsed) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'INVALID_IMAGE_PAYLOAD',
+        message: 'Invalid image data url',
+        requestId: req.requestId
+      });
+    }
+    if (parsed.buffer.length > ADMIN_ASSET_IMAGE_MAX_BYTES) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'IMAGE_TOO_LARGE',
+        message: `Image exceeds ${Math.floor(ADMIN_ASSET_IMAGE_MAX_BYTES / (1024 * 1024))}MB limit`,
+        requestId: req.requestId
+      });
+    }
+    fs.mkdirSync(ADMIN_ASSETS_DIR, { recursive: true });
+    const fileName = `${uuidv4()}.${parsed.ext}`;
+    const diskPath = path.join(ADMIN_ASSETS_DIR, fileName);
+    fs.writeFileSync(diskPath, parsed.buffer);
+    // Always return API-proxied path so web frontend can load assets via /api on any environment.
+    const url = `/api/admin/assets/${fileName}`;
+    appendAuditLog(req, 'admin.assets.upload_image', { file_name: fileName, size_bytes: parsed.buffer.length });
+    return res.json({ ok: true, file_name: fileName, url });
+  } catch (error) {
+    logError({ type: 'admin_asset_upload_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({
+      status: 'error',
+      code: 'ASSET_UPLOAD_FAILED',
+      message: 'Failed to upload image',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.get('/admin/assets/:name', (req, res) => {
+  const name = path.basename(String(req.params?.name || '').trim());
+  if (!name) {
+    return res.status(404).json({
+      status: 'error',
+      code: 'ASSET_NOT_FOUND',
+      message: 'Asset not found',
+      requestId: req.requestId
+    });
+  }
+  const diskPath = path.join(ADMIN_ASSETS_DIR, name);
+  if (!fs.existsSync(diskPath)) {
+    return res.status(404).json({
+      status: 'error',
+      code: 'ASSET_NOT_FOUND',
+      message: 'Asset not found',
+      requestId: req.requestId
+    });
+  }
+  return res.sendFile(diskPath);
+});
+
+app.get('/admin/content/pages', requireAdminAuth, (req, res) => {
+  try {
+    const items = loadContentPagesStore().slice().sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0));
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_content_pages_list_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_PAGES_READ_FAILED', message: 'Failed to load pages', requestId: req.requestId });
+  }
+});
+
+app.post('/admin/content/pages', requireAdminAuth, (req, res) => {
+  try {
+    const page = normalizeContentPage(req.body || {});
+    const items = loadContentPagesStore().slice();
+    if (!page.title) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_PAGE_TITLE', message: 'Page title is required', requestId: req.requestId });
+    }
+    items.push(page);
+    saveContentPagesStore(items);
+    appendAuditLog(req, 'admin.content.pages.create', { page_id: page.id, slug: page.slug });
+    return res.status(201).json({ ok: true, item: page });
+  } catch (error) {
+    logError({ type: 'admin_content_pages_create_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_PAGES_WRITE_FAILED', message: 'Failed to create page', requestId: req.requestId });
+  }
+});
+
+app.patch('/admin/content/pages/:id', requireAdminAuth, (req, res) => {
+  try {
+    const id = String(req.params?.id || '').trim();
+    const items = loadContentPagesStore().slice();
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'PAGE_NOT_FOUND', message: 'Page not found', requestId: req.requestId });
+    }
+    const updated = normalizeContentPage({
+      ...items[index],
+      ...asObject(req.body || {}),
+      id,
+      updated_at: new Date().toISOString()
+    });
+    items[index] = updated;
+    saveContentPagesStore(items);
+    appendAuditLog(req, 'admin.content.pages.update', { page_id: updated.id, slug: updated.slug });
+    return res.json({ ok: true, item: updated });
+  } catch (error) {
+    logError({ type: 'admin_content_pages_update_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_PAGES_WRITE_FAILED', message: 'Failed to update page', requestId: req.requestId });
+  }
+});
+
+app.delete('/admin/content/pages/:id', requireAdminAuth, (req, res) => {
+  try {
+    const id = String(req.params?.id || '').trim();
+    const pages = loadContentPagesStore().slice();
+    const removed = pages.find((item) => item.id === id);
+    if (!removed) {
+      return res.status(404).json({ status: 'error', code: 'PAGE_NOT_FOUND', message: 'Page not found', requestId: req.requestId });
+    }
+    const filteredPages = pages.filter((item) => item.id !== id);
+    saveContentPagesStore(filteredPages);
+    const removedSlug = safeSlug(removed.slug, 'home');
+    const blocks = loadContentBlocksStore().slice().filter((item) => item.page_slug !== removedSlug);
+    saveContentBlocksStore(blocks);
+    appendAuditLog(req, 'admin.content.pages.delete', { page_id: removed.id, slug: removed.slug });
+    return res.status(204).send();
+  } catch (error) {
+    logError({ type: 'admin_content_pages_delete_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_PAGES_WRITE_FAILED', message: 'Failed to delete page', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/content/blocks', requireAdminAuth, (req, res) => {
+  try {
+    const pageSlug = String(req.query?.page_slug || '').trim();
+    let items = loadContentBlocksStore().slice();
+    if (pageSlug) {
+      const normalizedPageSlug = safeSlug(pageSlug, 'home');
+      items = items.filter((item) => item.page_slug === normalizedPageSlug);
+    }
+    items.sort((a, b) => Number(a.order_index || 0) - Number(b.order_index || 0));
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_content_blocks_list_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_BLOCKS_READ_FAILED', message: 'Failed to load blocks', requestId: req.requestId });
+  }
+});
+
+app.post('/admin/content/blocks', requireAdminAuth, (req, res) => {
+  try {
+    const block = normalizeContentBlock(req.body || {});
+    const items = loadContentBlocksStore().slice();
+    items.push(block);
+    saveContentBlocksStore(items);
+    appendAuditLog(req, 'admin.content.blocks.create', { block_id: block.id, page_slug: block.page_slug, type: block.type });
+    return res.status(201).json({ ok: true, item: block });
+  } catch (error) {
+    logError({ type: 'admin_content_blocks_create_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_BLOCKS_WRITE_FAILED', message: 'Failed to create block', requestId: req.requestId });
+  }
+});
+
+app.patch('/admin/content/blocks/:id', requireAdminAuth, (req, res) => {
+  try {
+    const id = String(req.params?.id || '').trim();
+    const items = loadContentBlocksStore().slice();
+    const index = items.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'BLOCK_NOT_FOUND', message: 'Block not found', requestId: req.requestId });
+    }
+    const updated = normalizeContentBlock({
+      ...items[index],
+      ...asObject(req.body || {}),
+      id,
+      updated_at: new Date().toISOString()
+    });
+    items[index] = updated;
+    saveContentBlocksStore(items);
+    appendAuditLog(req, 'admin.content.blocks.update', { block_id: updated.id, page_slug: updated.page_slug, type: updated.type });
+    return res.json({ ok: true, item: updated });
+  } catch (error) {
+    logError({ type: 'admin_content_blocks_update_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_BLOCKS_WRITE_FAILED', message: 'Failed to update block', requestId: req.requestId });
+  }
+});
+
+app.delete('/admin/content/blocks/:id', requireAdminAuth, (req, res) => {
+  try {
+    const id = String(req.params?.id || '').trim();
+    const blocks = loadContentBlocksStore().slice();
+    const filtered = blocks.filter((item) => item.id !== id);
+    if (filtered.length === blocks.length) {
+      return res.status(404).json({ status: 'error', code: 'BLOCK_NOT_FOUND', message: 'Block not found', requestId: req.requestId });
+    }
+    saveContentBlocksStore(filtered);
+    appendAuditLog(req, 'admin.content.blocks.delete', { block_id: id });
+    return res.status(204).send();
+  } catch (error) {
+    logError({ type: 'admin_content_blocks_delete_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'CONTENT_BLOCKS_WRITE_FAILED', message: 'Failed to delete block', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/settings/platform', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const settings = loadPlatformSettingsStore();
+    return res.json({ ok: true, settings, item: settings });
+  } catch (error) {
+    logError({ type: 'admin_settings_read_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'SETTINGS_READ_FAILED', message: 'Failed to load settings', requestId: req.requestId });
+  }
+});
+
+app.put('/admin/settings/platform', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const merged = normalizePlatformSettings({
+      ...loadPlatformSettingsStore(),
+      ...asObject(req.body || {}),
+      updated_at: new Date().toISOString()
+    });
+    savePlatformSettingsStore(merged);
+    appendAuditLog(req, 'admin.platform_settings.update', { feature_flags: merged.feature_flags || {} });
+    return res.json({ ok: true, settings: merged, item: merged });
+  } catch (error) {
+    logError({ type: 'admin_settings_write_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'SETTINGS_WRITE_FAILED', message: 'Failed to save settings', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/audit-logs', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const limit = Math.min(500, Math.max(1, Number(req.query?.limit || 100)));
+    const items = loadAuditLogsStore().slice(-limit).reverse();
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_audit_logs_read_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'AUDIT_READ_FAILED', message: 'Failed to load audit logs', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/worker/health-checks', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const limit = Math.min(500, Math.max(1, Number(req.query?.limit || 100)));
+    const items = loadWorkerHealthChecksStore().slice(-limit).reverse();
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_worker_health_checks_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKER_HEALTH_READ_FAILED', message: 'Failed to load worker health checks', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/worker/synthetic-results', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const toolFilter = String(req.query?.tool || '').trim();
+    const limit = Math.min(1000, Math.max(1, Number(req.query?.limit || 200)));
+    const items = loadSyntheticTestResultsStore()
+      .filter((item) => !toolFilter || String(item.tool || '') === toolFilter)
+      .slice(-limit)
+      .reverse();
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_synthetic_results_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'SYNTHETIC_RESULTS_READ_FAILED', message: 'Failed to load synthetic results', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/worker/alerts', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const limit = Math.min(500, Math.max(1, Number(req.query?.limit || 100)));
+    const items = loadWorkerAlertEventsStore().slice(-limit).reverse();
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_worker_alerts_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKER_ALERTS_READ_FAILED', message: 'Failed to load worker alerts', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/worker/formats', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const state = loadFormatHealthStateStore();
+    const items = Object.values(state).sort((a, b) => String(a.tool || '').localeCompare(String(b.tool || '')));
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_worker_formats_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKER_FORMATS_READ_FAILED', message: 'Failed to load worker format state', requestId: req.requestId });
+  }
+});
+
+app.patch('/admin/worker/formats/:tool', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const toolId = String(req.params?.tool || '').trim();
+    if (!TOOL_IDS.has(toolId)) {
+      return res.status(404).json({ status: 'error', code: 'TOOL_NOT_FOUND', message: 'Tool not found', requestId: req.requestId });
+    }
+    const body = asObject(req.body || {});
+    const state = loadFormatHealthStateStore();
+    const current = asObject(state[toolId]);
+    const disabled = Object.prototype.hasOwnProperty.call(body, 'disabled') ? body.disabled === true : current.disabled === true;
+    const fallbackTool = String(body.fallback_tool || current.fallback_tool || '').trim();
+    const reason = clampText(String(body.reason || current.reason || '').trim(), 200) || null;
+    const next = {
+      ...current,
+      tool: toolId,
+      disabled,
+      reason,
+      fallback_tool: fallbackTool && TOOL_IDS.has(fallbackTool) ? fallbackTool : null,
+      updated_at: new Date().toISOString()
+    };
+    const merged = { ...state, [toolId]: next };
+    saveFormatHealthStateStore(merged);
+    appendAuditLog(req, 'admin.worker.format.update', { tool: toolId, disabled: next.disabled, fallback_tool: next.fallback_tool, reason: next.reason });
+    return res.json({ ok: true, item: next });
+  } catch (error) {
+    logError({ type: 'admin_worker_format_update_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKER_FORMATS_WRITE_FAILED', message: 'Failed to update format health state', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/api-keys', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const userIdFilter = String(req.query?.user_id || '').trim();
+    const items = loadApiKeysStore()
+      .filter((item) => !userIdFilter || String(item.user_id || '') === userIdFilter)
+      .map((item) => mapApiKeyPublic(item))
+      .sort((a, b) => Date.parse(b.created_at || '') - Date.parse(a.created_at || ''));
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_api_keys_list_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_READ_FAILED', message: 'Failed to load API keys', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/api-usage', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const range = String(req.query?.range || '30d').trim().toLowerCase();
+    const now = Date.now();
+    const windowMs = range === '24h' ? 24 * 60 * 60 * 1000 : (range === '7d' ? 7 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000);
+    const rows = loadApiUsageStore().filter((row) => {
+      const ts = Date.parse(row.created_at || '');
+      return Number.isFinite(ts) && (now - ts <= windowMs);
+    });
+    const byKey = new Map();
+    rows.forEach((row) => {
+      const keyId = String(row.api_key_id || '');
+      const current = byKey.get(keyId) || { api_key_id: keyId, requests: 0, errors: 0, avg_latency_ms: 0 };
+      current.requests += 1;
+      if (Number(row.status || 0) >= 400) current.errors += 1;
+      current.avg_latency_ms += Number(row.response_time_ms || 0);
+      byKey.set(keyId, current);
+    });
+    const topKeys = Array.from(byKey.values()).map((item) => ({
+      ...item,
+      avg_latency_ms: item.requests ? Number((item.avg_latency_ms / item.requests).toFixed(1)) : 0
+    })).sort((a, b) => b.requests - a.requests).slice(0, 20);
+    const total = rows.length;
+    const errors = rows.filter((row) => Number(row.status || 0) >= 400).length;
+    const avgLatency = total
+      ? Number((rows.reduce((sum, row) => sum + Number(row.response_time_ms || 0), 0) / total).toFixed(1))
+      : 0;
+    return res.json({
+      ok: true,
+      range,
+      totals: {
+        requests: total,
+        errors,
+        error_rate: total ? Number((errors / total).toFixed(4)) : 0,
+        avg_latency_ms: avgLatency
+      },
+      top_keys: topKeys
+    });
+  } catch (error) {
+    logError({ type: 'admin_api_usage_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_USAGE_READ_FAILED', message: 'Failed to load API usage', requestId: req.requestId });
+  }
+});
+
+app.patch('/admin/api-keys/:id/limits', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const keyId = String(req.params?.id || '').trim();
+    const body = asObject(req.body || {});
+    const keys = loadApiKeysStore().slice();
+    const index = keys.findIndex((item) => item.id === keyId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'API_KEY_NOT_FOUND', message: 'API key not found', requestId: req.requestId });
+    }
+    const limits = resolveApiKeyLimits(body.plan || keys[index].plan, body);
+    keys[index] = {
+      ...keys[index],
+      plan: limits.plan,
+      rate_limit_per_min: limits.rate_limit_per_min,
+      quota_monthly: limits.quota_monthly,
+      allowed_ips: Object.prototype.hasOwnProperty.call(body, 'allowed_ips')
+        ? sanitizeIpAllowlist(body.allowed_ips)
+        : sanitizeIpAllowlist(keys[index].allowed_ips),
+      updated_at: new Date().toISOString()
+    };
+    saveApiKeysStore(keys);
+    appendAuditLog(req, 'admin.api_keys.update_limits', {
+      api_key_id: keyId,
+      plan: limits.plan,
+      rate_limit_per_min: limits.rate_limit_per_min,
+      quota_monthly: limits.quota_monthly,
+      allowed_ips: sanitizeIpAllowlist(keys[index].allowed_ips)
+    });
+    return res.json({ ok: true, item: mapApiKeyPublic(keys[index]) });
+  } catch (error) {
+    logError({ type: 'admin_api_keys_update_limits_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_WRITE_FAILED', message: 'Failed to update API key limits', requestId: req.requestId });
+  }
+});
+
+app.post('/admin/api-keys/:id/revoke', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const keyId = String(req.params?.id || '').trim();
+    const keys = loadApiKeysStore().slice();
+    const index = keys.findIndex((item) => item.id === keyId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'API_KEY_NOT_FOUND', message: 'API key not found', requestId: req.requestId });
+    }
+    keys[index] = {
+      ...keys[index],
+      revoked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    saveApiKeysStore(keys);
+    appendAuditLog(req, 'admin.api_keys.revoke', { api_key_id: keyId });
+    return res.json({ ok: true, item: mapApiKeyPublic(keys[index]) });
+  } catch (error) {
+    logError({ type: 'admin_api_keys_revoke_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_WRITE_FAILED', message: 'Failed to revoke API key', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/api-webhooks', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const userIdFilter = String(req.query?.user_id || '').trim();
+    const apiKeyFilter = String(req.query?.api_key_id || '').trim();
+    const items = loadApiWebhooksStore()
+      .filter((item) => {
+        if (userIdFilter && String(item.user_id || '') !== userIdFilter) return false;
+        if (apiKeyFilter && String(item.api_key_id || '') !== apiKeyFilter) return false;
+        return true;
+      })
+      .map((item) => mapApiWebhookPublic(item))
+      .sort((a, b) => Date.parse(b.created_at || '') - Date.parse(a.created_at || ''));
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_api_webhooks_list_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_READ_FAILED', message: 'Failed to load API webhooks', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/api-webhook-deliveries', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const apiKeyFilter = String(req.query?.api_key_id || '').trim();
+    const limit = Math.min(1000, Math.max(1, Number(req.query?.limit || API_WEBHOOK_DELIVERY_LIST_LIMIT)));
+    const items = loadApiWebhookDeliveriesStore()
+      .filter((item) => !apiKeyFilter || String(item.api_key_id || '') === apiKeyFilter)
+      .sort((a, b) => Date.parse(b.created_at || '') - Date.parse(a.created_at || ''))
+      .slice(0, limit);
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'admin_api_webhook_deliveries_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_READ_FAILED', message: 'Failed to load webhook deliveries', requestId: req.requestId });
+  }
+});
+
+app.patch('/admin/api-webhooks/:id', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const webhookId = String(req.params?.id || '').trim();
+    const body = asObject(req.body || {});
+    const hooks = loadApiWebhooksStore().slice();
+    const index = hooks.findIndex((item) => item.id === webhookId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'WEBHOOK_NOT_FOUND', message: 'Webhook not found', requestId: req.requestId });
+    }
+    const current = hooks[index];
+    const nextUrl = Object.prototype.hasOwnProperty.call(body, 'url')
+      ? normalizeWebhookTargetUrl(body.url)
+      : String(current.url || '');
+    if (!nextUrl) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_WEBHOOK_URL', message: 'Invalid webhook url', requestId: req.requestId });
+    }
+    hooks[index] = {
+      ...current,
+      url: nextUrl,
+      events: Object.prototype.hasOwnProperty.call(body, 'events')
+        ? sanitizeWebhookEvents(body.events)
+        : sanitizeWebhookEvents(current.events),
+      is_active: Object.prototype.hasOwnProperty.call(body, 'is_active')
+        ? body.is_active !== false
+        : current.is_active !== false,
+      updated_at: new Date().toISOString()
+    };
+    saveApiWebhooksStore(hooks);
+    appendAuditLog(req, 'admin.api_webhooks.update', { webhook_id: webhookId, api_key_id: current.api_key_id });
+    return res.json({ ok: true, item: mapApiWebhookPublic(hooks[index]) });
+  } catch (error) {
+    logError({ type: 'admin_api_webhook_update_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_WRITE_FAILED', message: 'Failed to update webhook', requestId: req.requestId });
+  }
+});
+
+app.delete('/admin/api-webhooks/:id', requireAdminAuthIfEnabled, (req, res) => {
+  try {
+    const webhookId = String(req.params?.id || '').trim();
+    const hooks = loadApiWebhooksStore().slice();
+    const index = hooks.findIndex((item) => item.id === webhookId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'WEBHOOK_NOT_FOUND', message: 'Webhook not found', requestId: req.requestId });
+    }
+    const [removed] = hooks.splice(index, 1);
+    saveApiWebhooksStore(hooks);
+    appendAuditLog(req, 'admin.api_webhooks.delete', { webhook_id: webhookId, api_key_id: removed?.api_key_id || null });
+    return res.status(204).send();
+  } catch (error) {
+    logError({ type: 'admin_api_webhook_delete_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_WRITE_FAILED', message: 'Failed to delete webhook', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/localization/status', requireAdminAuth, (req, res) => {
+  try {
+    const overrides = loadLocalizationOverridesStore();
+    const files = fs.existsSync(FRONTEND_I18N_DIR)
+      ? fs.readdirSync(FRONTEND_I18N_DIR).filter((name) => name.endsWith('.json')).sort()
+      : [];
+    let baseCount = 0;
+    const locales = files.map((file) => {
+      const lang = file.replace(/\.json$/i, '');
+      const diskPath = path.join(FRONTEND_I18N_DIR, file);
+      let keysCount = 0;
+      try {
+        const parsed = JSON.parse(fs.readFileSync(diskPath, 'utf8'));
+        keysCount = Object.keys(asObject(parsed)).length;
+      } catch {
+        keysCount = 0;
+      }
+      if (lang === 'en') baseCount = keysCount;
+      const overrideCount = Object.keys(asObject(overrides[lang])).length;
+      return { lang, keys_count: keysCount, override_count: overrideCount };
+    });
+    return res.json({ ok: true, base_lang: 'en', base_count: baseCount, locales });
+  } catch (error) {
+    logError({ type: 'admin_localization_status_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'LOCALIZATION_STATUS_FAILED', message: 'Failed to load localization status', requestId: req.requestId });
+  }
+});
+
+app.get('/admin/localization/catalog', requireAdminAuth, (req, res) => {
+  try {
+    const lang = safeSlug(String(req.query?.lang || 'en').trim(), 'en');
+    const filePath = path.join(FRONTEND_I18N_DIR, `${lang}.json`);
+    const basePath = path.join(FRONTEND_I18N_DIR, 'en.json');
+    const base = fs.existsSync(basePath) ? asObject(JSON.parse(fs.readFileSync(basePath, 'utf8'))) : {};
+    const dict = fs.existsSync(filePath) ? asObject(JSON.parse(fs.readFileSync(filePath, 'utf8'))) : {};
+    const overrides = asObject(loadLocalizationOverridesStore()[lang]);
+    const merged = { ...base, ...dict, ...overrides };
+    return res.json({ ok: true, lang, entries: merged, override_count: Object.keys(overrides).length });
+  } catch (error) {
+    logError({ type: 'admin_localization_catalog_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'LOCALIZATION_CATALOG_FAILED', message: 'Failed to load localization catalog', requestId: req.requestId });
+  }
+});
+
+app.put('/admin/localization/catalog/:lang', requireAdminAuth, (req, res) => {
+  try {
+    const lang = safeSlug(String(req.params?.lang || '').trim(), '');
+    if (!lang) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_LANG', message: 'Invalid locale', requestId: req.requestId });
+    }
+    const entries = asObject(req.body?.entries || {});
+    const sanitized = {};
+    Object.entries(entries).forEach(([key, value]) => {
+      const normalizedKey = String(key || '').trim();
+      if (!normalizedKey) return;
+      sanitized[normalizedKey] = clampText(String(value || ''), 5000);
+    });
+    const store = loadLocalizationOverridesStore();
+    const next = { ...store, [lang]: sanitized };
+    saveLocalizationOverridesStore(next);
+    appendAuditLog(req, 'admin.localization.catalog.update', { lang, override_count: Object.keys(sanitized).length });
+    return res.json({ ok: true, lang, override_count: Object.keys(sanitized).length });
+  } catch (error) {
+    logError({ type: 'admin_localization_catalog_save_failed', error: error?.message || 'unknown', requestId: req.requestId });
+    return res.status(500).json({ status: 'error', code: 'LOCALIZATION_WRITE_FAILED', message: 'Failed to save localization overrides', requestId: req.requestId });
   }
 });
 
@@ -3585,6 +6239,341 @@ app.get('/posts/:id/likes', (req, res) => {
       message: 'Failed to load likes',
       requestId: req.requestId
     });
+  }
+});
+
+const mapApiKeyPublic = (item) => {
+  const limits = resolveApiKeyLimits(item?.plan, item || {});
+  return {
+    id: String(item?.id || ''),
+    user_id: String(item?.user_id || ''),
+    name: String(item?.name || 'Default'),
+    plan: limits.plan,
+    rate_limit_per_min: limits.rate_limit_per_min,
+    quota_monthly: limits.quota_monthly,
+    allowed_ips: sanitizeIpAllowlist(item?.allowed_ips),
+    key_prefix: String(item?.key_prefix || ''),
+    created_at: item?.created_at || null,
+    revoked_at: item?.revoked_at || null,
+    last_used_at: item?.last_used_at || null
+  };
+};
+
+const mapApiWebhookPublic = (item) => ({
+  id: String(item?.id || ''),
+  api_key_id: String(item?.api_key_id || ''),
+  user_id: String(item?.user_id || ''),
+  url: String(item?.url || ''),
+  events: sanitizeWebhookEvents(item?.events),
+  is_active: item?.is_active !== false,
+  created_at: item?.created_at || null,
+  updated_at: item?.updated_at || null
+});
+
+app.get('/account/api-keys', requireUserAuth, (req, res) => {
+  try {
+    const userId = req.user.id;
+    const keys = loadApiKeysStore()
+      .filter((item) => String(item.user_id || '') === userId)
+      .map((item) => mapApiKeyPublic(item));
+    const usage = loadApiUsageStore().filter((row) => {
+      const key = keys.find((item) => item.id === String(row.api_key_id || ''));
+      return Boolean(key);
+    });
+    return res.json({
+      ok: true,
+      items: keys,
+      usage_summary: {
+        month: monthIdFromDate(),
+        requests: usage.filter((row) => String(row.month || '') === monthIdFromDate()).length,
+        errors: usage.filter((row) => Number(row.status || 0) >= 400 && String(row.month || '') === monthIdFromDate()).length
+      }
+    });
+  } catch (error) {
+    logError({ type: 'account_api_keys_list_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_READ_FAILED', message: 'Failed to load API keys', requestId: req.requestId });
+  }
+});
+
+app.post('/account/api-keys', requireUserAuth, (req, res) => {
+  try {
+    const userId = req.user.id;
+    const body = asObject(req.body || {});
+    const name = clampText(String(body.name || 'Default').trim(), 80) || 'Default';
+    const requestedPlan = normalizeApiKeyPlan(body.plan || 'free');
+    const keys = loadApiKeysStore().slice();
+    const ownKeys = keys.filter((item) => String(item.user_id || '') === userId && !item.revoked_at);
+    if (ownKeys.length >= API_KEY_MAX_PER_USER) {
+      return res.status(409).json({ status: 'error', code: 'API_KEY_LIMIT_REACHED', message: 'User API key limit reached', requestId: req.requestId });
+    }
+    const token = buildApiKeyPrefix();
+    const limits = resolveApiKeyLimits(requestedPlan, body);
+    const item = {
+      id: uuidv4(),
+      user_id: userId,
+      key_hash: hashApiKeyToken(token),
+      key_prefix: token.slice(0, 16),
+      name,
+      plan: limits.plan,
+      rate_limit_per_min: limits.rate_limit_per_min,
+      quota_monthly: limits.quota_monthly,
+      allowed_ips: sanitizeIpAllowlist(body.allowed_ips),
+      created_at: new Date().toISOString(),
+      revoked_at: null,
+      last_used_at: null,
+      expires_at: null
+    };
+    keys.push(item);
+    saveApiKeysStore(keys);
+    appendAuditLog(req, 'account.api_keys.create', { api_key_id: item.id, user_id: userId, plan: item.plan });
+    return res.status(201).json({ ok: true, item: mapApiKeyPublic(item), token });
+  } catch (error) {
+    logError({ type: 'account_api_keys_create_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_WRITE_FAILED', message: 'Failed to create API key', requestId: req.requestId });
+  }
+});
+
+app.post('/account/api-keys/:id/revoke', requireUserAuth, (req, res) => {
+  try {
+    const keyId = String(req.params?.id || '').trim();
+    const userId = req.user.id;
+    const keys = loadApiKeysStore().slice();
+    const index = keys.findIndex((item) => item.id === keyId && String(item.user_id || '') === userId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'API_KEY_NOT_FOUND', message: 'API key not found', requestId: req.requestId });
+    }
+    keys[index] = { ...keys[index], revoked_at: new Date().toISOString() };
+    saveApiKeysStore(keys);
+    appendAuditLog(req, 'account.api_keys.revoke', { api_key_id: keyId, user_id: userId });
+    return res.json({ ok: true, item: mapApiKeyPublic(keys[index]) });
+  } catch (error) {
+    logError({ type: 'account_api_keys_revoke_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_WRITE_FAILED', message: 'Failed to revoke API key', requestId: req.requestId });
+  }
+});
+
+app.post('/account/api-keys/:id/regenerate', requireUserAuth, (req, res) => {
+  try {
+    const keyId = String(req.params?.id || '').trim();
+    const userId = req.user.id;
+    const keys = loadApiKeysStore().slice();
+    const index = keys.findIndex((item) => item.id === keyId && String(item.user_id || '') === userId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'API_KEY_NOT_FOUND', message: 'API key not found', requestId: req.requestId });
+    }
+    const token = buildApiKeyPrefix();
+    keys[index] = {
+      ...keys[index],
+      key_hash: hashApiKeyToken(token),
+      key_prefix: token.slice(0, 16),
+      revoked_at: null,
+      updated_at: new Date().toISOString()
+    };
+    saveApiKeysStore(keys);
+    appendAuditLog(req, 'account.api_keys.regenerate', { api_key_id: keyId, user_id: userId });
+    return res.json({ ok: true, item: mapApiKeyPublic(keys[index]), token });
+  } catch (error) {
+    logError({ type: 'account_api_keys_regenerate_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_WRITE_FAILED', message: 'Failed to regenerate API key', requestId: req.requestId });
+  }
+});
+
+app.patch('/account/api-keys/:id/allowlist', requireUserAuth, (req, res) => {
+  try {
+    const keyId = String(req.params?.id || '').trim();
+    const userId = req.user.id;
+    const body = asObject(req.body || {});
+    const keys = loadApiKeysStore().slice();
+    const index = keys.findIndex((item) => item.id === keyId && String(item.user_id || '') === userId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'API_KEY_NOT_FOUND', message: 'API key not found', requestId: req.requestId });
+    }
+    const allowedIps = sanitizeIpAllowlist(body.allowed_ips);
+    keys[index] = {
+      ...keys[index],
+      allowed_ips: allowedIps,
+      updated_at: new Date().toISOString()
+    };
+    saveApiKeysStore(keys);
+    appendAuditLog(req, 'account.api_keys.allowlist_update', { api_key_id: keyId, user_id: userId, allowed_ips: allowedIps });
+    return res.json({ ok: true, item: mapApiKeyPublic(keys[index]) });
+  } catch (error) {
+    logError({ type: 'account_api_keys_allowlist_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_KEYS_WRITE_FAILED', message: 'Failed to update API key allowlist', requestId: req.requestId });
+  }
+});
+
+app.get('/account/api-webhooks', requireUserAuth, (req, res) => {
+  try {
+    const userId = req.user.id;
+    const keys = loadApiKeysStore().filter((item) => String(item.user_id || '') === userId);
+    const keyIds = new Set(keys.map((item) => String(item.id || '')));
+    const items = loadApiWebhooksStore()
+      .filter((item) => keyIds.has(String(item.api_key_id || '')))
+      .map((item) => mapApiWebhookPublic(item))
+      .sort((a, b) => Date.parse(b.created_at || '') - Date.parse(a.created_at || ''));
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'account_api_webhooks_list_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_READ_FAILED', message: 'Failed to load API webhooks', requestId: req.requestId });
+  }
+});
+
+app.get('/account/api-webhooks/deliveries', requireUserAuth, (req, res) => {
+  try {
+    const userId = req.user.id;
+    const keyFilter = String(req.query?.api_key_id || '').trim();
+    const limit = Math.min(500, Math.max(1, Number(req.query?.limit || 100)));
+    const keyIds = new Set(
+      loadApiKeysStore()
+        .filter((item) => String(item.user_id || '') === userId)
+        .map((item) => String(item.id || ''))
+    );
+    if (keyFilter && !keyIds.has(keyFilter)) {
+      return res.status(404).json({ status: 'error', code: 'API_KEY_NOT_FOUND', message: 'API key not found', requestId: req.requestId });
+    }
+    const rows = loadApiWebhookDeliveriesStore()
+      .filter((item) => {
+        const keyId = String(item.api_key_id || '');
+        if (!keyIds.has(keyId)) return false;
+        if (keyFilter && keyId !== keyFilter) return false;
+        return true;
+      })
+      .sort((a, b) => Date.parse(b.created_at || '') - Date.parse(a.created_at || ''))
+      .slice(0, limit);
+    return res.json({ ok: true, items: rows });
+  } catch (error) {
+    logError({ type: 'account_api_webhook_deliveries_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_READ_FAILED', message: 'Failed to load webhook deliveries', requestId: req.requestId });
+  }
+});
+
+app.post('/account/api-webhooks', requireUserAuth, (req, res) => {
+  try {
+    const userId = req.user.id;
+    const body = asObject(req.body || {});
+    const apiKeyId = String(body.api_key_id || '').trim();
+    if (!apiKeyId) {
+      return res.status(400).json({ status: 'error', code: 'MISSING_API_KEY_ID', message: 'api_key_id is required', requestId: req.requestId });
+    }
+    const key = loadApiKeysStore().find((item) => item.id === apiKeyId && String(item.user_id || '') === userId && !item.revoked_at);
+    if (!key) {
+      return res.status(404).json({ status: 'error', code: 'API_KEY_NOT_FOUND', message: 'API key not found', requestId: req.requestId });
+    }
+    const url = normalizeWebhookTargetUrl(body.url);
+    if (!url) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_WEBHOOK_URL', message: 'Invalid webhook url', requestId: req.requestId });
+    }
+    const events = sanitizeWebhookEvents(body.events);
+    const webhooks = loadApiWebhooksStore().slice();
+    const ownForKey = webhooks.filter((item) => String(item.api_key_id || '') === apiKeyId);
+    if (ownForKey.length >= API_WEBHOOKS_MAX_PER_KEY) {
+      return res.status(409).json({ status: 'error', code: 'WEBHOOK_LIMIT_REACHED', message: 'Webhook limit reached for API key', requestId: req.requestId });
+    }
+    const secret = crypto.randomBytes(24).toString('hex');
+    const item = {
+      id: uuidv4(),
+      user_id: userId,
+      api_key_id: apiKeyId,
+      url,
+      events,
+      is_active: body.is_active !== false,
+      secret,
+      created_at: new Date().toISOString(),
+      updated_at: null
+    };
+    webhooks.push(item);
+    saveApiWebhooksStore(webhooks);
+    appendAuditLog(req, 'account.api_webhooks.create', { webhook_id: item.id, api_key_id: apiKeyId, events });
+    return res.status(201).json({ ok: true, item: mapApiWebhookPublic(item), secret });
+  } catch (error) {
+    logError({ type: 'account_api_webhook_create_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_WRITE_FAILED', message: 'Failed to create webhook', requestId: req.requestId });
+  }
+});
+
+app.patch('/account/api-webhooks/:id', requireUserAuth, (req, res) => {
+  try {
+    const webhookId = String(req.params?.id || '').trim();
+    const userId = req.user.id;
+    const body = asObject(req.body || {});
+    const hooks = loadApiWebhooksStore().slice();
+    const index = hooks.findIndex((item) => item.id === webhookId && String(item.user_id || '') === userId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'WEBHOOK_NOT_FOUND', message: 'Webhook not found', requestId: req.requestId });
+    }
+    const current = hooks[index];
+    const nextUrl = Object.prototype.hasOwnProperty.call(body, 'url')
+      ? normalizeWebhookTargetUrl(body.url)
+      : String(current.url || '');
+    if (!nextUrl) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_WEBHOOK_URL', message: 'Invalid webhook url', requestId: req.requestId });
+    }
+    hooks[index] = {
+      ...current,
+      url: nextUrl,
+      events: Object.prototype.hasOwnProperty.call(body, 'events')
+        ? sanitizeWebhookEvents(body.events)
+        : sanitizeWebhookEvents(current.events),
+      is_active: Object.prototype.hasOwnProperty.call(body, 'is_active')
+        ? body.is_active !== false
+        : current.is_active !== false,
+      updated_at: new Date().toISOString()
+    };
+    saveApiWebhooksStore(hooks);
+    appendAuditLog(req, 'account.api_webhooks.update', { webhook_id: webhookId, api_key_id: current.api_key_id });
+    return res.json({ ok: true, item: mapApiWebhookPublic(hooks[index]) });
+  } catch (error) {
+    logError({ type: 'account_api_webhook_update_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_WRITE_FAILED', message: 'Failed to update webhook', requestId: req.requestId });
+  }
+});
+
+app.delete('/account/api-webhooks/:id', requireUserAuth, (req, res) => {
+  try {
+    const webhookId = String(req.params?.id || '').trim();
+    const userId = req.user.id;
+    const hooks = loadApiWebhooksStore().slice();
+    const index = hooks.findIndex((item) => item.id === webhookId && String(item.user_id || '') === userId);
+    if (index < 0) {
+      return res.status(404).json({ status: 'error', code: 'WEBHOOK_NOT_FOUND', message: 'Webhook not found', requestId: req.requestId });
+    }
+    const [removed] = hooks.splice(index, 1);
+    saveApiWebhooksStore(hooks);
+    appendAuditLog(req, 'account.api_webhooks.delete', { webhook_id: webhookId, api_key_id: removed?.api_key_id || null });
+    return res.status(204).send();
+  } catch (error) {
+    logError({ type: 'account_api_webhook_delete_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_WRITE_FAILED', message: 'Failed to delete webhook', requestId: req.requestId });
+  }
+});
+
+app.post('/account/api-webhooks/:id/test', requireUserAuth, async (req, res) => {
+  try {
+    const webhookId = String(req.params?.id || '').trim();
+    const userId = req.user.id;
+    const hooks = loadApiWebhooksStore();
+    const hook = hooks.find((item) => item.id === webhookId && String(item.user_id || '') === userId);
+    if (!hook) {
+      return res.status(404).json({ status: 'error', code: 'WEBHOOK_NOT_FOUND', message: 'Webhook not found', requestId: req.requestId });
+    }
+    const testJobId = `test_${Date.now()}`;
+    await dispatchApiWebhooks({
+      apiKeyId: hook.api_key_id,
+      eventName: sanitizeWebhookEvents(req.body?.events || hook.events)[0] || 'job.completed',
+      payload: {
+        job_id: testJobId,
+        status: 'completed',
+        download_url: null,
+        error: null,
+        source: 'webhook_test'
+      }
+    });
+    appendAuditLog(req, 'account.api_webhooks.test', { webhook_id: webhookId, api_key_id: hook.api_key_id });
+    return res.json({ ok: true, webhook_id: webhookId, test_job_id: testJobId });
+  } catch (error) {
+    logError({ type: 'account_api_webhook_test_failed', requestId: req.requestId, userId: req.user.id, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_WEBHOOKS_TEST_FAILED', message: 'Failed to send test webhook', requestId: req.requestId });
   }
 });
 
@@ -4750,6 +7739,706 @@ app.post('/promo/redeem', requireUserAuth, async (req, res) => {
   }
 });
 
+app.get('/account/workspaces', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const list = store.workspaces
+      .filter((item) => Array.isArray(item.members) && item.members.some((member) => String(member.user_id || '') === userId))
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description || '',
+        role: workspaceMemberRole(item, userId),
+        members_count: Array.isArray(item.members) ? item.members.length : 0,
+        created_at: item.created_at,
+        updated_at: item.updated_at || item.created_at
+      }));
+    return res.json({ ok: true, items: list });
+  } catch (error) {
+    logError({ type: 'account_workspaces_list_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_READ_FAILED', message: 'Failed to load workspaces', requestId: req.requestId });
+  }
+});
+
+app.post('/account/workspaces', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const name = clampText(String(body.name || '').trim(), 120);
+    if (!name) {
+      return res.status(400).json({ status: 'error', code: 'MISSING_NAME', message: 'Workspace name is required', requestId: req.requestId });
+    }
+    const nowIso = new Date().toISOString();
+    const workspace = {
+      id: uuidv4(),
+      name,
+      description: clampText(String(body.description || '').trim(), 500) || '',
+      members: [{ user_id: userId, role: 'owner', added_at: nowIso }],
+      created_by: userId,
+      created_at: nowIso,
+      updated_at: nowIso
+    };
+    const store = loadWorkspacePlatformStore();
+    store.workspaces.push(workspace);
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'workspace.create', { workspace_id: workspace.id, name: workspace.name });
+    return res.status(201).json({ ok: true, item: workspace });
+  } catch (error) {
+    logError({ type: 'account_workspace_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to create workspace', requestId: req.requestId });
+  }
+});
+
+app.patch('/account/workspaces/:id', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const store = loadWorkspacePlatformStore();
+    const index = store.workspaces.findIndex((item) => String(item.id || '') === workspaceId);
+    if (index < 0) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    const current = store.workspaces[index];
+    if (!canEditWorkspace(current, userId)) {
+      return res.status(403).json({ status: 'error', code: 'WORKSPACE_FORBIDDEN', message: 'No permission to update workspace', requestId: req.requestId });
+    }
+    const next = {
+      ...current,
+      name: body.name !== undefined ? clampText(String(body.name || '').trim(), 120) || current.name : current.name,
+      description: body.description !== undefined ? clampText(String(body.description || '').trim(), 500) || '' : current.description,
+      updated_at: new Date().toISOString()
+    };
+    store.workspaces[index] = next;
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'workspace.update', { workspace_id: workspaceId });
+    return res.json({ ok: true, item: next });
+  } catch (error) {
+    logError({ type: 'account_workspace_update_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to update workspace', requestId: req.requestId });
+  }
+});
+
+app.delete('/account/workspaces/:id', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const index = store.workspaces.findIndex((item) => String(item.id || '') === workspaceId);
+    if (index < 0) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    const current = store.workspaces[index];
+    if (workspaceMemberRole(current, userId) !== 'owner') {
+      return res.status(403).json({ status: 'error', code: 'WORKSPACE_FORBIDDEN', message: 'Only owner can delete workspace', requestId: req.requestId });
+    }
+    store.workspaces.splice(index, 1);
+    store.projects = store.projects.filter((item) => String(item.workspace_id || '') !== workspaceId);
+    store.folders = store.folders.filter((item) => String(item.workspace_id || '') !== workspaceId);
+    store.items = store.items.filter((item) => String(item.workspace_id || '') !== workspaceId);
+    store.comments = store.comments.filter((item) => String(item.workspace_id || '') !== workspaceId);
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'workspace.delete', { workspace_id: workspaceId });
+    return res.json({ ok: true });
+  } catch (error) {
+    logError({ type: 'account_workspace_delete_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to delete workspace', requestId: req.requestId });
+  }
+});
+
+app.post('/account/workspaces/:id/members', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const actor = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const targetUserId = clampText(String(body.user_id || '').trim(), 128);
+    if (!targetUserId) return res.status(400).json({ status: 'error', code: 'MISSING_USER_ID', message: 'user_id is required', requestId: req.requestId });
+    const role = normalizeWorkspaceRole(body.role);
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, actor);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    if (workspaceMemberRole(workspace, actor) !== 'owner') {
+      return res.status(403).json({ status: 'error', code: 'WORKSPACE_FORBIDDEN', message: 'Only owner can manage members', requestId: req.requestId });
+    }
+    const members = Array.isArray(workspace.members) ? workspace.members.slice() : [];
+    const index = members.findIndex((item) => String(item.user_id || '') === targetUserId);
+    if (index >= 0) {
+      members[index] = { ...members[index], role };
+    } else {
+      members.push({ user_id: targetUserId, role, added_at: new Date().toISOString() });
+    }
+    workspace.members = members;
+    workspace.updated_at = new Date().toISOString();
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'workspace.member.upsert', { workspace_id: workspaceId, target_user_id: targetUserId, role });
+    return res.json({ ok: true, members: workspace.members });
+  } catch (error) {
+    logError({ type: 'account_workspace_member_upsert_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to update workspace members', requestId: req.requestId });
+  }
+});
+
+app.delete('/account/workspaces/:id/members/:userId', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const actor = String(req.user?.id || '').trim();
+    const target = String(req.params?.userId || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, actor);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    if (workspaceMemberRole(workspace, actor) !== 'owner') {
+      return res.status(403).json({ status: 'error', code: 'WORKSPACE_FORBIDDEN', message: 'Only owner can manage members', requestId: req.requestId });
+    }
+    workspace.members = (Array.isArray(workspace.members) ? workspace.members : []).filter((item) => String(item.user_id || '') !== target);
+    workspace.updated_at = new Date().toISOString();
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'workspace.member.delete', { workspace_id: workspaceId, target_user_id: target });
+    return res.json({ ok: true, members: workspace.members });
+  } catch (error) {
+    logError({ type: 'account_workspace_member_delete_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to remove workspace member', requestId: req.requestId });
+  }
+});
+
+app.get('/account/workspaces/:id/items', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, userId);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    const items = store.items.filter((item) => String(item.workspace_id || '') === workspaceId);
+    const projects = store.projects.filter((item) => String(item.workspace_id || '') === workspaceId);
+    const folders = store.folders.filter((item) => String(item.workspace_id || '') === workspaceId);
+    return res.json({ ok: true, items, projects, folders });
+  } catch (error) {
+    logError({ type: 'account_workspace_items_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_READ_FAILED', message: 'Failed to load workspace items', requestId: req.requestId });
+  }
+});
+
+app.post('/account/workspaces/:id/projects', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, userId);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    if (!canEditWorkspace(workspace, userId)) {
+      return res.status(403).json({ status: 'error', code: 'WORKSPACE_FORBIDDEN', message: 'No permission to create project', requestId: req.requestId });
+    }
+    const item = {
+      id: uuidv4(),
+      workspace_id: workspaceId,
+      name: clampText(String(body.name || '').trim(), 160) || 'Project',
+      description: clampText(String(body.description || '').trim(), 500) || '',
+      created_by: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    store.projects.push(item);
+    saveWorkspacePlatformStore(store);
+    return res.status(201).json({ ok: true, item });
+  } catch (error) {
+    logError({ type: 'account_workspace_project_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to create project', requestId: req.requestId });
+  }
+});
+
+app.post('/account/workspaces/:id/folders', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, userId);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    if (!canEditWorkspace(workspace, userId)) {
+      return res.status(403).json({ status: 'error', code: 'WORKSPACE_FORBIDDEN', message: 'No permission to create folder', requestId: req.requestId });
+    }
+    const item = {
+      id: uuidv4(),
+      workspace_id: workspaceId,
+      project_id: clampText(String(body.project_id || '').trim(), 120) || null,
+      name: clampText(String(body.name || '').trim(), 160) || 'Folder',
+      parent_id: clampText(String(body.parent_id || '').trim(), 120) || null,
+      created_by: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    store.folders.push(item);
+    saveWorkspacePlatformStore(store);
+    return res.status(201).json({ ok: true, item });
+  } catch (error) {
+    logError({ type: 'account_workspace_folder_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to create folder', requestId: req.requestId });
+  }
+});
+
+app.post('/account/workspaces/:id/items', requireUserAuth, (req, res) => {
+  try {
+    const workspaceId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, userId);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    if (!canEditWorkspace(workspace, userId)) {
+      return res.status(403).json({ status: 'error', code: 'WORKSPACE_FORBIDDEN', message: 'No permission to add items', requestId: req.requestId });
+    }
+    const item = {
+      id: uuidv4(),
+      workspace_id: workspaceId,
+      project_id: clampText(String(body.project_id || '').trim(), 120) || null,
+      folder_id: clampText(String(body.folder_id || '').trim(), 120) || null,
+      name: clampText(String(body.name || '').trim(), 220) || 'file',
+      input_key: clampText(String(body.input_key || '').trim(), 400) || null,
+      output_key: clampText(String(body.output_key || '').trim(), 400) || null,
+      size: Math.max(0, Number(body.size || 0)),
+      format: clampText(String(body.format || '').trim().toLowerCase(), 32) || null,
+      status: clampText(String(body.status || 'stored').trim().toLowerCase(), 40) || 'stored',
+      created_by: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    store.items.push(item);
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'workspace.item.create', { workspace_id: workspaceId, item_id: item.id });
+    return res.status(201).json({ ok: true, item });
+  } catch (error) {
+    logError({ type: 'account_workspace_item_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to create workspace item', requestId: req.requestId });
+  }
+});
+
+app.post('/account/file-intelligence/analyze', requireUserAuth, (req, res) => {
+  try {
+    const body = asObject(req.body || {});
+    const fileName = String(body.file_name || body.name || '').trim();
+    const fileSize = Math.max(0, Number(body.file_size || body.size || 0));
+    const ext = (String(body.ext || path.extname(fileName || '').replace('.', '') || '').trim().toLowerCase());
+    if (!ext) return res.status(400).json({ status: 'error', code: 'MISSING_EXTENSION', message: 'File extension is required', requestId: req.requestId });
+    const map = {
+      pdf: { best: 'docx', reason: 'Better for editing and collaboration' },
+      png: { best: 'jpg', reason: 'Smaller size for web and sharing' },
+      jpg: { best: 'webp', reason: 'Better compression and quality ratio' },
+      mp4: { best: 'mp3', reason: 'Audio-only extraction reduces size' },
+      mov: { best: 'mp4', reason: 'Wider compatibility' },
+      docx: { best: 'pdf', reason: 'Stable layout for delivery' }
+    };
+    const rec = map[ext] || { best: ext, reason: 'Current format is already acceptable' };
+    const estimatedSize = rec.best === ext ? fileSize : Math.max(1, Math.round(fileSize * 0.75));
+    const response = {
+      ok: true,
+      analysis: {
+        ext,
+        best_format: rec.best,
+        recommendation_reason: rec.reason,
+        estimated_output_size: estimatedSize,
+        actions: [
+          `convert_to_${rec.best}`,
+          estimatedSize < fileSize ? 'compress_after_convert' : 'keep_quality'
+        ]
+      }
+    };
+    return res.json(response);
+  } catch (error) {
+    logError({ type: 'account_file_intelligence_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'FILE_INTELLIGENCE_FAILED', message: 'Failed to analyze file', requestId: req.requestId });
+  }
+});
+
+app.get('/account/pipelines', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const items = store.pipelines.filter((item) => String(item.user_id || '') === userId);
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'account_pipelines_list_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'PIPELINE_READ_FAILED', message: 'Failed to load pipelines', requestId: req.requestId });
+  }
+});
+
+app.post('/account/pipelines', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const name = clampText(String(body.name || '').trim(), 160);
+    if (!name) return res.status(400).json({ status: 'error', code: 'MISSING_NAME', message: 'Pipeline name is required', requestId: req.requestId });
+    const pipeline = {
+      id: uuidv4(),
+      user_id: userId,
+      workspace_id: clampText(String(body.workspace_id || '').trim(), 128) || null,
+      name,
+      steps: normalizePipelineSteps(body.steps),
+      enabled: body.enabled !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    const store = loadWorkspacePlatformStore();
+    store.pipelines.push(pipeline);
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'pipeline.create', { pipeline_id: pipeline.id, steps: pipeline.steps.length });
+    return res.status(201).json({ ok: true, item: pipeline });
+  } catch (error) {
+    logError({ type: 'account_pipeline_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'PIPELINE_WRITE_FAILED', message: 'Failed to create pipeline', requestId: req.requestId });
+  }
+});
+
+app.patch('/account/pipelines/:id', requireUserAuth, (req, res) => {
+  try {
+    const pipelineId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const store = loadWorkspacePlatformStore();
+    const index = store.pipelines.findIndex((item) => String(item.id || '') === pipelineId && String(item.user_id || '') === userId);
+    if (index < 0) return res.status(404).json({ status: 'error', code: 'PIPELINE_NOT_FOUND', message: 'Pipeline not found', requestId: req.requestId });
+    const current = store.pipelines[index];
+    const next = {
+      ...current,
+      name: body.name !== undefined ? clampText(String(body.name || '').trim(), 160) || current.name : current.name,
+      steps: body.steps !== undefined ? normalizePipelineSteps(body.steps) : current.steps,
+      enabled: body.enabled !== undefined ? body.enabled !== false : current.enabled,
+      updated_at: new Date().toISOString()
+    };
+    store.pipelines[index] = next;
+    saveWorkspacePlatformStore(store);
+    return res.json({ ok: true, item: next });
+  } catch (error) {
+    logError({ type: 'account_pipeline_update_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'PIPELINE_WRITE_FAILED', message: 'Failed to update pipeline', requestId: req.requestId });
+  }
+});
+
+app.delete('/account/pipelines/:id', requireUserAuth, (req, res) => {
+  try {
+    const pipelineId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const before = store.pipelines.length;
+    store.pipelines = store.pipelines.filter((item) => !(String(item.id || '') === pipelineId && String(item.user_id || '') === userId));
+    if (store.pipelines.length === before) {
+      return res.status(404).json({ status: 'error', code: 'PIPELINE_NOT_FOUND', message: 'Pipeline not found', requestId: req.requestId });
+    }
+    saveWorkspacePlatformStore(store);
+    return res.json({ ok: true });
+  } catch (error) {
+    logError({ type: 'account_pipeline_delete_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'PIPELINE_WRITE_FAILED', message: 'Failed to delete pipeline', requestId: req.requestId });
+  }
+});
+
+app.post('/account/pipelines/:id/run', requireUserAuth, async (req, res) => {
+  try {
+    const pipelineId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const store = loadWorkspacePlatformStore();
+    const pipeline = store.pipelines.find((item) => String(item.id || '') === pipelineId && String(item.user_id || '') === userId);
+    if (!pipeline) return res.status(404).json({ status: 'error', code: 'PIPELINE_NOT_FOUND', message: 'Pipeline not found', requestId: req.requestId });
+    if (!Array.isArray(pipeline.steps) || !pipeline.steps.length) {
+      return res.status(400).json({ status: 'error', code: 'PIPELINE_EMPTY', message: 'Pipeline has no steps', requestId: req.requestId });
+    }
+    const firstConvert = pipeline.steps.find((step) => step.action === 'convert' && step.tool && TOOL_IDS.has(step.tool));
+    if (!firstConvert) {
+      return res.status(400).json({ status: 'error', code: 'PIPELINE_NO_CONVERT_STEP', message: 'Pipeline must include a valid convert step', requestId: req.requestId });
+    }
+    const inputKey = String(body.inputKey || '').trim();
+    const originalName = String(body.originalName || 'input').trim();
+    const inputSize = Number(body.inputSize || 0);
+    const inputFormat = String(body.inputFormat || path.extname(originalName).replace('.', '')).trim().toLowerCase();
+    if (!inputKey || !inputKey.startsWith('inputs/')) {
+      return res.status(400).json({ status: 'error', code: 'MISSING_INPUT_KEY', message: 'Valid inputKey is required', requestId: req.requestId });
+    }
+    if (!inputSize || inputSize <= 0 || inputSize > MAX_FILE_SIZE) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid inputSize', requestId: req.requestId });
+    }
+    const jobId = uuidv4();
+    const tool = firstConvert.tool;
+    const availability = resolveToolAvailability(tool);
+    if (!availability.allowed) {
+      return res.status(503).json({ status: 'error', code: 'TOOL_TEMP_DISABLED', message: availability.reason || 'Tool temporarily disabled', requestId: req.requestId });
+    }
+    const finalTool = availability.tool;
+    const outputName = `${path.parse(sanitizeFileName(originalName)).name || 'output'}.${TOOL_EXT[finalTool] || 'bin'}`;
+    const outputKey = `outputs/${jobId}/${outputName}`;
+    const timeout = TOOL_META[finalTool]?.timeoutMs || 180000;
+    await withTimeout(queue.add('convert', {
+      jobId,
+      tool: finalTool,
+      requestedTool: finalTool,
+      fallbackApplied: availability.fallback_applied === true,
+      inputKey,
+      outputKey,
+      originalName: sanitizeFileName(originalName),
+      settings: asObject(firstConvert.settings || {}),
+      inputFormat,
+      inputSize,
+      requestId: req.requestId,
+      userId,
+      pipelineId
+    }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
+    return res.json({ ok: true, jobId, tool: finalTool, pipeline_id: pipelineId, steps_total: pipeline.steps.length });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+    }
+    logError({ type: 'account_pipeline_run_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'PIPELINE_RUN_FAILED', message: 'Failed to run pipeline', requestId: req.requestId });
+  }
+});
+
+app.get('/account/automation-rules', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const items = store.automation_rules.filter((item) => String(item.user_id || '') === userId);
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'account_automation_rules_list_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'AUTOMATION_READ_FAILED', message: 'Failed to load automation rules', requestId: req.requestId });
+  }
+});
+
+app.post('/account/automation-rules', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const rule = {
+      id: uuidv4(),
+      user_id: userId,
+      name: clampText(String(body.name || '').trim(), 180) || 'Rule',
+      enabled: body.enabled !== false,
+      priority: Math.max(1, Number(body.priority || 100)),
+      condition: asObject(body.condition || {}),
+      action: asObject(body.action || {}),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    const store = loadWorkspacePlatformStore();
+    store.automation_rules.push(rule);
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'automation_rule.create', { rule_id: rule.id });
+    return res.status(201).json({ ok: true, item: rule });
+  } catch (error) {
+    logError({ type: 'account_automation_rule_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'AUTOMATION_WRITE_FAILED', message: 'Failed to create automation rule', requestId: req.requestId });
+  }
+});
+
+app.patch('/account/automation-rules/:id', requireUserAuth, (req, res) => {
+  try {
+    const ruleId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const store = loadWorkspacePlatformStore();
+    const index = store.automation_rules.findIndex((item) => String(item.id || '') === ruleId && String(item.user_id || '') === userId);
+    if (index < 0) return res.status(404).json({ status: 'error', code: 'RULE_NOT_FOUND', message: 'Automation rule not found', requestId: req.requestId });
+    const current = store.automation_rules[index];
+    const next = {
+      ...current,
+      name: body.name !== undefined ? clampText(String(body.name || '').trim(), 180) || current.name : current.name,
+      enabled: body.enabled !== undefined ? body.enabled !== false : current.enabled,
+      priority: body.priority !== undefined ? Math.max(1, Number(body.priority || current.priority || 100)) : current.priority,
+      condition: body.condition !== undefined ? asObject(body.condition || {}) : current.condition,
+      action: body.action !== undefined ? asObject(body.action || {}) : current.action,
+      updated_at: new Date().toISOString()
+    };
+    store.automation_rules[index] = next;
+    saveWorkspacePlatformStore(store);
+    return res.json({ ok: true, item: next });
+  } catch (error) {
+    logError({ type: 'account_automation_rule_update_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'AUTOMATION_WRITE_FAILED', message: 'Failed to update automation rule', requestId: req.requestId });
+  }
+});
+
+app.delete('/account/automation-rules/:id', requireUserAuth, (req, res) => {
+  try {
+    const ruleId = String(req.params?.id || '').trim();
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const before = store.automation_rules.length;
+    store.automation_rules = store.automation_rules.filter((item) => !(String(item.id || '') === ruleId && String(item.user_id || '') === userId));
+    if (store.automation_rules.length === before) {
+      return res.status(404).json({ status: 'error', code: 'RULE_NOT_FOUND', message: 'Automation rule not found', requestId: req.requestId });
+    }
+    saveWorkspacePlatformStore(store);
+    return res.json({ ok: true });
+  } catch (error) {
+    logError({ type: 'account_automation_rule_delete_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'AUTOMATION_WRITE_FAILED', message: 'Failed to delete automation rule', requestId: req.requestId });
+  }
+});
+
+app.get('/account/integrations', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const items = store.integrations.filter((item) => String(item.user_id || '') === userId);
+    return res.json({ ok: true, items });
+  } catch (error) {
+    logError({ type: 'account_integrations_list_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'INTEGRATION_READ_FAILED', message: 'Failed to load integrations', requestId: req.requestId });
+  }
+});
+
+app.post('/account/integrations', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const provider = String(body.provider || '').trim().toLowerCase();
+    const allowed = new Set(['google_drive', 'dropbox', 'notion', 'zapier']);
+    if (!allowed.has(provider)) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_PROVIDER', message: 'Unsupported integration provider', requestId: req.requestId });
+    }
+    const store = loadWorkspacePlatformStore();
+    const existing = store.integrations.find((item) => String(item.user_id || '') === userId && String(item.provider || '') === provider);
+    if (existing) {
+      existing.status = 'connected';
+      existing.updated_at = new Date().toISOString();
+      saveWorkspacePlatformStore(store);
+      return res.json({ ok: true, item: existing });
+    }
+    const item = {
+      id: uuidv4(),
+      user_id: userId,
+      provider,
+      status: 'connected',
+      metadata: asObject(body.metadata || {}),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    store.integrations.push(item);
+    saveWorkspacePlatformStore(store);
+    appendAuditLog(req, 'integration.connect', { provider });
+    return res.status(201).json({ ok: true, item });
+  } catch (error) {
+    logError({ type: 'account_integration_connect_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'INTEGRATION_WRITE_FAILED', message: 'Failed to connect integration', requestId: req.requestId });
+  }
+});
+
+app.delete('/account/integrations/:provider', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const provider = String(req.params?.provider || '').trim().toLowerCase();
+    const store = loadWorkspacePlatformStore();
+    const before = store.integrations.length;
+    store.integrations = store.integrations.filter((item) => !(String(item.user_id || '') === userId && String(item.provider || '') === provider));
+    if (store.integrations.length === before) {
+      return res.status(404).json({ status: 'error', code: 'INTEGRATION_NOT_FOUND', message: 'Integration not found', requestId: req.requestId });
+    }
+    saveWorkspacePlatformStore(store);
+    return res.json({ ok: true });
+  } catch (error) {
+    logError({ type: 'account_integration_delete_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'INTEGRATION_WRITE_FAILED', message: 'Failed to disconnect integration', requestId: req.requestId });
+  }
+});
+
+app.get('/account/collaboration/comments', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const workspaceId = String(req.query?.workspace_id || '').trim();
+    if (!workspaceId) return res.status(400).json({ status: 'error', code: 'MISSING_WORKSPACE_ID', message: 'workspace_id is required', requestId: req.requestId });
+    const itemId = String(req.query?.item_id || '').trim();
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, userId);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    const rows = store.comments.filter((row) => String(row.workspace_id || '') === workspaceId && (!itemId || String(row.item_id || '') === itemId));
+    return res.json({ ok: true, items: rows });
+  } catch (error) {
+    logError({ type: 'account_comments_list_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'COLLAB_READ_FAILED', message: 'Failed to load comments', requestId: req.requestId });
+  }
+});
+
+app.post('/account/collaboration/comments', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const body = asObject(req.body || {});
+    const workspaceId = String(body.workspace_id || '').trim();
+    const itemId = String(body.item_id || '').trim();
+    const text = clampText(String(body.text || '').trim(), 4000);
+    if (!workspaceId || !text) return res.status(400).json({ status: 'error', code: 'INVALID_INPUT', message: 'workspace_id and text are required', requestId: req.requestId });
+    const store = loadWorkspacePlatformStore();
+    const workspace = getWorkspaceById(store, workspaceId, userId);
+    if (!workspace) return res.status(404).json({ status: 'error', code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found', requestId: req.requestId });
+    const comment = {
+      id: uuidv4(),
+      workspace_id: workspaceId,
+      item_id: itemId || null,
+      user_id: userId,
+      text,
+      created_at: new Date().toISOString()
+    };
+    store.comments.push(comment);
+    saveWorkspacePlatformStore(store);
+    return res.status(201).json({ ok: true, item: comment });
+  } catch (error) {
+    logError({ type: 'account_comment_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'COLLAB_WRITE_FAILED', message: 'Failed to create comment', requestId: req.requestId });
+  }
+});
+
+app.get('/account/insights/dashboard', requireUserAuth, (req, res) => {
+  try {
+    const userId = String(req.user?.id || '').trim();
+    const rangeDaysRaw = Number(req.query?.range_days || 30);
+    const rangeDays = Math.max(1, Math.min(365, Number.isFinite(rangeDaysRaw) ? rangeDaysRaw : 30));
+    const sinceTs = Date.now() - (rangeDays * 24 * 60 * 60 * 1000);
+    const rows = loadWorkerJobResultsStore().filter((item) => String(item.user_id || '') === userId && Date.parse(String(item.created_at || '')) >= sinceTs);
+    const total = rows.length;
+    const success = rows.filter((item) => item.success === true).length;
+    const avgDuration = total ? Math.round(rows.reduce((sum, row) => sum + Math.max(0, Number(row.duration_ms || 0)), 0) / total) : null;
+    const tools = {};
+    rows.forEach((row) => {
+      const key = String(row.tool || 'unknown');
+      tools[key] = Number(tools[key] || 0) + 1;
+    });
+    const store = loadWorkspacePlatformStore();
+    const workspaceCount = store.workspaces.filter((item) => Array.isArray(item.members) && item.members.some((member) => String(member.user_id || '') === userId)).length;
+    const itemCount = store.items.filter((item) => String(item.created_by || '') === userId).length;
+    return res.json({
+      ok: true,
+      range_days: rangeDays,
+      summary: {
+        jobs_total: total,
+        jobs_success: success,
+        success_rate: total ? Number((success / total).toFixed(4)) : null,
+        avg_time_to_result_ms: avgDuration
+      },
+      workspace: {
+        workspaces: workspaceCount,
+        files: itemCount
+      },
+      top_tools: Object.entries(tools).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([tool, count]) => ({ tool, count }))
+    });
+  } catch (error) {
+    logError({ type: 'account_insights_dashboard_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'INSIGHTS_READ_FAILED', message: 'Failed to load insights dashboard', requestId: req.requestId });
+  }
+});
+
+app.get('/account/platform/capabilities', requireUserAuth, (_req, res) => {
+  return res.json({
+    ok: true,
+    positioning: 'file_processing_platform',
+    modules: [
+      'file_workspace',
+      'pipelines',
+      'file_intelligence',
+      'collaboration',
+      'bulk_processing',
+      'smart_automation',
+      'insights_dashboard',
+      'integrations',
+      'developer_ecosystem'
+    ]
+  });
+});
+
 app.get('/admin/metrics/overview', requireAdminAuth, async (req, res) => {
   const clickhouseEnabled = isClickHouseAnalyticsEnabled();
   const fallbackEnabled = canUseAnalyticsFallback();
@@ -5554,7 +9243,13 @@ app.post('/crypto/session', async (req, res) => {
     const sessionId = uuidv4();
     const kp = nacl.box.keyPair();
     await withTimeout(connection.setex(`zk:session:${sessionId}`, ZK_SESSION_TTL_SEC, bytesToB64(kp.secretKey)), REDIS_OP_TIMEOUT_MS, 'redis_setex_timeout');
-    return res.json({ sessionId, publicKey: bytesToB64(kp.publicKey), expiresIn: ZK_SESSION_TTL_SEC });
+    return res.json({
+      sessionId,
+      publicKey: bytesToB64(kp.publicKey),
+      expiresIn: ZK_SESSION_TTL_SEC,
+      keyVersion: ENCRYPTION_KEY_VERSION,
+      algorithm: 'AES-256-GCM'
+    });
   } catch (error) {
     if (isQueueUnavailableError(error)) {
       return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'redis_unavailable'));
@@ -5562,6 +9257,29 @@ app.post('/crypto/session', async (req, res) => {
     logError({ type: 'crypto_session_failed', requestId: req.requestId, error: error?.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'SESSION_CREATE_FAILED', message: 'Failed to create crypto session', requestId: req.requestId });
   }
+});
+
+app.get('/security/encryption-profile', (_req, res) => {
+  return res.json({
+    ok: true,
+    profile: {
+      in_transit: {
+        tls_required: true,
+        hsts_enabled: HSTS_ENABLED,
+        hsts_max_age: HSTS_MAX_AGE
+      },
+      at_rest: {
+        algorithm: 'AES-256-GCM',
+        envelope_encryption: true,
+        key_version: ENCRYPTION_KEY_VERSION
+      },
+      private_mode: {
+        client_side_encryption_supported: true,
+        session_ttl_sec: ZK_SESSION_TTL_SEC,
+        auto_delete_hours: 24
+      }
+    }
+  });
 });
 
 app.get('/crypto/worker-pubkey', (req, res) => {
@@ -5708,6 +9426,216 @@ app.post('/auth/2fa/verify-token', (req, res) => {
   return res.json({ ok: true });
 });
 
+app.use('/api', requireApiKeyAuth, enforceApiKeyLimits, apiKeyUsageTracker);
+
+app.get('/api/keys/me', (req, res) => {
+  return res.json({ ok: true, api_key: mapApiKeyPublic(req.apiKey) });
+});
+
+app.post('/api/uploads/sign', async (req, res) => {
+  try {
+    const body = asObject(req.body || {});
+    const originalName = sanitizeFileName(String(body.fileName || body.originalName || 'upload.bin'));
+    const contentType = String(body.contentType || 'application/octet-stream');
+    const key = `inputs/${uuidv4()}/${originalName}`;
+    if (storageMode === 's3') {
+      const uploadUrl = await getSignedUrl(s3, new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: key,
+        ContentType: contentType
+      }), { expiresIn: 15 * 60 });
+      return res.json({ ok: true, key, uploadUrl, method: 'PUT', headers: { 'Content-Type': contentType } });
+    }
+    return res.json({ ok: true, key, uploadUrl: `/api/uploads/proxy?key=${encodeURIComponent(key)}`, method: 'POST' });
+  } catch (error) {
+    logError({ type: 'api_upload_sign_failed', requestId: req.requestId, apiKeyId: req.apiKey?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'UPLOAD_SIGN_FAILED', message: 'Failed to sign upload URL', requestId: req.requestId });
+  }
+});
+
+app.post('/api/convert', async (req, res) => {
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) return res.status(503).json(redis.payload);
+
+    const body = asObject(req.body || {});
+    const apiEncryption = asObject(body.encryption || {});
+    if (apiEncryption.enabled === true) {
+      const envelopeCheck = validateEncryptionEnvelope(apiEncryption, { requireKeyWrap: true });
+      if (!envelopeCheck.ok) {
+        return res.status(400).json({ status: 'error', code: envelopeCheck.code, message: envelopeCheck.message, requestId: req.requestId });
+      }
+      const metaCheck = validateEncryptionMeta(apiEncryption);
+      if (!metaCheck.ok) {
+        return res.status(400).json({ status: 'error', code: metaCheck.code, message: metaCheck.message, requestId: req.requestId });
+      }
+    }
+    const requestedTool = String(body.tool || '').trim();
+    let tool = requestedTool;
+    let inputKey = String(body.input_key || body.inputKey || '').trim();
+    let originalName = String(body.original_name || body.originalName || 'input.bin').trim();
+    let inputFormat = String(body.input_format || body.inputFormat || '').trim().toLowerCase();
+    let inputSize = Number(body.input_size || body.inputSize || 0);
+
+    if (!inputKey && body.file_url && body.to_format) {
+      const fileUrl = String(body.file_url || '').trim();
+      const toFormat = String(body.to_format || '').trim().toLowerCase();
+      const response = await fetch(fileUrl, { method: 'GET' });
+      if (!response.ok) {
+        return res.status(400).json({ status: 'error', code: 'FILE_FETCH_FAILED', message: 'Unable to fetch file_url', requestId: req.requestId });
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      if (!buffer.length || buffer.length > MAX_FILE_SIZE) {
+        return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
+      }
+      const ext = inferExtFromUrl(fileUrl) || 'bin';
+      if (!tool) {
+        tool = resolveToolByFormats(ext, toFormat) || '';
+      }
+      if (!tool) {
+        return res.status(400).json({ status: 'error', code: 'UNSUPPORTED_TOOL', message: 'Cannot resolve tool by file_url/to_format', requestId: req.requestId });
+      }
+      const generatedName = `remote.${ext}`;
+      inputKey = `inputs/${uuidv4()}/${generatedName}`;
+      await putObjectBuffer(inputKey, buffer, String(response.headers.get('content-type') || 'application/octet-stream'));
+      originalName = generatedName;
+      inputFormat = ext;
+      inputSize = buffer.length;
+    }
+
+    if (!tool || !TOOL_IDS.has(tool)) {
+      return res.status(400).json({ status: 'error', code: 'UNSUPPORTED_TOOL', message: 'Unsupported tool', requestId: req.requestId });
+    }
+    const availability = resolveToolAvailability(tool);
+    if (!availability.allowed) {
+      return res.status(503).json({
+        status: 'error',
+        code: 'TOOL_TEMP_DISABLED',
+        message: availability.reason || 'Tool temporarily disabled',
+        tool,
+        requestId: req.requestId
+      });
+    }
+    const requestedToolId = tool;
+    tool = availability.tool;
+    if (!inputKey || !String(inputKey).startsWith('inputs/')) {
+      return res.status(400).json({ status: 'error', code: 'MISSING_INPUT_KEY', message: 'Missing input key', requestId: req.requestId });
+    }
+
+    const safeName = sanitizeFileName(originalName || 'input');
+    const toolMeta = TOOL_META[tool];
+    const inferredInputFormat = inputFormat || path.extname(safeName).replace('.', '').toLowerCase();
+    if (toolMeta?.inputExts?.length && !toolMeta.inputExts.includes(inferredInputFormat)) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_FORMAT', message: 'Unsupported input format', requestId: req.requestId });
+    }
+    const size = Number(inputSize || 0);
+    if (!size || size <= 0 || size > MAX_FILE_SIZE) {
+      return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
+    }
+
+    const jobId = uuidv4();
+    const base = path.parse(safeName).name || 'output';
+    const ext = TOOL_EXT[tool] || (path.parse(safeName).ext.replace('.', '') || 'bin');
+    const outputName = `${base}.${ext}`;
+    const outputKey = `outputs/${jobId}/${outputName}`;
+    const timeout = toolMeta?.timeoutMs || 180000;
+    await withTimeout(queue.add('convert', {
+      jobId,
+      tool,
+      requestedTool: requestedToolId,
+      fallbackApplied: availability.fallback_applied === true,
+      inputKey,
+      outputKey,
+      originalName: safeName,
+      settings: asObject(body.settings || {}),
+      inputFormat: inferredInputFormat,
+      inputSize: size,
+      requestId: req.requestId,
+      apiKeyId: req.apiKey.id,
+      encryption: apiEncryption.enabled === true ? apiEncryption : null
+    }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
+    return res.status(202).json({
+      ok: true,
+      job_id: jobId,
+      status: 'queued',
+      tool,
+      requested_tool: requestedToolId,
+      fallback_applied: availability.fallback_applied === true,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+    }
+    logError({ type: 'api_convert_failed', requestId: req.requestId, apiKeyId: req.apiKey?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'API_CONVERT_FAILED', message: 'Failed to create conversion job', requestId: req.requestId });
+  }
+});
+
+app.get('/api/jobs/:id', async (req, res) => {
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) return res.status(503).json(redis.payload);
+    const job = await queue.getJob(req.params.id);
+    if (!job) return res.status(404).json({ status: 'error', code: 'JOB_NOT_FOUND', message: 'Job not found', requestId: req.requestId });
+    const jobApiKeyId = String(job?.data?.apiKeyId || '');
+    if (jobApiKeyId && jobApiKeyId !== String(req.apiKey?.id || '')) {
+      return res.status(404).json({ status: 'error', code: 'JOB_NOT_FOUND', message: 'Job not found', requestId: req.requestId });
+    }
+    const state = await job.getState();
+    const progress = job.progress || 0;
+    let downloadUrl = null;
+    if (state === 'completed') {
+      const outputKey = (job.returnvalue && job.returnvalue.outputKey) || job.data.outputKey;
+      if (storageMode === 's3') {
+        downloadUrl = await getSignedUrl(s3, new GetObjectCommand({
+          Bucket: process.env.S3_BUCKET,
+          Key: outputKey
+        }), { expiresIn: 60 * 60 });
+      } else {
+        downloadUrl = `/files/${outputKey}`;
+      }
+    }
+    if (jobApiKeyId && (state === 'completed' || state === 'failed')) {
+      const eventName = state === 'completed' ? 'job.completed' : 'job.failed';
+      void dispatchApiWebhooks({
+        apiKeyId: jobApiKeyId,
+        eventName,
+        payload: {
+          job_id: String(req.params.id || ''),
+          status: state,
+          download_url: downloadUrl,
+          error: state === 'failed' ? (job.failedReason || 'Conversion failed') : null
+        }
+      }).catch((error) => {
+        logError({
+          type: 'api_webhook_dispatch_failed',
+          requestId: req.requestId,
+          apiKeyId: jobApiKeyId,
+          jobId: req.params.id,
+          eventName,
+          error: error?.message || 'unknown'
+        });
+      });
+    }
+    return res.json({
+      ok: true,
+      job_id: req.params.id,
+      status: state,
+      progress,
+      download_url: downloadUrl,
+      error: state === 'failed' ? (job.failedReason || 'Conversion failed') : null
+    });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+    }
+    logError({ type: 'api_job_fetch_failed', requestId: req.requestId, apiKeyId: req.apiKey?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'JOB_FETCH_FAILED', message: 'Failed to fetch job', requestId: req.requestId });
+  }
+});
+
 app.post('/jobs', async (req, res) => {
   try {
     const redis = await ensureRedisAvailable(req.requestId);
@@ -5718,17 +9646,34 @@ app.post('/jobs', async (req, res) => {
     const allowed = await rateLimit(`rl:jobs:${clientId}`, RATE_LIMIT_JOBS_PER_MIN, 60);
     if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many jobs', requestId: req.requestId });
 
-    const tool = req.body.tool;
+    const requestedTool = String(req.body.tool || '').trim();
+    let tool = requestedTool;
     const batch = String(req.body.batch || 'false') === 'true';
-    const settings = typeof req.body.settings === 'string' ? JSON.parse(req.body.settings) : (req.body.settings || {});
+    let settings = typeof req.body.settings === 'string' ? JSON.parse(req.body.settings) : (req.body.settings || {});
+    const actorUserId = getRequestUserId(req);
     if (!tool) return res.status(400).json({ status: 'error', code: 'MISSING_TOOL', message: 'Missing tool', requestId: req.requestId });
     if (!TOOL_IDS.has(tool)) return res.status(400).json({ status: 'error', code: 'UNSUPPORTED_TOOL', message: 'Unsupported tool', requestId: req.requestId });
+    const availability = resolveToolAvailability(tool);
+    if (!availability.allowed) {
+      return res.status(503).json({
+        status: 'error',
+        code: 'TOOL_TEMP_DISABLED',
+        message: availability.reason || 'Tool temporarily disabled',
+        tool,
+        requestId: req.requestId
+      });
+    }
+    tool = availability.tool;
 
     const jobId = uuidv4();
     const toolMeta = TOOL_META[tool];
     const timeout = toolMeta?.timeoutMs || 180000;
     const encryption = req.body.encryption || null;
     if (encryption?.enabled) {
+      const envelopeCheck = validateEncryptionEnvelope(encryption, { requireKeyWrap: true });
+      if (!envelopeCheck.ok) {
+        return res.status(400).json({ status: 'error', code: envelopeCheck.code, message: envelopeCheck.message, requestId: req.requestId });
+      }
       const sessionId = encryption.sessionId;
       if (!sessionId) return res.status(400).json({ status: 'error', code: 'MISSING_SESSION', message: 'Missing encryption session', requestId: req.requestId });
       const exists = await withTimeout(connection.exists(`zk:session:${sessionId}`), REDIS_OP_TIMEOUT_MS, 'redis_exists_timeout');
@@ -5758,8 +9703,11 @@ app.post('/jobs', async (req, res) => {
         if (toolMeta?.inputExts?.length && !toolMeta.inputExts.includes(inputFormat)) {
           return res.status(400).json({ status: 'error', code: 'INVALID_FORMAT', message: 'Unsupported input format', requestId: req.requestId });
         }
-        if (encryption?.enabled && (!item.encryption || !item.encryption.ivBase || !item.encryption.totalChunks || !item.encryption.chunkSize)) {
-          return res.status(400).json({ status: 'error', code: 'MISSING_ENCRYPTION_META', message: 'Missing encryption metadata', requestId: req.requestId });
+        if (encryption?.enabled) {
+          const metaCheck = validateEncryptionMeta(item.encryption);
+          if (!metaCheck.ok) {
+            return res.status(400).json({ status: 'error', code: metaCheck.code, message: metaCheck.message, requestId: req.requestId });
+          }
         }
         if (storageMode === 's3') {
           const head = await headObject(inputKey);
@@ -5777,10 +9725,20 @@ app.post('/jobs', async (req, res) => {
         });
       }
 
+      const automationApplied = applyAutomationRulesForJob({
+        userId: actorUserId,
+        tool,
+        inputSize: inputItems.reduce((sum, i) => sum + (i.inputSize || 0), 0),
+        settings
+      });
+      tool = automationApplied.tool;
+      settings = automationApplied.settings;
       const batchOutputKey = `outputs/${jobId}/batch_${tool}.zip`;
       await withTimeout(queue.add('convert', {
         jobId,
         tool,
+        requestedTool,
+        fallbackApplied: availability.fallback_applied === true,
         batch: true,
         items: inputItems,
         outputKey: batchOutputKey,
@@ -5788,10 +9746,12 @@ app.post('/jobs', async (req, res) => {
         inputFormats: inputItems.map((i) => i.inputFormat).filter(Boolean),
         inputSize: inputItems.reduce((sum, i) => sum + (i.inputSize || 0), 0),
         requestId: req.requestId,
+        userId: actorUserId || null,
+        automationApplied: automationApplied.matched_rules,
         encryption
       }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
-      log({ type: 'job_created', requestId: req.requestId, jobId, tool, batch: true, count: inputItems.length });
-      return res.json({ jobId, requestId: req.requestId });
+      log({ type: 'job_created', requestId: req.requestId, jobId, tool, requestedTool, fallbackApplied: availability.fallback_applied === true, batch: true, count: inputItems.length });
+      return res.json({ jobId, tool, requested_tool: requestedTool, fallback_applied: availability.fallback_applied === true, requestId: req.requestId });
     }
 
     const inputKey = req.body.inputKey;
@@ -5807,8 +9767,11 @@ app.post('/jobs', async (req, res) => {
     if (toolMeta?.inputExts?.length && !toolMeta.inputExts.includes(inputFormat)) {
       return res.status(400).json({ status: 'error', code: 'INVALID_FORMAT', message: 'Unsupported input format', requestId: req.requestId });
     }
-    if (encryption?.enabled && (!encryption.ivBase || !encryption.totalChunks || !encryption.chunkSize)) {
-      return res.status(400).json({ status: 'error', code: 'MISSING_ENCRYPTION_META', message: 'Missing encryption metadata', requestId: req.requestId });
+    if (encryption?.enabled) {
+      const metaCheck = validateEncryptionMeta(encryption);
+      if (!metaCheck.ok) {
+        return res.status(400).json({ status: 'error', code: metaCheck.code, message: metaCheck.message, requestId: req.requestId });
+      }
     }
     if (storageMode === 's3') {
       const head = await headObject(inputKey);
@@ -5820,10 +9783,20 @@ app.post('/jobs', async (req, res) => {
     const ext = TOOL_EXT[tool] || (path.parse(safeName).ext.replace('.', '') || 'bin');
     const outputName = `${base}.${ext}`;
     const outputKey = `outputs/${jobId}/${outputName}`;
+    const automationApplied = applyAutomationRulesForJob({
+      userId: actorUserId,
+      tool,
+      inputSize,
+      settings
+    });
+    tool = automationApplied.tool;
+    settings = automationApplied.settings;
 
     await withTimeout(queue.add('convert', {
       jobId,
       tool,
+      requestedTool,
+      fallbackApplied: availability.fallback_applied === true,
       inputKey,
       outputKey,
       originalName: safeName,
@@ -5831,11 +9804,13 @@ app.post('/jobs', async (req, res) => {
       inputFormat,
       inputSize,
       requestId: req.requestId,
+      userId: actorUserId || null,
+      automationApplied: automationApplied.matched_rules,
       encryption
     }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
-    log({ type: 'job_created', requestId: req.requestId, jobId, tool, batch: false, count: 1, inputSize, inputFormat });
+    log({ type: 'job_created', requestId: req.requestId, jobId, tool, requestedTool, fallbackApplied: availability.fallback_applied === true, batch: false, count: 1, inputSize, inputFormat });
 
-    res.json({ jobId, requestId: req.requestId });
+    res.json({ jobId, tool, requested_tool: requestedTool, fallback_applied: availability.fallback_applied === true, requestId: req.requestId });
   } catch (err) {
     if (isQueueUnavailableError(err)) {
       return res.status(503).json(redisUnavailablePayload(req.requestId, err?.message || 'queue_unavailable'));

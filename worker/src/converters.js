@@ -489,6 +489,14 @@ const tryCommands = async (helpers, commands) => {
   if (lastError) throw lastError;
 };
 
+const isMissingDependencyError = (error, command) => {
+  const message = String(error?.message || '');
+  const stderr = String(error?.stderr || '');
+  const target = String(command || '').trim();
+  if (!target) return message.includes('Missing dependency');
+  return message.includes(`Missing dependency: ${target}`) || stderr.includes('not found');
+};
+
 const convertRasterToSvg = async (inputPath, outputPath) => {
   const mimeMap = {
     jpg: 'image/jpeg',
@@ -877,8 +885,34 @@ const convertDocumentTool = async (helpers, {
 
   if (inputExt === 'epub' || outputExt === 'epub' || inputExt === 'mobi' || outputExt === 'mobi') {
     const outputPath = path.join(workDir, `${baseName}.${outputExt}`);
-    await tryCommands(helpers, [['ebook-convert', [inputPath, outputPath]]]);
-    return [outputPath];
+    try {
+      await tryCommands(helpers, [['ebook-convert', [inputPath, outputPath]]]);
+      return [outputPath];
+    } catch (error) {
+      if (!isMissingDependencyError(error, 'ebook-convert')) throw error;
+
+      if (inputExt === 'epub' && outputExt === 'pdf') {
+        try {
+          const fallbackOut = await helpers.convertViaLibreOffice({ inputPath, workDir, to: 'pdf', baseName });
+          return [fallbackOut];
+        } catch {
+          // Keep canonical dependency error below.
+        }
+      }
+
+      if (inputExt === 'pdf' && outputExt === 'epub') {
+        try {
+          const fallbackOut = await helpers.convertViaLibreOffice({ inputPath, workDir, to: 'epub', baseName });
+          return [fallbackOut];
+        } catch {
+          // Keep canonical dependency error below.
+        }
+      }
+
+      const missing = new Error('Temporary unavailable: ebook conversion dependency is missing');
+      missing.code = 'DEPENDENCY_MISSING_EBOOK_CONVERT';
+      throw missing;
+    }
   }
 
   const out = await helpers.convertViaLibreOffice({ inputPath, workDir, to: outputExt, baseName });

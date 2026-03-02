@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const http = require('http');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const { execFile, execFileSync } = require('child_process');
@@ -47,7 +48,7 @@ function logToolchainStatus() {
   const missing = checks.filter((item) => !item.ok);
   if (!missing.length) {
     log({ type: 'toolchain_ok' });
-    return;
+    return checks;
   }
   for (const item of missing) {
     logError({
@@ -56,6 +57,7 @@ function logToolchainStatus() {
       requiredFor: item.requiredFor
     });
   }
+  return checks;
 }
 
 const streamToFile = async (stream, filePath) => {
@@ -208,12 +210,79 @@ const OCR_LANGS = String(process.env.OCR_LANGS || 'eng+rus,eng')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
+const WORKER_VERSION = String(process.env.WORKER_VERSION || process.env.npm_package_version || '1.0.0').trim() || '1.0.0';
+const WORKER_ID = String(process.env.WORKER_ID || process.env.HOSTNAME || `worker-${process.pid}`).trim() || `worker-${process.pid}`;
+const API_BASE_URL = String(process.env.API_BASE_URL || process.env.BOT_INTERNAL_API_BASE || '').trim().replace(/\/+$/, '');
+const WORKER_PUBLIC_BASE_URL = String(process.env.WORKER_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+const WORKER_INTERNAL_TOKEN = String(process.env.WORKER_INTERNAL_TOKEN || process.env.INTERNAL_WORKER_TOKEN || '').trim();
+const WORKER_HEALTH_PORT = Math.max(1, Number(process.env.WORKER_HEALTH_PORT || 3021));
+const SYNTHETIC_INTERVAL_MS = Math.max(60_000, Number(process.env.WORKER_SYNTHETIC_INTERVAL_MS || 10 * 60 * 1000));
+const STARTUP_SYNTHETIC_ENABLED = String(process.env.WORKER_STARTUP_SYNTHETIC_ENABLED || '1').trim() !== '0';
+const SYNTHETIC_MAX_PER_RUN = Math.max(1, Number(process.env.WORKER_SYNTHETIC_MAX_PER_RUN || 3));
+const OUTPUT_SIZE_MIN_BYTES = Math.max(1, Number(process.env.WORKER_OUTPUT_SIZE_MIN_BYTES || 16));
+const OUTPUT_RATIO_MAX = Math.max(2, Number(process.env.WORKER_OUTPUT_RATIO_MAX || 250));
+const ENCRYPTION_MIN_CHUNK_SIZE = Math.max(16 * 1024, Number(process.env.ENCRYPTION_MIN_CHUNK_SIZE || 64 * 1024));
+const ENCRYPTION_MAX_CHUNK_SIZE = Math.max(ENCRYPTION_MIN_CHUNK_SIZE, Number(process.env.ENCRYPTION_MAX_CHUNK_SIZE || 16 * 1024 * 1024));
+const ENCRYPTION_MAX_TOTAL_CHUNKS = Math.max(1, Number(process.env.ENCRYPTION_MAX_TOTAL_CHUNKS || 20000));
+const WORKER_HEARTBEAT_INTERVAL_MS = Math.max(15_000, Number(process.env.WORKER_HEARTBEAT_INTERVAL_MS || 30_000));
+const WORKER_REPORT_BASE = String(process.env.WORKER_REPORT_BASE || API_BASE_URL || '').trim().replace(/\/+$/, '');
+const WORKER_HEALTH_PING_URL = String(process.env.WORKER_HEALTH_PING_URL || (WORKER_REPORT_BASE ? `${WORKER_REPORT_BASE}/health/worker/ping` : '')).trim();
+const formatList = Object.keys(TOOL_META || {});
+const healthState = {
+  started_at: new Date().toISOString(),
+  worker_id: WORKER_ID,
+  version: WORKER_VERSION,
+  status: 'starting',
+  last_startup_check_at: null,
+  last_synthetic_at: null,
+  startup_checks: [],
+  synthetic_recent: [],
+  stats: {
+    jobs_total: 0,
+    jobs_failed: 0,
+    jobs_succeeded: 0,
+    synthetic_total: 0,
+    synthetic_failed: 0
+  }
+};
 
 const b64ToBytes = (b64) => Uint8Array.from(Buffer.from(b64, 'base64'));
 const bytesToB64 = (bytes) => Buffer.from(bytes).toString('base64');
+const isBase64Text = (value) => /^[A-Za-z0-9+/=]+$/.test(String(value || '').trim());
+
+function assertEncryptionMeta(meta) {
+  if (!meta || typeof meta !== 'object') throw new Error('INVALID_ENCRYPTION_META');
+  const alg = String(meta.alg || 'AES-256-GCM').trim().toUpperCase();
+  if (alg !== 'AES-256-GCM') throw new Error('INVALID_ENCRYPTION_ALG');
+  const chunkSize = Number(meta.chunkSize || 0);
+  if (!Number.isInteger(chunkSize) || chunkSize < ENCRYPTION_MIN_CHUNK_SIZE || chunkSize > ENCRYPTION_MAX_CHUNK_SIZE) {
+    throw new Error('INVALID_ENCRYPTION_CHUNK');
+  }
+  const totalChunks = Number(meta.totalChunks || 0);
+  if (!Number.isInteger(totalChunks) || totalChunks < 1 || totalChunks > ENCRYPTION_MAX_TOTAL_CHUNKS) {
+    throw new Error('INVALID_ENCRYPTION_CHUNKS');
+  }
+  const ivBase = String(meta.ivBase || '').trim();
+  if (!ivBase || !isBase64Text(ivBase)) throw new Error('INVALID_ENCRYPTION_IV');
+  const ivBytes = Buffer.from(ivBase, 'base64');
+  if (ivBytes.length !== 8) throw new Error('INVALID_ENCRYPTION_IV');
+}
+
+function assertEncryptionEnvelope(encryption) {
+  if (!encryption || encryption.enabled !== true) return;
+  if (!encryption.keyWrap || typeof encryption.keyWrap !== 'object') throw new Error('MISSING_KEY_WRAP');
+  const wrappedKey = String(encryption.keyWrap.wrappedKey || '').trim();
+  const nonce = String(encryption.keyWrap.nonce || '').trim();
+  const clientPublicKey = String(encryption.keyWrap.clientPublicKey || '').trim();
+  if (!wrappedKey || !nonce || !clientPublicKey) throw new Error('MISSING_KEY_WRAP');
+  if (!isBase64Text(wrappedKey) || !isBase64Text(nonce) || !isBase64Text(clientPublicKey)) {
+    throw new Error('INVALID_KEY_WRAP');
+  }
+}
 
 async function unwrapKey(encryption) {
   if (!encryption || !encryption.keyWrap) return null;
+  assertEncryptionEnvelope(encryption);
   let privKey = WORKER_PRIVATE_KEY;
   if (encryption.sessionId) {
     const stored = await connection.get(`zk:session:${encryption.sessionId}`);
@@ -246,6 +315,10 @@ async function cleanupEncryptionSession(job) {
 }
 
 async function decryptFileGcm(inputPath, outputPath, meta, key) {
+  assertEncryptionMeta(meta);
+  if (!Buffer.isBuffer(key) || key.length !== 32) {
+    throw new Error('INVALID_ENCRYPTION_KEY');
+  }
   const { chunkSize, ivBase, totalChunks } = meta;
   const ivBaseBytes = Buffer.from(ivBase, 'base64');
   const inFd = fs.openSync(inputPath, 'r');
@@ -275,6 +348,12 @@ async function decryptFileGcm(inputPath, outputPath, meta, key) {
 }
 
 async function encryptFileGcm(inputPath, outputPath, key, chunkSize = 4 * 1024 * 1024) {
+  if (!Buffer.isBuffer(key) || key.length !== 32) {
+    throw new Error('INVALID_ENCRYPTION_KEY');
+  }
+  if (!Number.isInteger(chunkSize) || chunkSize < ENCRYPTION_MIN_CHUNK_SIZE || chunkSize > ENCRYPTION_MAX_CHUNK_SIZE) {
+    throw new Error('INVALID_ENCRYPTION_CHUNK');
+  }
   const stat = fs.statSync(inputPath);
   const totalChunks = Math.max(1, Math.ceil(stat.size / chunkSize));
   const ivBase = crypto.randomBytes(8);
@@ -420,6 +499,62 @@ function assertMagic(tool, filePath) {
   }
 }
 
+function checkOutputByExt(ext, header) {
+  const normalized = String(ext || '').toLowerCase();
+  if (!normalized) return true;
+  if (normalized === 'pdf') return isPdf(header);
+  if (normalized === 'png') return isPng(header);
+  if (normalized === 'jpg' || normalized === 'jpeg') return isJpg(header);
+  if (normalized === 'gif') return isGif(header);
+  if (normalized === 'webp') return isWebp(header);
+  if (normalized === 'docx' || normalized === 'xlsx' || normalized === 'pptx' || normalized === 'zip') return isZip(header);
+  if (normalized === 'mp3') return isMp3(header);
+  if (normalized === 'wav') return isWav(header);
+  if (normalized === 'mp4' || normalized === 'mov' || normalized === 'm4a') return isFtyp(header);
+  if (normalized === 'txt' || normalized === 'csv' || normalized === 'json' || normalized === 'xml' || normalized === 'yaml' || normalized === 'yml') {
+    return true;
+  }
+  return true;
+}
+
+function validateOutputFile({ tool, inputPath, outputPath }) {
+  if (!outputPath || !fs.existsSync(outputPath)) {
+    throw new Error('OUTPUT_NOT_FOUND');
+  }
+  const outputStat = fs.statSync(outputPath);
+  const inputStat = fs.existsSync(inputPath) ? fs.statSync(inputPath) : null;
+  if (!Number.isFinite(outputStat.size) || outputStat.size < OUTPUT_SIZE_MIN_BYTES) {
+    throw new Error('OUTPUT_TOO_SMALL');
+  }
+  if (inputStat && inputStat.size > 0) {
+    const ratio = outputStat.size / inputStat.size;
+    if (ratio > OUTPUT_RATIO_MAX) {
+      throw new Error(`OUTPUT_RATIO_TOO_HIGH:${ratio.toFixed(2)}`);
+    }
+  }
+  const outputExt = path.extname(outputPath).replace('.', '').toLowerCase();
+  const expectedExt = String(TOOL_META?.[tool]?.outputExt || '').trim().toLowerCase();
+  if (expectedExt && outputExt && expectedExt !== outputExt && !(expectedExt === 'jpg' && outputExt === 'jpeg')) {
+    throw new Error(`OUTPUT_EXT_MISMATCH:${outputExt}->${expectedExt}`);
+  }
+  const header = readHeader(outputPath, 1024);
+  if (!checkOutputByExt(expectedExt || outputExt, header)) {
+    throw new Error('OUTPUT_MAGIC_INVALID');
+  }
+  if ((expectedExt || outputExt) === 'txt') {
+    const text = fs.readFileSync(outputPath, 'utf8');
+    if (!text || text.replace(/\s+/g, '').length === 0) {
+      throw new Error('OUTPUT_TEXT_EMPTY');
+    }
+  }
+  return {
+    ok: true,
+    output_ext: outputExt || expectedExt || null,
+    output_size: outputStat.size,
+    expected_ext: expectedExt || null
+  };
+}
+
 async function execMagick(args) {
   try {
     await exec('magick', args);
@@ -472,6 +607,219 @@ function resolveSofficeOutput(workDir, expectedPath, ext, beforeNames) {
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function normalizeErrorMessage(error) {
+  if (!error) return 'unknown';
+  const value = String(error?.message || error).trim();
+  return value.slice(0, 500) || 'unknown';
+}
+
+async function postJsonWithTimeout(url, payload, timeoutMs = 8000) {
+  if (!url) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(WORKER_INTERNAL_TOKEN ? { 'x-worker-token': WORKER_INTERNAL_TOKEN } : {})
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function reportWorkerReliability(pathSuffix, payload) {
+  if (!WORKER_REPORT_BASE) return;
+  await postJsonWithTimeout(`${WORKER_REPORT_BASE}${pathSuffix}`, payload, 10_000);
+}
+
+async function pingApiWorkerHealth() {
+  if (!WORKER_HEALTH_PING_URL) return;
+  const ok = await postJsonWithTimeout(WORKER_HEALTH_PING_URL, {
+    worker_id: WORKER_ID,
+    version: WORKER_VERSION,
+    ts: new Date().toISOString()
+  }, 5_000);
+  if (!ok) {
+    logError({ type: 'worker_ping_failed', worker_id: WORKER_ID });
+  }
+}
+
+function samplePdfBuffer() {
+  const body = '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
+    + '2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n'
+    + '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n'
+    + '4 0 obj\n<< /Length 44 >>\nstream\nBT /F1 16 Tf 40 120 Td (MegaConvert synthetic) Tj ET\nendstream\nendobj\n'
+    + '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
+    + 'xref\n0 6\n0000000000 65535 f \n'
+    + '0000000010 00000 n \n0000000065 00000 n \n0000000126 00000 n \n0000000264 00000 n \n0000000358 00000 n \n'
+    + 'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n428\n%%EOF\n';
+  return Buffer.from(body, 'utf8');
+}
+
+function samplePngBuffer() {
+  return Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z5tYAAAAASUVORK5CYII=',
+    'base64'
+  );
+}
+
+async function writeMinimalEpub(outputPath, workDir) {
+  const epubDir = path.join(workDir, 'epub_src');
+  const metaInfDir = path.join(epubDir, 'META-INF');
+  const oebpsDir = path.join(epubDir, 'OEBPS');
+  fs.mkdirSync(metaInfDir, { recursive: true });
+  fs.mkdirSync(oebpsDir, { recursive: true });
+  fs.writeFileSync(path.join(epubDir, 'mimetype'), 'application/epub+zip', 'utf8');
+  fs.writeFileSync(
+    path.join(metaInfDir, 'container.xml'),
+    '<?xml version="1.0"?>\n<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>\n',
+    'utf8'
+  );
+  fs.writeFileSync(
+    path.join(oebpsDir, 'content.opf'),
+    '<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="2.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>MegaConvert Synthetic</dc:title><dc:language>en</dc:language><dc:identifier id="BookId">urn:uuid:synthetic-epub</dc:identifier></metadata><manifest><item id="chap1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chap1"/></spine></package>\n',
+    'utf8'
+  );
+  fs.writeFileSync(
+    path.join(oebpsDir, 'chapter1.xhtml'),
+    '<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml"><head><title>MegaConvert Synthetic</title></head><body><h1>MegaConvert Synthetic</h1><p>Worker reliability check.</p></body></html>\n',
+    'utf8'
+  );
+  try {
+    await exec('zip', ['-X0', outputPath, 'mimetype'], { cwd: epubDir });
+    await exec('zip', ['-Xr9D', outputPath, 'META-INF', 'OEBPS'], { cwd: epubDir });
+  } catch {
+    await exec('7z', ['a', '-tzip', outputPath, 'mimetype', 'META-INF', 'OEBPS'], { cwd: epubDir });
+  }
+  return outputPath;
+}
+
+async function buildSyntheticInputFile(tool, workDir) {
+  if (tool === 'pdf-word') {
+    const inputPath = path.join(workDir, 'synthetic.pdf');
+    fs.writeFileSync(inputPath, samplePdfBuffer());
+    return inputPath;
+  }
+  if (tool === 'png-jpg') {
+    const inputPath = path.join(workDir, 'synthetic.png');
+    fs.writeFileSync(inputPath, samplePngBuffer());
+    return inputPath;
+  }
+  if (tool === 'mp4-mp3') {
+    const inputPath = path.join(workDir, 'synthetic.mp4');
+    await exec('ffmpeg', [
+      '-y',
+      '-f', 'lavfi', '-i', 'color=c=black:s=320x240:d=1',
+      '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono',
+      '-shortest',
+      '-c:v', 'libx264',
+      '-c:a', 'aac',
+      inputPath
+    ]);
+    return inputPath;
+  }
+  if (tool === 'pdf-epub') {
+    const inputPath = path.join(workDir, 'synthetic.pdf');
+    fs.writeFileSync(inputPath, samplePdfBuffer());
+    return inputPath;
+  }
+  if (tool === 'epub-pdf') {
+    const inputPath = path.join(workDir, 'synthetic.epub');
+    await writeMinimalEpub(inputPath, workDir);
+    return inputPath;
+  }
+  throw new Error(`SYNTHETIC_INPUT_UNSUPPORTED:${tool}`);
+}
+
+const DEFAULT_SYNTHETIC_MATRIX = [
+  { tool: 'pdf-word', pair: 'pdf->docx' },
+  { tool: 'png-jpg', pair: 'png->jpg' },
+  { tool: 'mp4-mp3', pair: 'mp4->mp3' },
+  { tool: 'pdf-epub', pair: 'pdf->epub' },
+  { tool: 'epub-pdf', pair: 'epub->pdf' }
+];
+
+function parseSyntheticMatrixFromEnv() {
+  const rawJson = String(process.env.WORKER_SYNTHETIC_MATRIX || '').trim();
+  if (!rawJson) return DEFAULT_SYNTHETIC_MATRIX;
+  try {
+    const parsed = JSON.parse(rawJson);
+    if (!Array.isArray(parsed)) return DEFAULT_SYNTHETIC_MATRIX;
+    const out = parsed
+      .map((item) => ({
+        tool: String(item?.tool || '').trim(),
+        pair: String(item?.pair || '').trim()
+      }))
+      .filter((item) => item.tool && item.pair && TOOL_IDS.has(item.tool));
+    return out.length ? out : DEFAULT_SYNTHETIC_MATRIX;
+  } catch {
+    return DEFAULT_SYNTHETIC_MATRIX;
+  }
+}
+
+const SUPPORTED_SYNTHETIC_INPUT_TOOLS = new Set(['pdf-word', 'png-jpg', 'mp4-mp3', 'pdf-epub', 'epub-pdf']);
+const SYNTHETIC_MATRIX = parseSyntheticMatrixFromEnv().filter((item) => SUPPORTED_SYNTHETIC_INPUT_TOOLS.has(item.tool));
+
+async function runSyntheticCase({ tool, pair }) {
+  const workDir = path.join(tmpRoot, `synthetic_${tool.replace(/[^a-z0-9_-]/ig, '_')}_${Date.now()}`);
+  fs.mkdirSync(workDir, { recursive: true });
+  const startedAt = Date.now();
+  let success = false;
+  let error = null;
+  let validation = null;
+  try {
+    const inputPath = await buildSyntheticInputFile(tool, workDir);
+    assertMagic(tool, inputPath);
+    const outputs = await convertSingle(tool, inputPath, workDir, {});
+    const outputPath = outputs[0];
+    validation = validateOutputFile({ tool, inputPath, outputPath });
+    success = true;
+    return {
+      worker_id: WORKER_ID,
+      format_pair: pair,
+      tool,
+      success: true,
+      validation_status: validation?.ok ? 'passed' : 'failed',
+      latency_ms: Date.now() - startedAt,
+      output_ext: validation?.output_ext || null,
+      output_size: Number(validation?.output_size || 0),
+      error: null,
+      created_at: new Date().toISOString()
+    };
+  } catch (syntheticError) {
+    error = normalizeErrorMessage(syntheticError);
+    return {
+      worker_id: WORKER_ID,
+      format_pair: pair,
+      tool,
+      success: false,
+      validation_status: 'failed',
+      latency_ms: Date.now() - startedAt,
+      output_ext: null,
+      output_size: 0,
+      error,
+      created_at: new Date().toISOString()
+    };
+  } finally {
+    if (success) {
+      healthState.stats.synthetic_total += 1;
+    } else {
+      healthState.stats.synthetic_total += 1;
+      healthState.stats.synthetic_failed += 1;
+      logError({ type: 'synthetic_test_failed', tool, pair, error });
+    }
+    try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
+  }
+}
 
 async function waitForSofficeOutput(workDir, expectedPath, ext, beforeNames, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
@@ -818,6 +1166,7 @@ async function handleSingle(job, data) {
   const { tool, inputKey, outputKey, originalName, settings, encryption } = data;
   const workDir = path.join(tmpRoot, job.id || job.name || 'job');
   fs.mkdirSync(workDir, { recursive: true });
+  let key = null;
   try {
     if (job?.timestamp && Date.now() - job.timestamp > JOB_MAX_AGE_MS) {
       throw new Error('Job TTL exceeded');
@@ -835,8 +1184,9 @@ async function handleSingle(job, data) {
     job.updateProgress(30);
 
     let outputMeta = null;
-    let key = null;
     if (encryption?.enabled) {
+      assertEncryptionEnvelope(encryption);
+      assertEncryptionMeta(encryption);
       key = await unwrapKey(encryption);
       await decryptFileGcm(encPath, inputPath, encryption, key);
     }
@@ -850,13 +1200,7 @@ async function handleSingle(job, data) {
       await zipFiles(zipPath, outputs);
       finalPath = zipPath;
     }
-    if (!fs.existsSync(finalPath)) {
-      throw new Error('Output not produced');
-    }
-    const stat = fs.statSync(finalPath);
-    if (!stat.size) {
-      throw new Error('Output is empty');
-    }
+    const validation = validateOutputFile({ tool, inputPath, outputPath: finalPath });
 
     job.updateProgress(80);
     let uploadPath = finalPath;
@@ -873,8 +1217,11 @@ async function handleSingle(job, data) {
       fs.copyFileSync(uploadPath, destPath);
     }
     job.updateProgress(100);
-    return { outputKey, outputMeta };
+    return { outputKey, outputMeta, validation };
   } finally {
+    try {
+      if (Buffer.isBuffer(key)) key.fill(0);
+    } catch {}
     try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
   }
 }
@@ -884,13 +1231,14 @@ async function handleBatch(job, data) {
   const workDir = path.join(tmpRoot, `${job.id || job.name || 'job'}_batch`);
   const outDir = path.join(workDir, 'out');
   fs.mkdirSync(outDir, { recursive: true });
+  let key = null;
   try {
     if (job?.timestamp && Date.now() - job.timestamp > JOB_MAX_AGE_MS) {
       throw new Error('Job TTL exceeded');
     }
     let outputMeta = null;
-    let key = null;
     if (encryption?.enabled) {
+      assertEncryptionEnvelope(encryption);
       key = await unwrapKey(encryption);
     }
     let index = 0;
@@ -907,11 +1255,13 @@ async function handleBatch(job, data) {
       }
       if (encryption?.enabled) {
         const meta = item.encryption || encryption;
+        assertEncryptionMeta(meta);
         await decryptFileGcm(encPath, inputPath, meta, key);
       }
       assertMagic(tool, inputPath);
       const outputs = await convertSingle(tool, inputPath, workDir, settings);
       const target = outputs[0];
+      validateOutputFile({ tool, inputPath, outputPath: target });
       const dest = path.join(outDir, path.basename(target));
       fs.copyFileSync(target, dest);
       job.updateProgress(Math.min(80, Math.round((index / items.length) * 70) + 10));
@@ -925,6 +1275,10 @@ async function handleBatch(job, data) {
     }
     if (!fs.existsSync(zipPath)) {
       throw new Error('Batch output not produced');
+    }
+    const zipStat = fs.statSync(zipPath);
+    if (!zipStat.size || zipStat.size < OUTPUT_SIZE_MIN_BYTES) {
+      throw new Error('BATCH_OUTPUT_INVALID');
     }
     let uploadPath = zipPath;
     if (encryption?.enabled) {
@@ -942,8 +1296,124 @@ async function handleBatch(job, data) {
     job.updateProgress(100);
     return { outputKey, outputMeta };
   } finally {
+    try {
+      if (Buffer.isBuffer(key)) key.fill(0);
+    } catch {}
     try { fs.rmSync(workDir, { recursive: true, force: true }); } catch {}
   }
+}
+
+async function runStartupChecks() {
+  const startedAt = Date.now();
+  const commandChecks = logToolchainStatus().map((item) => ({
+    check: `binary:${item.key}`,
+    status: item.ok ? 'ok' : 'failed',
+    details: { required_for: item.requiredFor }
+  }));
+  const startupResult = {
+    worker_id: WORKER_ID,
+    version: WORKER_VERSION,
+    status: commandChecks.every((item) => item.status === 'ok') ? 'ok' : 'degraded',
+    duration_ms: 0,
+    checks: commandChecks,
+    created_at: new Date().toISOString()
+  };
+
+  if (STARTUP_SYNTHETIC_ENABLED) {
+    const startupSynthetic = [];
+    for (const item of SYNTHETIC_MATRIX.slice(0, SYNTHETIC_MAX_PER_RUN)) {
+      const row = await runSyntheticCase(item);
+      startupSynthetic.push({
+        check: `synthetic:${row.format_pair}`,
+        status: row.success ? 'ok' : 'failed',
+        details: { error: row.error || null, latency_ms: row.latency_ms }
+      });
+      await reportWorkerReliability('/internal/worker/synthetic-result', row);
+      healthState.synthetic_recent.unshift(row);
+    }
+    startupResult.checks.push(...startupSynthetic);
+    healthState.synthetic_recent = healthState.synthetic_recent.slice(0, 50);
+    if (startupSynthetic.some((item) => item.status === 'failed')) {
+      startupResult.status = 'degraded';
+    }
+  }
+
+  startupResult.duration_ms = Date.now() - startedAt;
+  healthState.last_startup_check_at = startupResult.created_at;
+  healthState.startup_checks = startupResult.checks.slice();
+  healthState.status = startupResult.status === 'ok' ? 'ready' : 'degraded';
+  await reportWorkerReliability('/internal/worker/health-check', startupResult);
+  return startupResult;
+}
+
+async function runSyntheticSweep() {
+  const rows = [];
+  for (const item of SYNTHETIC_MATRIX.slice(0, SYNTHETIC_MAX_PER_RUN)) {
+    const row = await runSyntheticCase(item);
+    rows.push(row);
+    healthState.synthetic_recent.unshift(row);
+    await reportWorkerReliability('/internal/worker/synthetic-result', row);
+  }
+  healthState.synthetic_recent = healthState.synthetic_recent.slice(0, 100);
+  healthState.last_synthetic_at = new Date().toISOString();
+  const hasFailure = rows.some((row) => !row.success);
+  if (hasFailure) {
+    healthState.status = 'degraded';
+  } else if (healthState.status === 'degraded') {
+    const lastTwenty = healthState.synthetic_recent.slice(0, 20);
+    if (lastTwenty.every((row) => row.success)) {
+      healthState.status = 'ready';
+    }
+  }
+  return rows;
+}
+
+function startWorkerHealthServer() {
+  const availableFormats = Array.from(new Set(formatList
+    .map((tool) => String(TOOL_META?.[tool]?.outputExt || '').trim().toLowerCase())
+    .filter(Boolean)))
+    .sort();
+
+  const server = http.createServer((req, res) => {
+    const route = String(req.url || '').split('?')[0];
+    if (req.method === 'GET' && route === '/worker/health') {
+      const body = {
+        status: healthState.status === 'ready' ? 'ok' : healthState.status,
+        worker_id: WORKER_ID,
+        version: WORKER_VERSION,
+        formats: availableFormats,
+        tools_total: formatList.length,
+        startup_check_at: healthState.last_startup_check_at,
+        synthetic_check_at: healthState.last_synthetic_at
+      };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+      return;
+    }
+    if (req.method === 'GET' && route === '/worker/version') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ worker_id: WORKER_ID, version: WORKER_VERSION }));
+      return;
+    }
+    if (req.method === 'GET' && route === '/worker/reliability') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        worker_id: WORKER_ID,
+        status: healthState.status,
+        started_at: healthState.started_at,
+        startup_checks: healthState.startup_checks,
+        synthetic_recent: healthState.synthetic_recent.slice(0, 20),
+        stats: healthState.stats
+      }));
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'error', code: 'NOT_FOUND' }));
+  });
+  server.listen(WORKER_HEALTH_PORT, () => {
+    log({ type: 'worker_health_server_started', port: WORKER_HEALTH_PORT });
+  });
+  return server;
 }
 
 const worker = new Worker('convert', async (job) => {
@@ -956,7 +1426,25 @@ const worker = new Worker('convert', async (job) => {
   concurrency: Number(process.env.WORKER_CONCURRENCY || 2)
 });
 
+async function reportJobValidationResult({ job, success, durationMs, errorMessage = null }) {
+  const payload = {
+    worker_id: WORKER_ID,
+    job_id: String(job?.id || ''),
+    tool: String(job?.data?.tool || ''),
+    batch: Boolean(job?.data?.batch),
+    success: Boolean(success),
+    duration_ms: Number(durationMs || 0),
+    request_id: job?.data?.requestId ? String(job.data.requestId) : null,
+    user_id: job?.data?.userId ? String(job.data.userId) : null,
+    api_key_id: job?.data?.apiKeyId ? String(job.data.apiKeyId) : null,
+    error: errorMessage,
+    created_at: new Date().toISOString()
+  };
+  await reportWorkerReliability('/internal/worker/job-result', payload);
+}
+
 worker.on('active', (job) => {
+  healthState.stats.jobs_total += 1;
   log({
     type: 'job_started',
     requestId: job?.data?.requestId || null,
@@ -991,6 +1479,14 @@ worker.on('failed', async (job, err) => {
     durationMs: finished - started,
     error: err?.message || 'unknown'
   });
+  healthState.stats.jobs_failed += 1;
+  healthState.status = 'degraded';
+  await reportJobValidationResult({
+    job,
+    success: false,
+    durationMs: finished - started,
+    errorMessage: normalizeErrorMessage(err)
+  });
 });
 
 worker.on('completed', async (job) => {
@@ -1003,6 +1499,13 @@ worker.on('completed', async (job) => {
     jobId: job?.id,
     durationMs: finished - started
   });
+  healthState.stats.jobs_succeeded += 1;
+  await reportJobValidationResult({
+    job,
+    success: true,
+    durationMs: finished - started,
+    errorMessage: null
+  });
 });
 
 log({ type: 'worker_started' });
@@ -1012,6 +1515,32 @@ log({
   redisUrl: process.env.REDIS_URL || null,
   s3Endpoint: process.env.S3_ENDPOINT || null,
   s3Region: process.env.S3_REGION || null,
-  bucket: process.env.S3_BUCKET || null
+  bucket: process.env.S3_BUCKET || null,
+  workerId: WORKER_ID,
+  version: WORKER_VERSION,
+  healthPort: WORKER_HEALTH_PORT,
+  syntheticMatrixSize: SYNTHETIC_MATRIX.length
 });
-logToolchainStatus();
+
+startWorkerHealthServer();
+
+void (async () => {
+  try {
+    await runStartupChecks();
+  } catch (error) {
+    healthState.status = 'degraded';
+    logError({ type: 'worker_startup_checks_failed', error: normalizeErrorMessage(error) });
+  }
+
+  void pingApiWorkerHealth();
+  setInterval(() => {
+    void pingApiWorkerHealth();
+  }, WORKER_HEARTBEAT_INTERVAL_MS).unref?.();
+
+  setInterval(() => {
+    void runSyntheticSweep().catch((error) => {
+      healthState.status = 'degraded';
+      logError({ type: 'synthetic_sweep_failed', error: normalizeErrorMessage(error) });
+    });
+  }, SYNTHETIC_INTERVAL_MS).unref?.();
+})();
