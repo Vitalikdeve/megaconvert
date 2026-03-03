@@ -1459,8 +1459,12 @@ export default function App() {
   const isLoopbackHost = (host) => host === 'localhost' || host === '127.0.0.1' || host === '::1';
   const resolveApiBase = () => {
     const fallback = '/api';
-    const fromEnv = normalizeApiBase(import.meta.env.VITE_API_BASE || fallback);
+    const rawEnv = String(import.meta.env.VITE_API_BASE || '').trim();
+    const fromEnv = normalizeApiBase(rawEnv || fallback);
     if (typeof window === 'undefined') return fromEnv;
+    if (/^https?:\/\//i.test(rawEnv)) {
+      return normalizeApiBase(rawEnv);
+    }
     try {
       const currentHost = window.location.hostname;
       // In deployed environments, prefer same-origin /api via Vercel rewrites.
@@ -3192,9 +3196,12 @@ export default function App() {
     if (!jobId) return null;
     const candidates = [];
     const primary = String(API_BASE || '').trim();
+    const directFallback = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
+      .trim()
+      .replace(/\/+$/, '');
     if (primary) candidates.push(primary);
-    if (!candidates.includes('https://megaconvert-api.fly.dev')) {
-      candidates.push('https://megaconvert-api.fly.dev');
+    if (directFallback && !candidates.includes(directFallback)) {
+      candidates.push(directFallback);
     }
     const started = Date.now();
     while (Date.now() - started < maxWaitMs) {

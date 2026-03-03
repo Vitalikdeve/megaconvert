@@ -3,7 +3,9 @@ import { fetchWithTimeout, sleep } from '../infra/timeouts';
 import { retry } from '../infra/retries';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const DIRECT_API_FALLBACK = 'https://megaconvert-api.fly.dev';
+const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
+  .trim()
+  .replace(/\/+$/, '');
 const RETRYABLE_CREATE_CODES = new Set(['JOB_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);
 const RETRYABLE_STATUS_CODES = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);
 
@@ -36,9 +38,10 @@ const extractErrorMessage = (payload, fallback) => {
 const shouldTryDirectFallback = (apiBase) => {
   const base = String(apiBase || '').trim().toLowerCase();
   if (!base) return false;
+  if (!DIRECT_API_FALLBACK) return false;
   if (base.startsWith('http://localhost') || base.startsWith('https://localhost')) return false;
   if (base.startsWith('http://127.0.0.1') || base.startsWith('https://127.0.0.1')) return false;
-  if (base.startsWith(DIRECT_API_FALLBACK)) return false;
+  if (base.startsWith(DIRECT_API_FALLBACK.toLowerCase())) return false;
   return base.startsWith('/');
 };
 

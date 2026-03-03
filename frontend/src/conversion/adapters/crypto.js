@@ -3,7 +3,9 @@ import { ConversionError } from '../core/errors';
 import { fetchWithTimeout } from '../infra/timeouts';
 import { retry } from '../infra/retries';
 
-const DIRECT_API_FALLBACK = 'https://megaconvert-api.fly.dev';
+const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
+  .trim()
+  .replace(/\/+$/, '');
 
 export const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 export const bytesToB64 = (bytes) => btoa(String.fromCharCode(...bytes));
@@ -38,7 +40,8 @@ const ensureWebCrypto = () => {
 const shouldTryDirectFallback = (apiBase) => {
   const base = String(apiBase || '').trim().toLowerCase();
   if (!base) return false;
-  if (base.startsWith(DIRECT_API_FALLBACK)) return false;
+  if (!DIRECT_API_FALLBACK) return false;
+  if (base.startsWith(DIRECT_API_FALLBACK.toLowerCase())) return false;
   if (base.startsWith('http://localhost') || base.startsWith('https://localhost')) return false;
   if (base.startsWith('http://127.0.0.1') || base.startsWith('https://127.0.0.1')) return false;
   return base.startsWith('/');

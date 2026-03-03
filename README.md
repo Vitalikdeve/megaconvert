@@ -150,5 +150,6 @@ npm --prefix frontend run i18n:check:strict
 
 ## Notes
 - `api/` and `worker/` each include a local `shared/` copy for runtime. Source of truth is `shared/` at repo root.
-- Vercel routes `/api/*` to Fly API via `vercel.json` rewrite. In production, frontend can use `VITE_API_BASE=/api` to avoid mobile CORS issues.
+- Frontend API target is configured via `VITE_API_BASE` (for example: `https://api.your-domain.com` or `/api` if you proxy on the hosting platform).
+- Optional fallback target is configured via `VITE_DIRECT_API_FALLBACK` and is disabled by default.
 

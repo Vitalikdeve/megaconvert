@@ -74,7 +74,7 @@ Notes:
 - bot will bind support inbox to the first private chat that sends `/start`.
 
 ## Optional ENV
-- `API_BASE_URL` (default: `https://megaconvert-api.fly.dev`)
+- `API_BASE_URL` (default: `http://localhost:3000`)
 - `INTERNAL_LINK_PORT` (default: `8788`)
 - `LINK_CODE_TTL_SEC` (default: `600`)
 - `BOT_DATA_FILE` (default: `./data/bot-store.json`)
