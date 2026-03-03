@@ -1,0 +1,223 @@
+openapi: 3.1.0
+info:
+  title: MegaConvert API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Login
+      responses:
+        "200":
+          description: OK
+  /auth/logout:
+    post:
+      summary: Logout
+      responses:
+        "204":
+          description: No content
+  /auth/me:
+    get:
+      summary: Current user
+      responses:
+        "200":
+          description: OK
+  /files/upload:
+    post:
+      summary: Upload file
+      responses:
+        "200":
+          description: Uploaded
+  /files/{id}:
+    get:
+      summary: Get file
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+    delete:
+      summary: Delete file
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+  /jobs:
+    post:
+      summary: Create conversion job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_id: { type: string }
+                to_format: { type: string }
+                settings: { type: object }
+      responses:
+        "200": { description: Job created }
+  /jobs/{id}:
+    get:
+      summary: Get job status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /jobs/{id}/result:
+    get:
+      summary: Get result
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /jobs/{id}/analysis:
+    get:
+      summary: Get AI analysis
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /jobs/{id}/recommendations:
+    get:
+      summary: Get AI recommendations
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /jobs/{id}/apply-recommendation:
+    post:
+      summary: Apply recommendation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Applied }
+  /presets:
+    get:
+      summary: List presets
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create preset
+      responses:
+        "200": { description: Created }
+  /workflows:
+    get:
+      summary: List workflows
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create workflow
+      responses:
+        "200": { description: Created }
+  /workflows/{id}/run:
+    post:
+      summary: Run workflow
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Started }
+  /shares:
+    post:
+      summary: Create share link
+      responses:
+        "200": { description: Created }
+  /s/{token}:
+    get:
+      summary: Resolve share token
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /billing/subscription:
+    get:
+      summary: Get subscription
+      responses:
+        "200": { description: OK }
+  /billing/upgrade:
+    post:
+      summary: Upgrade plan
+      responses:
+        "200": { description: Upgraded }
+  /billing/cancel:
+    post:
+      summary: Cancel plan
+      responses:
+        "200": { description: Cancelled }
+  /apikeys:
+    get:
+      summary: List API keys
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Generate API key
+      responses:
+        "200": { description: Created }
+  /apikeys/{id}:
+    delete:
+      summary: Revoke API key
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Revoked }
+  /analytics/usage:
+    get:
+      summary: Usage analytics
+      responses:
+        "200": { description: OK }
+  /analytics/jobs:
+    get:
+      summary: Jobs analytics
+      responses:
+        "200": { description: OK }
+  /admin/users:
+    get:
+      summary: Admin users list
+      responses:
+        "200": { description: OK }
+  /admin/jobs:
+    get:
+      summary: Admin jobs list
+      responses:
+        "200": { description: OK }
+  /admin/errors:
+    get:
+      summary: Admin error list
+      responses:
+        "200": { description: OK }
+  /admin/metrics:
+    get:
+      summary: Admin metrics
+      responses:
+        "200": { description: OK }
+

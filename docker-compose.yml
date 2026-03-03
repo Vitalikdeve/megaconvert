@@ -1,27 +1,139 @@
 services:
   api:
-    build: ./server/api
-    env_file: ./server/.env
+    build: ./api
+    restart: unless-stopped
+    env_file: ./api/.env
     environment:
-      - STORAGE_MODE=local
-      - LOCAL_STORAGE_DIR=/data
+      - REDIS_URL=redis://redis:6379
+      - STORAGE_MODE=s3
+      - S3_ENDPOINT=http://minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
+      - S3_BUCKET=megaconvert
     ports:
       - "3000:3000"
-    volumes:
-      - ./data:/data
     depends_on:
       - redis
+      - minio
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    mem_limit: 256m
+    mem_reservation: 128m
+    pids_limit: 200
   worker:
-    build: ./server/worker
-    env_file: ./server/.env
+    build: ./worker
+    restart: unless-stopped
+    env_file: ./worker/.env
     environment:
-      - STORAGE_MODE=local
-      - LOCAL_STORAGE_DIR=/data
-    volumes:
-      - ./data:/data
+      - REDIS_URL=redis://redis:6379
+      - API_BASE_URL=http://api:3000
+      - STORAGE_MODE=s3
+      - S3_ENDPOINT=http://minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
+      - S3_BUCKET=megaconvert
     depends_on:
       - redis
+      - minio
+      - api
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3021/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    mem_limit: 320m
+    mem_reservation: 160m
+    pids_limit: 200
+  bot:
+    build: ./bot
+    container_name: megaconvert-bot
+    restart: unless-stopped
+    env_file:
+      - ./bot/.env
+    environment:
+      - API_BASE_URL=http://api:3000
+    ports:
+      - "8788:8788"
+    volumes:
+      - bot_data:/app/data
+    depends_on:
+      - api
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + (process.env.INTERNAL_LINK_PORT || 8788) + '/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 220m
+    mem_reservation: 120m
+    pids_limit: 150
   redis:
     image: redis:7
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 100mb
+      --maxmemory-policy allkeys-lru
+      --tcp-backlog 128
+      --timeout 300
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    mem_limit: 160m
+    mem_reservation: 80m
+    pids_limit: 100
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data:/data
+    mem_limit: 256m
+    mem_reservation: 128m
+    pids_limit: 150
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb -p local/megaconvert;
+      exit 0;"
+    mem_limit: 64m
+    mem_reservation: 32m
+
+volumes:
+  bot_data:

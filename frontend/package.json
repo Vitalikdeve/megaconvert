@@ -1,0 +1,46 @@
+{
+  "name": "superconvert",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "prerender": "node scripts/prerender.js",
+    "build": "npm run prerender && vite build",
+    "lint": "eslint .",
+    "check:interactions": "node scripts/check-dead-interactions.mjs",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:check:strict": "node scripts/i18n-check.mjs --strict",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:seo": "playwright test tests/seo-smoke.spec.js",
+    "test:buttons": "playwright test tests/no-dead-buttons.spec.js",
+    "verify:smoke": "npm run prerender && npm run lint && npm run check:interactions && npm run test:seo && npm run test:buttons"
+  },
+  "dependencies": {
+    "core-js": "^3.42.0",
+    "firebase": "^12.9.0",
+    "jspdf": "^4.1.0",
+    "lucide-react": "^0.563.0",
+    "pdfjs-dist": "^5.4.624",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "regenerator-runtime": "^0.14.1",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.48.2",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.24",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.2.4"
+  }
+}

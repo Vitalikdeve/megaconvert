@@ -1,0 +1,8 @@
+{
+  "upload.title": "Upload file",
+  "upload.drop_hint": "Drop file here or click to select",
+  "upload.processing": "Processing",
+  "upload.completed": "Completed",
+  "upload.error": "Upload failed"
+}
+

@@ -1,0 +1,8 @@
+FROM node:20-bullseye
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY src ./src
+COPY shared ./shared
+ENV NODE_ENV=production
+CMD ["node", "src/index.js"]

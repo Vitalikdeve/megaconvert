@@ -1,0 +1,14 @@
+{
+  "name": "megaconvert-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev:api": "node apps/api/src/server.js",
+    "dev:worker": "node apps/workers/src/index.js",
+    "dev:bot": "node apps/telegram-bot/src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.1"
+  }
+}

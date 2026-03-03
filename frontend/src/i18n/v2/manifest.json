@@ -1,0 +1,24 @@
+{
+  "defaultLocale": "en",
+  "rtlLocales": ["ar"],
+  "locales": [
+    "en",
+    "ru",
+    "be",
+    "es",
+    "pt",
+    "fr",
+    "de",
+    "it",
+    "nl",
+    "pl",
+    "tr",
+    "ar",
+    "hi",
+    "zh-CN",
+    "zh-TW",
+    "ja",
+    "ko"
+  ]
+}
+

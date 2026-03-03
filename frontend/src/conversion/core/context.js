@@ -1,0 +1,33 @@
+export const createConversionContext = ({
+  toolId,
+  files,
+  batchMode,
+  settings,
+  apiBase,
+  authHeaders,
+  encryptionEnabled,
+  stageLabels,
+  hooks,
+  limits,
+  processor
+}) => ({
+  toolId,
+  files,
+  batchMode,
+  settings,
+  apiBase,
+  authHeaders,
+  encryptionEnabled,
+  stageLabels,
+  hooks,
+  limits,
+  processor,
+  startedAt: Date.now(),
+  stage: null,
+  warnings: [],
+  normalizedFiles: [],
+  detectedFormats: [],
+  encryption: null,
+  job: null,
+  output: null
+});
