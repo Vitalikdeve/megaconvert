@@ -30,3 +30,6 @@ build
 .env*.local
 .dev/
 data/
+
+tmp_*.js
+tmp_*.html
