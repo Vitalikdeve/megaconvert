@@ -20,17 +20,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add VPS host key
+      - name: Validate required secrets
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
+          set -euo pipefail
+          missing=0
+          for v in SSH_HOST SSH_USER SSH_PRIVATE_KEY; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Missing required secret: $v"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Prepare SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -lf ~/.ssh/deploy_key >/dev/null
 
       - name: Deploy containers
         env:
@@ -39,8 +56,17 @@ jobs:
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SERVER_APP_DIR: ${{ secrets.SERVER_APP_DIR }}
         run: |
+          set -euo pipefail
           : "${SSH_PORT:=22}"
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "SERVER_APP_DIR='${SERVER_APP_DIR:-}' bash -se" <<'EOF'
+          CLEAN_HOST="${SSH_HOST#https://}"
+          CLEAN_HOST="${CLEAN_HOST#http://}"
+          CLEAN_HOST="${CLEAN_HOST%%/*}"
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=15 \
+            -p "$SSH_PORT" "$SSH_USER@$CLEAN_HOST" \
+            "SERVER_APP_DIR='${SERVER_APP_DIR:-}' bash -se" <<'EOF'
           set -euo pipefail
 
           APP_DIR="${SERVER_APP_DIR:-$HOME/megaconvert}"
