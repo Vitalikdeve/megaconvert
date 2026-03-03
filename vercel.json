@@ -18,7 +18,7 @@
     },
     {
       "source": "/api/:path*",
-      "destination": "https://34.122.218.135.nip.io/:path*"
+      "destination": "https://34.58.90.6.nip.io/:path*"
     },
     {
       "source": "/:path*",

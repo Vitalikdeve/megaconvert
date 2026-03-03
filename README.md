@@ -150,7 +150,7 @@ npm --prefix frontend run i18n:check:strict
 
 ## Notes
 - `api/` and `worker/` each include a local `shared/` copy for runtime. Source of truth is `shared/` at repo root.
-- Vercel rewrite routes `/api/*` to `https://34.122.218.135.nip.io/*`.
+- Vercel rewrite routes `/api/*` to `https://34.58.90.6.nip.io/*`.
 - Frontend API target can be forced via `VITE_API_BASE` (default in production config: `/api`).
-- Optional direct fallback is `VITE_DIRECT_API_FALLBACK` (default in code: `https://34.122.218.135.nip.io`).
+- Optional direct fallback is `VITE_DIRECT_API_FALLBACK` (set only for local debugging).
 
