@@ -1,4 +1,4 @@
-const CACHE_VERSION = "megaconvert-v2";
+const CACHE_VERSION = "megaconvert-v3";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -36,7 +36,7 @@ self.addEventListener("activate", (event) => {
 });
 
 const isStaticRequest = (request) =>
-  ["style", "script", "worker", "font", "image"].includes(request.destination);
+  ["style", "worker", "font", "image"].includes(request.destination);
 
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(RUNTIME_CACHE);

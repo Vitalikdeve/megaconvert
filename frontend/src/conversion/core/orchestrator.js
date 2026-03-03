@@ -18,16 +18,6 @@ import { computeChecksum } from '../verification/checksum';
 
 const DEFAULT_STAGE_ORDER = ['validate', 'detect', 'normalize', 'convert', 'verify', 'deliver', 'cleanup'];
 
-const shouldBlockOnVerificationFailure = (verification) => {
-  const mimeReason = String(verification?.checks?.mime?.reason || '').trim().toLowerCase();
-  const openReason = String(verification?.checks?.open?.reason || '').trim().toLowerCase();
-
-  // Block only when output is clearly unavailable or empty.
-  if (mimeReason === 'missing_url' || openReason === 'missing_url') return true;
-  if (mimeReason === 'empty_file' || openReason === 'empty_output') return true;
-  return false;
-};
-
 const buildJobPayload = ({
   toolId,
   batchMode,
@@ -256,9 +246,6 @@ export const runConversion = async ({
         });
         if (!verification.ok) {
           context.warnings.push(verification);
-          if (shouldBlockOnVerificationFailure(verification)) {
-            throw new ConversionError('VERIFY_FAILED', 'Output verification failed.', { verification });
-          }
           logger?.warn('verification_non_blocking_failure', {
             tool: toolId,
             jobId: context.job?.id || null,
