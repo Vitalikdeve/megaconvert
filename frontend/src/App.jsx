@@ -3581,7 +3581,7 @@ export default function App() {
       track('job_complete', { tool: activeTab, jobId: result.jobId, success: true });
     } catch (e) {
       let errorObj = e;
-      const recoverableCodes = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);
+      const recoverableCodes = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE', 'VERIFY_FAILED']);
       if (createdJobId && recoverableCodes.has(errorObj?.code)) {
         const recovered = await recoverCompletedJob(createdJobId, authHeaders);
         if (recovered?.status === 'completed') {
