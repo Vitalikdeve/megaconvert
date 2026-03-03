@@ -208,6 +208,70 @@ const CODEC_MAP = {
   av1: 'libaom-av1'
 };
 
+function inferContentTypeFromKey(key) {
+  const ext = path.extname(String(key || '')).replace('.', '').toLowerCase();
+  if (!ext) return 'application/octet-stream';
+  const map = {
+    pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ppt: 'application/vnd.ms-powerpoint',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    txt: 'text/plain; charset=utf-8',
+    csv: 'text/csv; charset=utf-8',
+    json: 'application/json; charset=utf-8',
+    xml: 'application/xml; charset=utf-8',
+    html: 'text/html; charset=utf-8',
+    md: 'text/markdown; charset=utf-8',
+    yaml: 'application/x-yaml; charset=utf-8',
+    yml: 'application/x-yaml; charset=utf-8',
+    toml: 'application/toml; charset=utf-8',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    bmp: 'image/bmp',
+    tiff: 'image/tiff',
+    tif: 'image/tiff',
+    ico: 'image/x-icon',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    aac: 'audio/aac',
+    ogg: 'audio/ogg',
+    opus: 'audio/ogg',
+    m4a: 'audio/mp4',
+    m4r: 'audio/mp4',
+    wma: 'audio/x-ms-wma',
+    flac: 'audio/flac',
+    aiff: 'audio/aiff',
+    amr: 'audio/amr',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+    webm: 'video/webm',
+    flv: 'video/x-flv',
+    wmv: 'video/x-ms-wmv',
+    mpg: 'video/mpeg',
+    mpeg: 'video/mpeg',
+    ogv: 'video/ogg',
+    ts: 'video/mp2t',
+    zip: 'application/zip',
+    rar: 'application/vnd.rar',
+    '7z': 'application/x-7z-compressed',
+    tar: 'application/x-tar',
+    gz: 'application/gzip',
+    bz2: 'application/x-bzip2',
+    xz: 'application/x-xz',
+    epub: 'application/epub+zip'
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
 const WORKER_PUBLIC_KEY = process.env.WORKER_KEY_PUBLIC || '';
 const WORKER_PRIVATE_KEY = process.env.WORKER_KEY_PRIVATE || '';
 const OCR_LANGS = String(process.env.OCR_LANGS || 'eng+rus,eng')
@@ -1223,7 +1287,15 @@ async function handleSingle(job, data) {
       uploadPath = encOut;
     }
     if (storageMode === 's3') {
-      await s3.send(new PutObjectCommand({ Bucket: process.env.S3_BUCKET, Key: outputKey, Body: fs.createReadStream(uploadPath) }));
+      const contentType = encryption?.enabled
+        ? 'application/octet-stream'
+        : inferContentTypeFromKey(outputKey);
+      await s3.send(new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: outputKey,
+        Body: fs.createReadStream(uploadPath),
+        ContentType: contentType
+      }));
     } else {
       const destPath = localPathForKey(outputKey);
       fs.mkdirSync(path.dirname(destPath), { recursive: true });
@@ -1300,7 +1372,15 @@ async function handleBatch(job, data) {
       uploadPath = encOut;
     }
     if (storageMode === 's3') {
-      await s3.send(new PutObjectCommand({ Bucket: process.env.S3_BUCKET, Key: outputKey, Body: fs.createReadStream(uploadPath) }));
+      const contentType = encryption?.enabled
+        ? 'application/octet-stream'
+        : inferContentTypeFromKey(outputKey);
+      await s3.send(new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: outputKey,
+        Body: fs.createReadStream(uploadPath),
+        ContentType: contentType
+      }));
     } else {
       const destPath = localPathForKey(outputKey);
       fs.mkdirSync(path.dirname(destPath), { recursive: true });

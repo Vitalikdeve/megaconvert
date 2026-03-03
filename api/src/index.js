@@ -2341,6 +2341,71 @@ function buildDownloadUrl(req, outputKey) {
   return base ? `${base}${relative}` : relative;
 }
 
+function inferContentTypeFromKey(key) {
+  const ext = path.extname(String(key || '')).replace('.', '').toLowerCase();
+  if (!ext) return '';
+  const map = {
+    pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ppt: 'application/vnd.ms-powerpoint',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    txt: 'text/plain; charset=utf-8',
+    csv: 'text/csv; charset=utf-8',
+    json: 'application/json; charset=utf-8',
+    xml: 'application/xml; charset=utf-8',
+    html: 'text/html; charset=utf-8',
+    md: 'text/markdown; charset=utf-8',
+    yaml: 'application/x-yaml; charset=utf-8',
+    yml: 'application/x-yaml; charset=utf-8',
+    toml: 'application/toml; charset=utf-8',
+    ini: 'text/plain; charset=utf-8',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    bmp: 'image/bmp',
+    tiff: 'image/tiff',
+    tif: 'image/tiff',
+    ico: 'image/x-icon',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    aac: 'audio/aac',
+    ogg: 'audio/ogg',
+    opus: 'audio/ogg',
+    m4a: 'audio/mp4',
+    m4r: 'audio/mp4',
+    wma: 'audio/x-ms-wma',
+    flac: 'audio/flac',
+    aiff: 'audio/aiff',
+    amr: 'audio/amr',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+    webm: 'video/webm',
+    flv: 'video/x-flv',
+    wmv: 'video/x-ms-wmv',
+    mpg: 'video/mpeg',
+    mpeg: 'video/mpeg',
+    ogv: 'video/ogg',
+    ts: 'video/mp2t',
+    zip: 'application/zip',
+    rar: 'application/vnd.rar',
+    '7z': 'application/x-7z-compressed',
+    tar: 'application/x-tar',
+    gz: 'application/gzip',
+    bz2: 'application/x-bzip2',
+    xz: 'application/x-xz',
+    epub: 'application/epub+zip'
+  };
+  return map[ext] || '';
+}
+
 function dedupePostLikes(items) {
   const deduped = [];
   const seen = new Set();
@@ -9296,6 +9361,8 @@ const sendStoredFile = async (req, res) => {
         requestId: req.requestId
       });
     }
+    const inferred = inferContentTypeFromKey(key);
+    if (inferred) res.setHeader('Content-Type', inferred);
     return res.sendFile(diskPath);
   }
 
@@ -9306,7 +9373,8 @@ const sendStoredFile = async (req, res) => {
       Key: key
     }));
 
-    if (response.ContentType) res.setHeader('Content-Type', response.ContentType);
+    const contentType = response.ContentType || inferContentTypeFromKey(key);
+    if (contentType) res.setHeader('Content-Type', contentType);
     if (response.ContentDisposition) res.setHeader('Content-Disposition', response.ContentDisposition);
     if (response.ContentLength !== undefined && response.ContentLength !== null) {
       const contentLength = Number(response.ContentLength);

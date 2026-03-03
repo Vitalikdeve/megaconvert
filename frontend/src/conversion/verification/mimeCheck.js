@@ -15,6 +15,18 @@ const EXT_TO_MIME = {
   mov: ['video/quicktime']
 };
 
+const GENERIC_MIME_PREFIXES = [
+  'application/octet-stream',
+  'binary/octet-stream',
+  'application/download'
+];
+
+const isGenericMime = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return true;
+  return GENERIC_MIME_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+};
+
 export const verifyDownloadMime = async (url, expectedExt) => {
   if (!url) return { ok: false, reason: 'missing_url' };
   try {
@@ -25,7 +37,7 @@ export const verifyDownloadMime = async (url, expectedExt) => {
     if (length === 0) return { ok: false, reason: 'empty_file' };
     if (expectedExt) {
       const allowed = EXT_TO_MIME[expectedExt] || [];
-      if (allowed.length && !allowed.some((mime) => type.includes(mime))) {
+      if (allowed.length && !isGenericMime(type) && !allowed.some((mime) => type.includes(mime))) {
         return { ok: false, reason: 'mime_mismatch', type, expected: allowed };
       }
     }
