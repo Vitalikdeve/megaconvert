@@ -151,5 +151,6 @@ npm --prefix frontend run i18n:check:strict
 ## Notes
 - `api/` and `worker/` each include a local `shared/` copy for runtime. Source of truth is `shared/` at repo root.
 - Frontend API target is configured via `VITE_API_BASE` (for example: `https://api.your-domain.com` or `/api` if you proxy on the hosting platform).
-- Optional fallback target is configured via `VITE_DIRECT_API_FALLBACK` and is disabled by default.
+- Production safety fallback is configured via `VITE_PRODUCTION_API_BASE` (default in examples: `https://34.122.218.135.nip.io`).
+- Optional direct fallback target is configured via `VITE_DIRECT_API_FALLBACK`.
 

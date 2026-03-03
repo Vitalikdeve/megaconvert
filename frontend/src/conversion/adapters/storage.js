@@ -2,7 +2,7 @@ import { ConversionError } from '../core/errors';
 import { fetchWithTimeout } from '../infra/timeouts';
 import { retry } from '../infra/retries';
 
-const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
+const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || 'https://34.122.218.135.nip.io')
   .trim()
   .replace(/\/+$/, '');
 
