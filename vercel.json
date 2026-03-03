@@ -17,10 +17,6 @@
       "destination": "/sitemap.xml"
     },
     {
-      "source": "/api/:path*",
-      "destination": "https://megaconvert-api.fly.dev/:path*"
-    },
-    {
       "source": "/:path*",
       "destination": "/index.html"
     }

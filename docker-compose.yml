@@ -1,6 +1,20 @@
 services:
+  caddy:
+    image: caddy:alpine
+    container_name: megaconvert-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command: caddy reverse-proxy --from 34.122.218.135.nip.io --to http://megaconvert-api:3000
+    depends_on:
+      - api
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
   api:
     build: ./api
+    container_name: megaconvert-api
     restart: unless-stopped
     env_file: ./api/.env
     environment:
@@ -137,3 +151,5 @@ services:
 
 volumes:
   bot_data:
+  caddy_data:
+  caddy_config:
