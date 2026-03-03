@@ -3509,7 +3509,13 @@ export default function App() {
         await fetch(`${API_BASE}/job-events`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ job_id: createdJobId, stage, progress: progressValue })
+          body: JSON.stringify({
+            event: 'job_stage',
+            type: 'job_stage',
+            job_id: createdJobId,
+            stage,
+            progress: progressValue
+          })
         });
       } catch {
         // ignore

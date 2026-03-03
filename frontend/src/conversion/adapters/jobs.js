@@ -3,7 +3,7 @@ import { fetchWithTimeout, sleep } from '../infra/timeouts';
 import { retry } from '../infra/retries';
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || 'https://34.122.218.135.nip.io')
+const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
   .trim()
   .replace(/\/+$/, '');
 const RETRYABLE_CREATE_CODES = new Set(['JOB_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);

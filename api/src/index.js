@@ -2307,6 +2307,40 @@ function getRequestBaseUrl(req) {
   return `${proto}://${host}`;
 }
 
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(String(value || ''));
+  } catch {
+    return String(value || '');
+  }
+}
+
+function normalizeStorageKey(value) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '');
+  if (!normalized) return '';
+  const parts = normalized.split('/').filter(Boolean);
+  if (!parts.length) return '';
+  if (parts.some((part) => part === '.' || part === '..')) return '';
+  return parts.join('/');
+}
+
+function encodeStorageKeyForUrl(value) {
+  const normalized = normalizeStorageKey(value);
+  if (!normalized) return '';
+  return normalized.split('/').map((part) => encodeURIComponent(part)).join('/');
+}
+
+function buildDownloadUrl(req, outputKey) {
+  const encodedKey = encodeStorageKeyForUrl(outputKey);
+  if (!encodedKey) return null;
+  const base = getRequestBaseUrl(req);
+  const relative = `/api/files/${encodedKey}`;
+  return base ? `${base}${relative}` : relative;
+}
+
 function dedupePostLikes(items) {
   const deduped = [];
   const seen = new Set();
@@ -4511,11 +4545,19 @@ app.get('/share/:token', (req, res) => {
 
 function ingestEvent(req, res) {
   const body = asObject(req.body);
-  if (!body.type && !body.event) {
-    return res.status(400).json({ status: 'error', code: 'MISSING_EVENT', message: 'Missing event', requestId: req.requestId });
-  }
+  const inferredEvent = String(
+    body.event
+      || body.type
+      || body.stage
+      || body.status
+      || body.action
+      || ''
+  ).trim();
+  const normalizedBody = (body.event || body.type)
+    ? body
+    : { ...body, event: inferredEvent || 'client_event' };
 
-  const envelope = normalizeAnalyticsEnvelope(req, body);
+  const envelope = normalizeAnalyticsEnvelope(req, normalizedBody);
   const rows = buildAnalyticsRowsFromEnvelope(envelope);
   enqueueAnalyticsRows(rows);
   opsCounters.eventsAccepted += rows.length;
@@ -9231,7 +9273,123 @@ app.get('/admin/metrics/promo', requireAdminAuth, async (req, res) => {
     });
   }
 });
-app.use('/files', express.static(localRoot));
+const sendStoredFile = async (req, res) => {
+  const rawKey = String(req.params?.[0] || '').trim();
+  const decodedKey = rawKey.split('/').map((part) => safeDecodeURIComponent(part)).join('/');
+  const key = normalizeStorageKey(decodedKey);
+  if (!key) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID_FILE_KEY',
+      message: 'Invalid file key',
+      requestId: req.requestId
+    });
+  }
+
+  if (storageMode !== 's3') {
+    const diskPath = path.join(localRoot, key);
+    if (!fs.existsSync(diskPath)) {
+      return res.status(404).json({
+        status: 'error',
+        code: 'FILE_NOT_FOUND',
+        message: 'File not found',
+        requestId: req.requestId
+      });
+    }
+    return res.sendFile(diskPath);
+  }
+
+  try {
+    await ensureBucketAvailable();
+    const response = await s3.send(new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: key
+    }));
+
+    if (response.ContentType) res.setHeader('Content-Type', response.ContentType);
+    if (response.ContentDisposition) res.setHeader('Content-Disposition', response.ContentDisposition);
+    if (response.ContentLength !== undefined && response.ContentLength !== null) {
+      const contentLength = Number(response.ContentLength);
+      if (Number.isFinite(contentLength) && contentLength >= 0) {
+        res.setHeader('Content-Length', String(contentLength));
+      }
+    }
+    if (response.ETag) res.setHeader('ETag', response.ETag);
+    if (response.LastModified) res.setHeader('Last-Modified', new Date(response.LastModified).toUTCString());
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+
+    const body = response.Body;
+    if (body && typeof body.pipe === 'function') {
+      body.on('error', (streamError) => {
+        logError({
+          type: 'file_stream_failed',
+          requestId: req.requestId,
+          key,
+          error: streamError?.message || 'unknown'
+        });
+        if (!res.headersSent) {
+          res.status(500).json({
+            status: 'error',
+            code: 'FILE_STREAM_FAILED',
+            message: 'Failed to stream file',
+            requestId: req.requestId
+          });
+        } else {
+          res.end();
+        }
+      });
+      body.pipe(res);
+      return;
+    }
+
+    if (body && typeof body.transformToByteArray === 'function') {
+      const bytes = await body.transformToByteArray();
+      res.send(Buffer.from(bytes));
+      return;
+    }
+
+    if (Buffer.isBuffer(body)) {
+      res.send(body);
+      return;
+    }
+
+    return res.status(500).json({
+      status: 'error',
+      code: 'FILE_BODY_UNAVAILABLE',
+      message: 'File body unavailable',
+      requestId: req.requestId
+    });
+  } catch (error) {
+    const code = String(error?.name || error?.Code || '').trim();
+    if (code === 'NoSuchKey' || code === 'NotFound' || code === 'NoSuchBucket') {
+      return res.status(404).json({
+        status: 'error',
+        code: 'FILE_NOT_FOUND',
+        message: 'File not found',
+        requestId: req.requestId
+      });
+    }
+    logError({
+      type: 'file_fetch_failed',
+      requestId: req.requestId,
+      key,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'FILE_FETCH_FAILED',
+      message: 'Failed to fetch file',
+      requestId: req.requestId
+    });
+  }
+};
+
+app.get('/api/files/*', (req, res) => {
+  void sendStoredFile(req, res);
+});
+app.get('/files/*', (req, res) => {
+  void sendStoredFile(req, res);
+});
 
 app.post('/crypto/session', async (req, res) => {
   try {
@@ -9591,14 +9749,7 @@ app.get('/api/jobs/:id', async (req, res) => {
     let downloadUrl = null;
     if (state === 'completed') {
       const outputKey = (job.returnvalue && job.returnvalue.outputKey) || job.data.outputKey;
-      if (storageMode === 's3') {
-        downloadUrl = await getSignedUrl(s3, new GetObjectCommand({
-          Bucket: process.env.S3_BUCKET,
-          Key: outputKey
-        }), { expiresIn: 60 * 60 });
-      } else {
-        downloadUrl = `/files/${outputKey}`;
-      }
+      downloadUrl = buildDownloadUrl(req, outputKey);
     }
     if (jobApiKeyId && (state === 'completed' || state === 'failed')) {
       const eventName = state === 'completed' ? 'job.completed' : 'job.failed';
@@ -9844,15 +9995,7 @@ app.get('/jobs/:id', async (req, res) => {
 
     if (state === 'completed') {
       const outputKey = (job.returnvalue && job.returnvalue.outputKey) || job.data.outputKey;
-      if (storageMode === 's3') {
-        const signed = await getSignedUrl(s3, new GetObjectCommand({
-          Bucket: process.env.S3_BUCKET,
-          Key: outputKey
-        }), { expiresIn: 60 * 60 });
-        downloadUrl = signed;
-      } else {
-        downloadUrl = `/files/${outputKey}`;
-      }
+      downloadUrl = buildDownloadUrl(req, outputKey);
     }
     if (state === 'failed') {
       error = {
