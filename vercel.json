@@ -17,6 +17,10 @@
       "destination": "/sitemap.xml"
     },
     {
+      "source": "/api/:path*",
+      "destination": "https://34.122.218.135.nip.io/:path*"
+    },
+    {
       "source": "/:path*",
       "destination": "/index.html"
     }
