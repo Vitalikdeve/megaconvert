@@ -40,7 +40,7 @@ function logToolchainStatus() {
   const checks = [
     { key: 'soffice', ok: hasCommand(SOFFICE, ['--version']), requiredFor: ['pdf-word', 'word-pdf', 'pdf-excel', 'pdf-pptx', 'excel-pdf', 'pptx-pdf', 'txt-pdf'] },
     { key: 'ffmpeg', ok: hasCommand('ffmpeg'), requiredFor: ['mp4-mp3', 'mp4-gif', 'mov-mp4', 'mkv-mp4', 'avi-mp4', 'video-webm', 'mp3-wav', 'wav-mp3', 'm4a-mp3', 'flac-mp3', 'ogg-mp3'] },
-    { key: 'magick', ok: hasCommand('magick'), requiredFor: ['png-jpg', 'jpg-png', 'jpg-webp', 'png-webp', 'heic-jpg', 'avif-jpg', 'avif-png', 'image-pdf', 'jpg-pdf', 'svg-jpg', 'svg-png'] },
+    { key: 'magick', ok: hasCommand('magick') || hasCommand('convert'), requiredFor: ['png-jpg', 'jpg-png', 'jpg-webp', 'png-webp', 'heic-jpg', 'avif-jpg', 'avif-png', 'image-pdf', 'jpg-pdf', 'svg-jpg', 'svg-png'] },
     { key: 'pdftoppm', ok: hasCommand('pdftoppm', ['-v']), requiredFor: ['pdf-images'] },
     { key: 'ebook-convert', ok: hasCommand('ebook-convert', ['--version']), requiredFor: ['pdf-epub', 'epub-pdf', 'pdf-mobi', 'mobi-pdf'] },
     { key: 'tesseract', ok: hasCommand('tesseract', ['--version']), requiredFor: ['ocr'] }
@@ -100,7 +100,11 @@ const tmpRoot = os.tmpdir();
 const GS = isWin ? 'gswin64c' : 'gs';
 const ZIP = isWin ? '7z' : 'zip';
 const SOFFICE = (() => {
-  if (!isWin) return 'soffice';
+  if (!isWin) {
+    if (hasCommand('soffice', ['--version'])) return 'soffice';
+    if (hasCommand('libreoffice', ['--version'])) return 'libreoffice';
+    return 'soffice';
+  }
   const candidates = [
     'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
     'C:\\Program Files\\LibreOffice\\program\\soffice.com',
@@ -711,7 +715,16 @@ async function buildSyntheticInputFile(tool, workDir) {
   }
   if (tool === 'png-jpg') {
     const inputPath = path.join(workDir, 'synthetic.png');
-    fs.writeFileSync(inputPath, samplePngBuffer());
+    try {
+      await exec('ffmpeg', [
+        '-y',
+        '-f', 'lavfi', '-i', 'color=c=white:s=64x64:d=1',
+        '-frames:v', '1',
+        inputPath
+      ]);
+    } catch {
+      fs.writeFileSync(inputPath, samplePngBuffer());
+    }
     return inputPath;
   }
   if (tool === 'mp4-mp3') {
@@ -1376,7 +1389,7 @@ function startWorkerHealthServer() {
 
   const server = http.createServer((req, res) => {
     const route = String(req.url || '').split('?')[0];
-    if (req.method === 'GET' && route === '/worker/health') {
+    if (req.method === 'GET' && (route === '/worker/health' || route === '/health')) {
       const body = {
         status: healthState.status === 'ready' ? 'ok' : healthState.status,
         worker_id: WORKER_ID,

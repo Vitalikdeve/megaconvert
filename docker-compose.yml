@@ -118,7 +118,7 @@ services:
       --save ""
       --appendonly no
       --maxmemory 100mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --tcp-backlog 128
       --timeout 300
     restart: unless-stopped
