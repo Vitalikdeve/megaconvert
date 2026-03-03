@@ -19,6 +19,8 @@ services:
     env_file: ./api/.env
     environment:
       - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://megaconvert:megaconvert@postgres:5432/megaconvert
+      - PROMO_CODES_ENABLED=1
       - STORAGE_MODE=s3
       - S3_ENDPOINT=http://minio:9000
       - S3_REGION=us-east-1
@@ -30,6 +32,7 @@ services:
     depends_on:
       - redis
       - minio
+      - postgres
     healthcheck:
       test:
         [
@@ -122,6 +125,27 @@ services:
     mem_limit: 160m
     mem_reservation: 80m
     pids_limit: 100
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=megaconvert
+      - POSTGRES_USER=megaconvert
+      - POSTGRES_PASSWORD=megaconvert
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/promo_codes_v1.sql:/docker-entrypoint-initdb.d/10-promo_codes_v1.sql:ro
+      - ./infra/postgres/account_identity_v1.sql:/docker-entrypoint-initdb.d/20-account_identity_v1.sql:ro
+      - ./infra/postgres/promo_seed_v1.sql:/docker-entrypoint-initdb.d/30-promo_seed_v1.sql:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U megaconvert -d megaconvert" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 384m
+    mem_reservation: 192m
+    pids_limit: 200
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -153,3 +177,4 @@ volumes:
   bot_data:
   caddy_data:
   caddy_config:
+  postgres_data:
