@@ -2,11 +2,12 @@ import { ConversionError } from '../core/errors';
 import { fetchWithTimeout } from '../infra/timeouts';
 import { retry } from '../infra/retries';
 
-const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || 'https://34.122.218.135.nip.io')
+const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
   .trim()
   .replace(/\/+$/, '');
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const isLoopbackHost = (host) => host === 'localhost' || host === '127.0.0.1' || host === '::1';
 
 const parseResponseBody = async (res) => {
   const contentType = String(res.headers.get('content-type') || '').toLowerCase();
@@ -30,6 +31,10 @@ const shouldTryDirectFallback = (apiBase) => {
   const base = String(apiBase || '').trim().toLowerCase();
   if (!base) return false;
   if (!DIRECT_API_FALLBACK) return false;
+  if (typeof window !== 'undefined') {
+    const currentHost = String(window.location.hostname || '').trim().toLowerCase();
+    if (!isLoopbackHost(currentHost)) return false;
+  }
   if (base.startsWith(DIRECT_API_FALLBACK.toLowerCase())) return false;
   if (base.startsWith('http://localhost') || base.startsWith('https://localhost')) return false;
   if (base.startsWith('http://127.0.0.1') || base.startsWith('https://127.0.0.1')) return false;

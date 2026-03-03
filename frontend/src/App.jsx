@@ -1457,7 +1457,6 @@ export default function App() {
     return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
   };
   const isLoopbackHost = (host) => host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  const PRODUCTION_API_FALLBACK = 'https://34.122.218.135.nip.io';
   const resolveApiBase = () => {
     const fallback = '/api';
     const rawEnv = String(import.meta.env.VITE_API_BASE || '').trim();
@@ -3192,13 +3191,7 @@ export default function App() {
     if (!jobId) return null;
     const candidates = [];
     const primary = String(API_BASE || '').trim();
-    const directFallback = String(import.meta.env.VITE_DIRECT_API_FALLBACK || PRODUCTION_API_FALLBACK)
-      .trim()
-      .replace(/\/+$/, '');
     if (primary) candidates.push(primary);
-    if (directFallback && !candidates.includes(directFallback)) {
-      candidates.push(directFallback);
-    }
     const started = Date.now();
     while (Date.now() - started < maxWaitMs) {
       for (const base of candidates) {
