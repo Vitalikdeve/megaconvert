@@ -48,6 +48,16 @@ const shouldPreferProxyUpload = () => {
   return true;
 };
 
+const isInsecureDirectUploadUrl = (url) => {
+  try {
+    if (typeof window === 'undefined') return false;
+    if (String(window.location.protocol || '').toLowerCase() !== 'https:') return false;
+    return String(url || '').trim().toLowerCase().startsWith('http://');
+  } catch {
+    return false;
+  }
+};
+
 const isNetworkLikeError = (error) => {
   const msg = String(error?.message || '').toLowerCase();
   return error?.name === 'AbortError'
@@ -191,7 +201,9 @@ const isDirectUploadFallbackCandidate = (error) => {
 export const uploadToStorage = async (apiBase, authHeaders, file, nameOverride, timeoutMs, logger) => {
   const signed = await signUpload(apiBase, authHeaders, file, nameOverride, timeoutMs);
   let uploadMode = 'direct';
+  let proxyAttempted = false;
   if (shouldPreferProxyUpload()) {
+    proxyAttempted = true;
     try {
       await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs);
       uploadMode = 'proxy';
@@ -203,6 +215,19 @@ export const uploadToStorage = async (apiBase, authHeaders, file, nameOverride, 
         reason: error?.message || String(error)
       });
     }
+  }
+  if (isInsecureDirectUploadUrl(signed.uploadUrl)) {
+    logger?.warn('upload_direct_disabled_mixed_content', { inputKey: signed.inputKey });
+    if (!proxyAttempted) {
+      uploadMode = 'proxy';
+      await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs);
+      logger?.info('upload_complete', { inputKey: signed.inputKey, mode: uploadMode, reason: 'mixed_content_guard' });
+      return { inputKey: signed.inputKey };
+    }
+    throw new ConversionError(
+      'UPLOAD_PROXY_FAILED',
+      'Proxy upload failed, and direct HTTP upload is blocked on HTTPS pages.'
+    );
   }
   try {
     await retry(async () => {

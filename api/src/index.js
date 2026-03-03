@@ -4509,7 +4509,7 @@ app.get('/share/:token', (req, res) => {
   return res.json(item);
 });
 
-app.post('/events', (req, res) => {
+function ingestEvent(req, res) {
   const body = asObject(req.body);
   if (!body.type && !body.event) {
     return res.status(400).json({ status: 'error', code: 'MISSING_EVENT', message: 'Missing event', requestId: req.requestId });
@@ -4532,7 +4532,10 @@ app.post('/events', (req, res) => {
     ts: envelope.eventTime
   });
   return res.json({ ok: true, accepted: rows.length, requestId: req.requestId });
-});
+}
+
+app.post('/events', ingestEvent);
+app.post('/job-events', ingestEvent);
 
 app.post('/admin/auth/login', (req, res) => {
   if (!ADMIN_AUTH_ENABLED) {

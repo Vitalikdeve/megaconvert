@@ -1463,16 +1463,11 @@ export default function App() {
     const rawEnv = String(import.meta.env.VITE_API_BASE || '').trim();
     const fromEnv = normalizeApiBase(rawEnv || fallback);
     if (typeof window === 'undefined') return fromEnv;
-    if (/^https?:\/\//i.test(rawEnv)) {
-      return normalizeApiBase(rawEnv);
-    }
+    const currentHost = String(window.location.hostname || '').trim().toLowerCase();
+    // In deployed environments always use same-origin /api to avoid stale cross-origin configs.
+    if (!isLoopbackHost(currentHost)) return fallback;
+    if (/^https?:\/\//i.test(rawEnv)) return normalizeApiBase(rawEnv);
     try {
-      const currentHost = window.location.hostname;
-      // In deployed environments, prefer same-origin /api via Vercel rewrites.
-      // This avoids cross-origin edge cases on mobile browsers.
-      if (!isLoopbackHost(currentHost)) {
-        return fallback;
-      }
       const parsed = new URL(fromEnv, window.location.origin);
       if (isLoopbackHost(parsed.hostname) && !isLoopbackHost(currentHost)) {
         return fallback;
