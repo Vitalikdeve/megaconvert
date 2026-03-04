@@ -35,6 +35,13 @@ for (const key of required) {
 
 const log = (payload) => console.log(JSON.stringify(payload));
 const logError = (payload) => console.error(JSON.stringify(payload));
+const SERVERLESS_RUNTIME = ['1', 'true', 'yes', 'on'].includes(String(process.env.MEGACONVERT_SERVERLESS || '').trim().toLowerCase())
+  || Boolean(process.env.VERCEL)
+  || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DATA_ROOT_DIR = String(
+  process.env.DATA_ROOT_DIR
+  || (SERVERLESS_RUNTIME ? path.join('/tmp', 'megaconvert-data') : path.join(__dirname, '..', 'data'))
+).trim() || (SERVERLESS_RUNTIME ? path.join('/tmp', 'megaconvert-data') : path.join(__dirname, '..', 'data'));
 
 const app = express();
 app.set('etag', false);
@@ -64,7 +71,7 @@ const allowedOrigins = String(process.env.CORS_ORIGIN || 'http://localhost:5173'
   .map((value) => value.trim())
   .filter(Boolean);
 const allowVercelPreviewOrigins = String(process.env.ALLOW_VERCEL_PREVIEW_ORIGINS || 'true').toLowerCase() === 'true';
-const allowAllHttpsOrigins = String(process.env.ALLOW_ALL_HTTPS_ORIGINS || 'true').toLowerCase() === 'true';
+const allowAllHttpsOrigins = String(process.env.ALLOW_ALL_HTTPS_ORIGINS || 'false').toLowerCase() === 'true';
 
 const isVercelPreviewOrigin = (origin) => {
   if (!origin || !allowVercelPreviewOrigins) return false;
@@ -211,7 +218,7 @@ const ANALYTICS_QUERY_TIMEOUT_MS = Math.max(200, Number(process.env.ANALYTICS_QU
 const ANALYTICS_MAX_BUFFER = Math.max(ANALYTICS_BATCH_SIZE, Number(process.env.ANALYTICS_MAX_BUFFER || 10000));
 const ANALYTICS_USE_FALLBACK = parseEnvBoolean(process.env.ANALYTICS_USE_FALLBACK, true);
 const ANALYTICS_FALLBACK_FILE = String(
-  process.env.ANALYTICS_FALLBACK_FILE || path.join(__dirname, '..', 'data', 'analytics_events_fallback.jsonl')
+  process.env.ANALYTICS_FALLBACK_FILE || path.join(DATA_ROOT_DIR, 'analytics_events_fallback.jsonl')
 ).trim();
 const ANALYTICS_FALLBACK_MAX_ROWS = Math.max(1000, Number(process.env.ANALYTICS_FALLBACK_MAX_ROWS || 50000));
 const ANALYTICS_FALLBACK_MAX_LATENCY_POINTS = Math.max(100, Number(process.env.ANALYTICS_FALLBACK_MAX_LATENCY_POINTS || 10000));
@@ -243,64 +250,67 @@ const SEARCH_RANGE_DURATIONS_MS = {
   '30d': 30 * 24 * 60 * 60 * 1000
 };
 const ADMIN_POSTS_FILE = String(
-  process.env.ADMIN_POSTS_FILE || path.join(__dirname, '..', 'data', 'admin_posts.json')
+  process.env.ADMIN_POSTS_FILE || path.join(DATA_ROOT_DIR, 'admin_posts.json')
 ).trim();
 const DEVELOPERS_FILE = String(
-  process.env.DEVELOPERS_FILE || path.join(__dirname, '..', 'data', 'developers.json')
+  process.env.DEVELOPERS_FILE || path.join(DATA_ROOT_DIR, 'developers.json')
 ).trim();
 const POST_LIKES_FILE = String(
-  process.env.POST_LIKES_FILE || path.join(__dirname, '..', 'data', 'post_likes.json')
+  process.env.POST_LIKES_FILE || path.join(DATA_ROOT_DIR, 'post_likes.json')
 ).trim();
 const CONTENT_PAGES_FILE = String(
-  process.env.CONTENT_PAGES_FILE || path.join(__dirname, '..', 'data', 'content_pages.json')
+  process.env.CONTENT_PAGES_FILE || path.join(DATA_ROOT_DIR, 'content_pages.json')
 ).trim();
 const CONTENT_BLOCKS_FILE = String(
-  process.env.CONTENT_BLOCKS_FILE || path.join(__dirname, '..', 'data', 'content_blocks.json')
+  process.env.CONTENT_BLOCKS_FILE || path.join(DATA_ROOT_DIR, 'content_blocks.json')
 ).trim();
 const PLATFORM_SETTINGS_FILE = String(
-  process.env.PLATFORM_SETTINGS_FILE || path.join(__dirname, '..', 'data', 'platform_settings.json')
+  process.env.PLATFORM_SETTINGS_FILE || path.join(DATA_ROOT_DIR, 'platform_settings.json')
 ).trim();
 const API_KEYS_FILE = String(
-  process.env.API_KEYS_FILE || path.join(__dirname, '..', 'data', 'api_keys.json')
+  process.env.API_KEYS_FILE || path.join(DATA_ROOT_DIR, 'api_keys.json')
 ).trim();
 const API_USAGE_FILE = String(
-  process.env.API_USAGE_FILE || path.join(__dirname, '..', 'data', 'api_usage.json')
+  process.env.API_USAGE_FILE || path.join(DATA_ROOT_DIR, 'api_usage.json')
 ).trim();
 const API_WEBHOOKS_FILE = String(
-  process.env.API_WEBHOOKS_FILE || path.join(__dirname, '..', 'data', 'api_webhooks.json')
+  process.env.API_WEBHOOKS_FILE || path.join(DATA_ROOT_DIR, 'api_webhooks.json')
 ).trim();
 const API_WEBHOOK_DELIVERIES_FILE = String(
-  process.env.API_WEBHOOK_DELIVERIES_FILE || path.join(__dirname, '..', 'data', 'api_webhook_deliveries.json')
+  process.env.API_WEBHOOK_DELIVERIES_FILE || path.join(DATA_ROOT_DIR, 'api_webhook_deliveries.json')
 ).trim();
 const SHARE_LINKS_FILE = String(
-  process.env.SHARE_LINKS_FILE || path.join(__dirname, '..', 'data', 'share_links.json')
+  process.env.SHARE_LINKS_FILE || path.join(DATA_ROOT_DIR, 'share_links.json')
 ).trim();
 const AUDIT_LOGS_FILE = String(
-  process.env.AUDIT_LOGS_FILE || path.join(__dirname, '..', 'data', 'audit_logs.json')
+  process.env.AUDIT_LOGS_FILE || path.join(DATA_ROOT_DIR, 'audit_logs.json')
 ).trim();
 const LOCALIZATION_OVERRIDES_FILE = String(
-  process.env.LOCALIZATION_OVERRIDES_FILE || path.join(__dirname, '..', 'data', 'localization_overrides.json')
+  process.env.LOCALIZATION_OVERRIDES_FILE || path.join(DATA_ROOT_DIR, 'localization_overrides.json')
 ).trim();
 const WORKER_HEALTH_CHECKS_FILE = String(
-  process.env.WORKER_HEALTH_CHECKS_FILE || path.join(__dirname, '..', 'data', 'worker_health_checks.json')
+  process.env.WORKER_HEALTH_CHECKS_FILE || path.join(DATA_ROOT_DIR, 'worker_health_checks.json')
 ).trim();
 const SYNTHETIC_TEST_RESULTS_FILE = String(
-  process.env.SYNTHETIC_TEST_RESULTS_FILE || path.join(__dirname, '..', 'data', 'synthetic_test_results.json')
+  process.env.SYNTHETIC_TEST_RESULTS_FILE || path.join(DATA_ROOT_DIR, 'synthetic_test_results.json')
 ).trim();
 const FORMAT_HEALTH_STATE_FILE = String(
-  process.env.FORMAT_HEALTH_STATE_FILE || path.join(__dirname, '..', 'data', 'format_health_state.json')
+  process.env.FORMAT_HEALTH_STATE_FILE || path.join(DATA_ROOT_DIR, 'format_health_state.json')
 ).trim();
 const WORKER_ALERT_EVENTS_FILE = String(
-  process.env.WORKER_ALERT_EVENTS_FILE || path.join(__dirname, '..', 'data', 'worker_alert_events.json')
+  process.env.WORKER_ALERT_EVENTS_FILE || path.join(DATA_ROOT_DIR, 'worker_alert_events.json')
 ).trim();
 const WORKER_JOB_RESULTS_FILE = String(
-  process.env.WORKER_JOB_RESULTS_FILE || path.join(__dirname, '..', 'data', 'worker_job_results.json')
+  process.env.WORKER_JOB_RESULTS_FILE || path.join(DATA_ROOT_DIR, 'worker_job_results.json')
 ).trim();
 const WORKSPACE_PLATFORM_FILE = String(
-  process.env.WORKSPACE_PLATFORM_FILE || path.join(__dirname, '..', 'data', 'workspace_platform.json')
+  process.env.WORKSPACE_PLATFORM_FILE || path.join(DATA_ROOT_DIR, 'workspace_platform.json')
+).trim();
+const ACCOUNT_FALLBACK_FILE = String(
+  process.env.ACCOUNT_FALLBACK_FILE || path.join(DATA_ROOT_DIR, 'account_fallback.json')
 ).trim();
 const ADMIN_ASSETS_DIR = String(
-  process.env.ADMIN_ASSETS_DIR || path.join(__dirname, '..', 'data', 'admin_assets')
+  process.env.ADMIN_ASSETS_DIR || path.join(DATA_ROOT_DIR, 'admin_assets')
 ).trim();
 const ADMIN_ASSET_IMAGE_MAX_BYTES = Math.max(64 * 1024, Number(process.env.ADMIN_ASSET_IMAGE_MAX_BYTES || 5 * 1024 * 1024));
 const FRONTEND_I18N_DIR = String(
@@ -327,6 +337,7 @@ const ACCOUNT_SESSION_TTL_SEC = Math.max(60 * 60, Number(process.env.ACCOUNT_SES
 const ACCOUNT_PROFILE_NAME_MAX_LEN = Math.max(8, Number(process.env.ACCOUNT_PROFILE_NAME_MAX_LEN || 80));
 const ACCOUNT_PROFILE_TZ_MAX_LEN = Math.max(8, Number(process.env.ACCOUNT_PROFILE_TZ_MAX_LEN || 64));
 const ACCOUNT_PROFILE_AVATAR_MAX_LEN = Math.max(64, Number(process.env.ACCOUNT_PROFILE_AVATAR_MAX_LEN || 512));
+const ACCOUNT_STORAGE_FALLBACK_ENABLED = parseEnvBoolean(process.env.ACCOUNT_STORAGE_FALLBACK_ENABLED, true);
 const ACCOUNT_TELEGRAM_CODE_ALPHABET = (
   String(process.env.ACCOUNT_TELEGRAM_CODE_ALPHABET || 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789')
     .toUpperCase()
@@ -355,6 +366,7 @@ const SYNTHETIC_ALERT_WINDOW = Math.max(5, Number(process.env.SYNTHETIC_ALERT_WI
 const SYNTHETIC_SUCCESS_RATE_THRESHOLD = Math.max(0.5, Math.min(1, Number(process.env.SYNTHETIC_SUCCESS_RATE_THRESHOLD || 0.95)));
 const SYNTHETIC_LATENCY_THRESHOLD_MS = Math.max(100, Number(process.env.SYNTHETIC_LATENCY_THRESHOLD_MS || 20000));
 const FORMAT_FAILURE_DISABLE_STREAK = Math.max(1, Number(process.env.FORMAT_FAILURE_DISABLE_STREAK || 3));
+const ADMIN_ALLOW_INSECURE_NO_AUTH = parseEnvBoolean(process.env.ADMIN_ALLOW_INSECURE_NO_AUTH, false);
 const API_KEY_PLAN_LIMITS = {
   free: { rate_limit_per_min: 60, quota_monthly: 5000 },
   pro: { rate_limit_per_min: 300, quota_monthly: 100000 },
@@ -393,6 +405,7 @@ let formatHealthStateStore = null;
 let workerAlertEventsStore = null;
 let workerJobResultsStore = null;
 let workspacePlatformStore = null;
+let accountFallbackStore = null;
 let postLikesMutationQueue = Promise.resolve();
 let pgPool = null;
 let pgModuleLoadAttempted = false;
@@ -713,11 +726,19 @@ function requireAdminAuth(req, res, next) {
 
 function requireAdminAuthIfEnabled(req, res, next) {
   if (!ADMIN_AUTH_ENABLED) {
+    if (!ADMIN_ALLOW_INSECURE_NO_AUTH) {
+      return res.status(503).json({
+        status: 'error',
+        code: 'ADMIN_AUTH_NOT_CONFIGURED',
+        message: 'Admin auth is not configured',
+        requestId: req.requestId
+      });
+    }
     req.admin = {
       sub: 'admin',
       role: ADMIN_DEFAULT_ROLE || 'super_admin',
       sid: null,
-      mode: 'auth_disabled'
+      mode: 'auth_disabled_insecure'
     };
     return next();
   }
@@ -1004,6 +1025,9 @@ function resolveSessionDeviceLabel(userAgent) {
 
 function getAccountStorageStatus() {
   if (!DATABASE_URL) {
+    if (ACCOUNT_STORAGE_FALLBACK_ENABLED) {
+      return { ok: true, fallback: true };
+    }
     return {
       ok: false,
       statusCode: 503,
@@ -1013,6 +1037,9 @@ function getAccountStorageStatus() {
   }
   const pool = getPgPool();
   if (!pool) {
+    if (ACCOUNT_STORAGE_FALLBACK_ENABLED) {
+      return { ok: true, fallback: true };
+    }
     return {
       ok: false,
       statusCode: 503,
@@ -1584,6 +1611,97 @@ function saveWorkspacePlatformStore(next) {
   writeJsonAtomic(WORKSPACE_PLATFORM_FILE, normalized);
   workspacePlatformStore = normalized;
   return normalized;
+}
+
+function defaultAccountFallbackStore() {
+  return {
+    profiles: {},
+    connections: [],
+    sessions: [],
+    telegram_link_codes: []
+  };
+}
+
+function normalizeAccountFallbackStore(raw) {
+  const source = asObject(raw);
+  return {
+    profiles: asObject(source.profiles),
+    connections: Array.isArray(source.connections) ? source.connections : [],
+    sessions: Array.isArray(source.sessions) ? source.sessions : [],
+    telegram_link_codes: Array.isArray(source.telegram_link_codes) ? source.telegram_link_codes : []
+  };
+}
+
+function loadAccountFallbackStore() {
+  if (accountFallbackStore && typeof accountFallbackStore === 'object') return accountFallbackStore;
+  try {
+    if (!fs.existsSync(ACCOUNT_FALLBACK_FILE)) {
+      accountFallbackStore = defaultAccountFallbackStore();
+      return accountFallbackStore;
+    }
+    const raw = fs.readFileSync(ACCOUNT_FALLBACK_FILE, 'utf8');
+    accountFallbackStore = normalizeAccountFallbackStore(JSON.parse(raw));
+    return accountFallbackStore;
+  } catch (error) {
+    logError({ type: 'account_fallback_load_failed', file: ACCOUNT_FALLBACK_FILE, error: error?.message || 'unknown' });
+    accountFallbackStore = defaultAccountFallbackStore();
+    return accountFallbackStore;
+  }
+}
+
+function saveAccountFallbackStore(next) {
+  const normalized = normalizeAccountFallbackStore(next);
+  if (normalized.connections.length > 5000) {
+    normalized.connections = normalized.connections.slice(-5000);
+  }
+  if (normalized.sessions.length > 10000) {
+    normalized.sessions = normalized.sessions.slice(-10000);
+  }
+  if (normalized.telegram_link_codes.length > 5000) {
+    normalized.telegram_link_codes = normalized.telegram_link_codes.slice(-5000);
+  }
+  writeJsonAtomic(ACCOUNT_FALLBACK_FILE, normalized);
+  accountFallbackStore = normalized;
+  return normalized;
+}
+
+function touchAccountSessionFallback({ req, userId }) {
+  const sessionId = normalizeSessionId(req);
+  if (!sessionId) return null;
+  const sessionHash = hashSessionId(sessionId);
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const expiresAtIso = new Date(nowMs + (ACCOUNT_SESSION_TTL_SEC * 1000)).toISOString();
+  const userAgent = toCleanText(req.headers['user-agent'] || '', 512) || null;
+  const ipAddress = getRequestIpAddress(req);
+
+  const store = loadAccountFallbackStore();
+  let row = store.sessions.find((item) => (
+    String(item.user_id || '') === userId
+    && String(item.session_token_hash || '') === sessionHash
+  ));
+  if (!row) {
+    row = {
+      id: uuidv4(),
+      user_id: userId,
+      session_token_hash: sessionHash,
+      user_agent: userAgent,
+      ip_address: ipAddress,
+      created_at: nowIso,
+      last_active_at: nowIso,
+      expires_at: expiresAtIso,
+      revoked_at: null
+    };
+    store.sessions.push(row);
+  } else {
+    row.user_agent = userAgent;
+    row.ip_address = ipAddress;
+    row.last_active_at = nowIso;
+    row.expires_at = expiresAtIso;
+    row.revoked_at = null;
+  }
+  saveAccountFallbackStore(store);
+  return { ...row, current_hash: sessionHash };
 }
 
 function normalizeWorkspaceRole(value) {
@@ -6846,6 +6964,27 @@ app.get('/account/profile', requireUserAuth, async (req, res) => {
     });
   }
   const userId = String(req.user?.id || '').trim();
+  if (storage.fallback) {
+    try {
+      touchAccountSessionFallback({ req, userId });
+      const store = loadAccountFallbackStore();
+      const profile = asObject(store.profiles[userId]);
+      return res.json(mapAccountProfileRow(profile, userId));
+    } catch (error) {
+      logError({
+        type: 'account_profile_fallback_read_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'ACCOUNT_PROFILE_READ_FAILED',
+        message: 'Failed to load account profile',
+        requestId: req.requestId
+      });
+    }
+  }
   try {
     await touchAccountSession({ pool: storage.pool, req, userId });
     const result = await storage.pool.query(
@@ -6888,20 +7027,81 @@ app.patch('/account/profile', requireUserAuth, async (req, res) => {
     });
   }
   const userId = String(req.user?.id || '').trim();
-  try {
-    await touchAccountSession({ pool: storage.pool, req, userId });
-    const body = asObject(req.body);
-    const hasDisplayName = Object.prototype.hasOwnProperty.call(body, 'display_name');
-    const hasTimezone = Object.prototype.hasOwnProperty.call(body, 'timezone');
-    const hasAvatarUrl = Object.prototype.hasOwnProperty.call(body, 'avatar_url');
-    if (!hasDisplayName && !hasTimezone && !hasAvatarUrl) {
-      return res.status(400).json({
+  const body = asObject(req.body);
+  const hasDisplayName = Object.prototype.hasOwnProperty.call(body, 'display_name');
+  const hasTimezone = Object.prototype.hasOwnProperty.call(body, 'timezone');
+  const hasAvatarUrl = Object.prototype.hasOwnProperty.call(body, 'avatar_url');
+  if (!hasDisplayName && !hasTimezone && !hasAvatarUrl) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'EMPTY_PATCH',
+      message: 'No fields to update',
+      requestId: req.requestId
+    });
+  }
+
+  const parseOptionalField = (raw, field, maxLen) => {
+    if (raw === undefined) return undefined;
+    if (raw === null || raw === '') return null;
+    if (typeof raw !== 'string') {
+      throw new PromoApiError(400, 'INVALID_ACCOUNT_FIELD', `${field} must be string`);
+    }
+    return toCleanText(raw, maxLen) || null;
+  };
+
+  if (storage.fallback) {
+    try {
+      touchAccountSessionFallback({ req, userId });
+      const store = loadAccountFallbackStore();
+      const currentRow = asObject(store.profiles[userId]);
+      const nextDisplayName = hasDisplayName
+        ? parseOptionalField(body.display_name, 'display_name', ACCOUNT_PROFILE_NAME_MAX_LEN)
+        : (toCleanText(currentRow.display_name || '', ACCOUNT_PROFILE_NAME_MAX_LEN) || null);
+      const nextTimezone = hasTimezone
+        ? parseOptionalField(body.timezone, 'timezone', ACCOUNT_PROFILE_TZ_MAX_LEN)
+        : (toCleanText(currentRow.timezone || '', ACCOUNT_PROFILE_TZ_MAX_LEN) || null);
+      const nextAvatarUrl = hasAvatarUrl
+        ? parseOptionalField(body.avatar_url, 'avatar_url', ACCOUNT_PROFILE_AVATAR_MAX_LEN)
+        : (toCleanText(currentRow.avatar_url || '', ACCOUNT_PROFILE_AVATAR_MAX_LEN) || null);
+
+      store.profiles[userId] = {
+        display_name: nextDisplayName,
+        timezone: nextTimezone,
+        avatar_url: nextAvatarUrl,
+        updated_at: new Date().toISOString()
+      };
+      saveAccountFallbackStore(store);
+      log({
+        type: 'account_profile_update_fallback',
+        requestId: req.requestId,
+        userId
+      });
+      return res.json(mapAccountProfileRow(store.profiles[userId], userId));
+    } catch (error) {
+      if (error instanceof PromoApiError) {
+        return res.status(error.statusCode).json({
+          status: 'error',
+          code: error.code,
+          message: error.message,
+          requestId: req.requestId
+        });
+      }
+      logError({
+        type: 'account_profile_fallback_update_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
         status: 'error',
-        code: 'EMPTY_PATCH',
-        message: 'No fields to update',
+        code: 'ACCOUNT_PROFILE_WRITE_FAILED',
+        message: 'Failed to update account profile',
         requestId: req.requestId
       });
     }
+  }
+  try {
+    await touchAccountSession({ pool: storage.pool, req, userId });
 
     const current = await storage.pool.query(
       `
@@ -6913,15 +7113,6 @@ app.patch('/account/profile', requireUserAuth, async (req, res) => {
       [userId]
     );
     const currentRow = current.rows[0] || {};
-
-    const parseOptionalField = (raw, field, maxLen) => {
-      if (raw === undefined) return undefined;
-      if (raw === null || raw === '') return null;
-      if (typeof raw !== 'string') {
-        throw new PromoApiError(400, 'INVALID_ACCOUNT_FIELD', `${field} must be string`);
-      }
-      return toCleanText(raw, maxLen) || null;
-    };
 
     const nextDisplayName = hasDisplayName
       ? parseOptionalField(body.display_name, 'display_name', ACCOUNT_PROFILE_NAME_MAX_LEN)
@@ -6998,6 +7189,48 @@ app.get('/account/connections', requireUserAuth, async (req, res) => {
     });
   }
   const userId = String(req.user?.id || '').trim();
+  if (storage.fallback) {
+    try {
+      touchAccountSessionFallback({ req, userId });
+      const store = loadAccountFallbackStore();
+      const mapped = store.connections
+        .filter((row) => String(row.user_id || '') === userId)
+        .map((row) => mapAccountConnectionRow(row))
+        .filter(Boolean);
+      const byProvider = new Map(mapped.map((item) => [item.provider, item]));
+      const payload = Array.from(ACCOUNT_CONNECTION_PROVIDERS).map((provider) => {
+        const row = byProvider.get(provider);
+        if (!row) {
+          return {
+            provider,
+            connected: false,
+            email: null,
+            linked_at: null
+          };
+        }
+        return {
+          provider,
+          connected: true,
+          email: row.email,
+          linked_at: row.linked_at
+        };
+      });
+      return res.json(payload);
+    } catch (error) {
+      logError({
+        type: 'account_connections_fallback_read_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'ACCOUNT_CONNECTIONS_READ_FAILED',
+        message: 'Failed to load connected accounts',
+        requestId: req.requestId
+      });
+    }
+  }
   try {
     await touchAccountSession({ pool: storage.pool, req, userId });
     const result = await storage.pool.query(
@@ -7067,6 +7300,114 @@ app.post('/account/connections/:provider/link', requireUserAuth, async (req, res
       message: 'Provider is not supported',
       requestId: req.requestId
     });
+  }
+
+  if (storage.fallback) {
+    try {
+      touchAccountSessionFallback({ req, userId });
+      const body = asObject(req.body);
+      const providerUserId = normalizeAccountProviderUserId(
+        body.provider_user_id || body.providerUserId || body.uid || ''
+      );
+      if (!providerUserId) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'MISSING_PROVIDER_USER_ID',
+          message: 'provider_user_id is required',
+          requestId: req.requestId
+        });
+      }
+      const providerEmail = normalizeAccountConnectionEmail(body.email || body.provider_email || body.providerEmail);
+
+      const store = loadAccountFallbackStore();
+      const globalConflict = store.connections.find((row) => (
+        String(row.provider || '') === provider
+        && String(row.provider_user_id || '') === providerUserId
+        && String(row.user_id || '') !== userId
+      ));
+      if (globalConflict) {
+        return res.status(409).json({
+          status: 'error',
+          code: 'PROVIDER_ALREADY_LINKED',
+          message: 'Provider account is already linked to another user',
+          requestId: req.requestId
+        });
+      }
+
+      const existingIndex = store.connections.findIndex((row) => (
+        String(row.user_id || '') === userId
+        && String(row.provider || '') === provider
+      ));
+      const existing = existingIndex >= 0 ? mapAccountConnectionRow(store.connections[existingIndex]) : null;
+      if (
+        existing
+        && String(existing.provider_user_id || '') === providerUserId
+        && String(existing.email || '') === String(providerEmail || '')
+      ) {
+        return res.json({
+          status: 'already_linked',
+          connection: {
+            provider,
+            connected: true,
+            email: existing.email,
+            linked_at: existing.linked_at
+          }
+        });
+      }
+
+      const row = {
+        id: existing?.id || uuidv4(),
+        user_id: userId,
+        provider,
+        provider_user_id: providerUserId,
+        email: providerEmail,
+        linked_at: new Date().toISOString()
+      };
+      if (existingIndex >= 0) {
+        store.connections[existingIndex] = row;
+      } else {
+        store.connections.push(row);
+      }
+      saveAccountFallbackStore(store);
+      const connection = mapAccountConnectionRow(row);
+      log({
+        type: 'account_provider_link_fallback',
+        requestId: req.requestId,
+        userId,
+        provider
+      });
+      return res.json({
+        status: 'linked',
+        connection: {
+          provider,
+          connected: true,
+          email: connection?.email || null,
+          linked_at: connection?.linked_at || null
+        }
+      });
+    } catch (error) {
+      if (error instanceof PromoApiError) {
+        return res.status(error.statusCode).json({
+          status: 'error',
+          code: error.code,
+          message: error.message,
+          requestId: req.requestId
+        });
+      }
+      logError({
+        type: 'account_connections_fallback_link_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        provider: provider || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'ACCOUNT_CONNECTIONS_WRITE_FAILED',
+        message: 'Failed to link provider',
+        requestId: req.requestId
+      });
+    }
   }
 
   try {
@@ -7206,6 +7547,59 @@ app.delete('/account/connections/:provider', requireUserAuth, async (req, res) =
     });
   }
 
+  if (storage.fallback) {
+    try {
+      touchAccountSessionFallback({ req, userId });
+      const store = loadAccountFallbackStore();
+      const userRows = store.connections.filter((row) => String(row.user_id || '') === userId);
+      const targetIndex = store.connections.findIndex((row) => (
+        String(row.user_id || '') === userId
+        && String(row.provider || '') === provider
+      ));
+      if (targetIndex < 0) {
+        return res.json({
+          status: 'disconnected',
+          provider,
+          already_disconnected: true
+        });
+      }
+      if (userRows.length <= 1) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'CANNOT_REMOVE_LAST_LOGIN_METHOD',
+          message: 'Cannot remove the last login method',
+          requestId: req.requestId
+        });
+      }
+      store.connections.splice(targetIndex, 1);
+      saveAccountFallbackStore(store);
+      log({
+        type: 'account_provider_unlink_fallback',
+        requestId: req.requestId,
+        userId,
+        provider
+      });
+      return res.json({
+        status: 'disconnected',
+        provider
+      });
+    } catch (error) {
+      logError({
+        type: 'account_connections_fallback_unlink_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        provider: provider || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'ACCOUNT_CONNECTIONS_WRITE_FAILED',
+        message: 'Failed to disconnect provider',
+        requestId: req.requestId
+      });
+    }
+  }
+
   try {
     await touchAccountSession({ pool: storage.pool, req, userId });
     const existingResult = await storage.pool.query(
@@ -7283,20 +7677,34 @@ app.delete('/account/connections/:provider', requireUserAuth, async (req, res) =
 });
 
 app.post('/account/telegram/link-code', requireUserAuth, async (req, res) => {
-  if (!BOT_INTERNAL_API_BASE || !BOT_INTERNAL_LINK_SECRET) {
-    return res.status(503).json({
-      status: 'error',
-      code: 'TELEGRAM_LINK_NOT_CONFIGURED',
-      message: 'Telegram link service is not configured',
-      requestId: req.requestId
-    });
-  }
-
   const userId = String(req.user?.id || '').trim();
   const body = asObject(req.body);
   const email = normalizeAccountConnectionEmail(body.email || body.user_email || body.userEmail || '');
   const requestedTtlSec = toPositiveInt(body.ttl_sec || body.ttlSec, ACCOUNT_TELEGRAM_CODE_TTL_SEC);
   const ttlSec = Math.min(3600, Math.max(60, requestedTtlSec));
+
+  if (!BOT_INTERNAL_API_BASE || !BOT_INTERNAL_LINK_SECRET) {
+    const code = generateAccountTelegramCode();
+    const expiresAtIso = new Date(Date.now() + (ttlSec * 1000)).toISOString();
+    const store = loadAccountFallbackStore();
+    store.telegram_link_codes.push({
+      code,
+      app_user_id: userId,
+      email: email || null,
+      expires_at: expiresAtIso,
+      created_at: new Date().toISOString(),
+      mode: 'local_fallback'
+    });
+    saveAccountFallbackStore(store);
+    return res.json({
+      ok: true,
+      code,
+      expires_at: expiresAtIso,
+      ttl_sec: ttlSec,
+      mode: 'local_fallback'
+    });
+  }
+
   const code = generateAccountTelegramCode();
 
   const accountStorage = getAccountStorageStatus();
@@ -7383,6 +7791,36 @@ app.get('/account/sessions', requireUserAuth, async (req, res) => {
     });
   }
   const userId = String(req.user?.id || '').trim();
+  if (storage.fallback) {
+    try {
+      const currentSession = touchAccountSessionFallback({ req, userId });
+      const currentHash = String(currentSession?.current_hash || '').trim();
+      const nowMs = Date.now();
+      const store = loadAccountFallbackStore();
+      const rows = store.sessions
+        .filter((row) => (
+          String(row.user_id || '') === userId
+          && !row.revoked_at
+          && Date.parse(String(row.expires_at || '')) > nowMs
+        ))
+        .sort((left, right) => Date.parse(String(right.last_active_at || 0)) - Date.parse(String(left.last_active_at || 0)))
+        .slice(0, ACCOUNT_SESSIONS_LIST_LIMIT);
+      return res.json(rows.map((row) => mapAccountSessionRow(row, currentHash)).filter(Boolean));
+    } catch (error) {
+      logError({
+        type: 'account_sessions_fallback_read_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'ACCOUNT_SESSIONS_READ_FAILED',
+        message: 'Failed to load sessions',
+        requestId: req.requestId
+      });
+    }
+  }
   try {
     const currentSession = await touchAccountSession({ pool: storage.pool, req, userId });
     const currentHash = String(currentSession?.current_hash || '').trim();
@@ -7454,6 +7892,55 @@ app.delete('/account/sessions/:id', requireUserAuth, async (req, res) => {
       message: 'Session id is required',
       requestId: req.requestId
     });
+  }
+  if (storage.fallback) {
+    try {
+      const currentSession = touchAccountSessionFallback({ req, userId });
+      const currentHash = String(currentSession?.current_hash || '').trim();
+      const store = loadAccountFallbackStore();
+      const target = store.sessions.find((row) => (
+        String(row.id || '') === sessionId
+        && String(row.user_id || '') === userId
+      ));
+      if (!target) {
+        return res.status(404).json({
+          status: 'error',
+          code: 'SESSION_NOT_FOUND',
+          message: 'Session not found',
+          requestId: req.requestId
+        });
+      }
+      target.revoked_at = new Date().toISOString();
+      saveAccountFallbackStore(store);
+      const targetHash = String(target.session_token_hash || '').trim();
+      const isCurrent = Boolean(currentHash && targetHash && currentHash === targetHash);
+      log({
+        type: 'account_session_revoked_fallback',
+        requestId: req.requestId,
+        userId,
+        sessionId,
+        current: isCurrent
+      });
+      return res.json({
+        ok: true,
+        id: sessionId,
+        current: isCurrent
+      });
+    } catch (error) {
+      logError({
+        type: 'account_session_fallback_revoke_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        sessionId: sessionId || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'ACCOUNT_SESSIONS_WRITE_FAILED',
+        message: 'Failed to revoke session',
+        requestId: req.requestId
+      });
+    }
   }
   try {
     const currentSession = await touchAccountSession({ pool: storage.pool, req, userId });
@@ -7538,6 +8025,44 @@ app.post('/account/sessions/logout-all', requireUserAuth, async (req, res) => {
     });
   }
   const userId = String(req.user?.id || '').trim();
+  if (storage.fallback) {
+    try {
+      touchAccountSessionFallback({ req, userId });
+      const store = loadAccountFallbackStore();
+      const nowIso = new Date().toISOString();
+      let revokedCount = 0;
+      for (const row of store.sessions) {
+        if (String(row.user_id || '') !== userId) continue;
+        if (row.revoked_at) continue;
+        row.revoked_at = nowIso;
+        revokedCount += 1;
+      }
+      saveAccountFallbackStore(store);
+      log({
+        type: 'account_logout_all_fallback',
+        requestId: req.requestId,
+        userId,
+        revoked: revokedCount
+      });
+      return res.json({
+        ok: true,
+        revoked_count: revokedCount
+      });
+    } catch (error) {
+      logError({
+        type: 'account_logout_all_fallback_failed',
+        requestId: req.requestId,
+        userId: userId || null,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'ACCOUNT_SESSIONS_WRITE_FAILED',
+        message: 'Failed to logout all sessions',
+        requestId: req.requestId
+      });
+    }
+  }
   try {
     await touchAccountSession({ pool: storage.pool, req, userId });
     const result = await storage.pool.query(
@@ -7587,17 +8112,33 @@ app.post('/account/sessions/logout-all', requireUserAuth, async (req, res) => {
 });
 
 app.get('/account/billing', requireUserAuth, async (req, res) => {
+  const rawUserId = String(req.user?.id || '').trim();
   const promoStorage = getPromoStorageStatus();
   if (!promoStorage.ok) {
-    return res.status(promoStorage.statusCode).json({
-      status: 'error',
-      code: promoStorage.code,
-      message: promoStorage.message,
-      requestId: req.requestId
+    if (!ACCOUNT_STORAGE_FALLBACK_ENABLED) {
+      return res.status(promoStorage.statusCode).json({
+        status: 'error',
+        code: promoStorage.code,
+        message: promoStorage.message,
+        requestId: req.requestId
+      });
+    }
+    return res.json({
+      plan: {
+        tier: 'free',
+        title: 'Free',
+        status: 'active',
+        renews_at: null,
+        description: 'Fallback billing profile (promo storage unavailable)',
+        promo_only: false
+      },
+      active_benefits: [],
+      history: [],
+      fallback: true,
+      user_id: rawUserId || null
     });
   }
 
-  const rawUserId = String(req.user?.id || '').trim();
   const promoUserId = normalizePromoUserId(rawUserId);
   if (!promoUserId) {
     return res.status(400).json({
@@ -10083,7 +10624,22 @@ app.get('/jobs/:id', async (req, res) => {
   }
 });
 
-const port = process.env.PORT || 3000;
+app.use((err, req, res, next) => {
+  logError({
+    type: 'unhandled_http_error',
+    requestId: req.requestId || null,
+    path: req.path || null,
+    error: err?.message || 'unknown'
+  });
+  if (res.headersSent) return next(err);
+  return res.status(500).json({
+    status: 'error',
+    code: 'INTERNAL_ERROR',
+    message: 'Internal server error',
+    requestId: req.requestId
+  });
+});
+
 startAnalyticsFlushLoop();
 if (ANALYTICS_ENABLED && !CLICKHOUSE_URL && !canUseAnalyticsFallback()) {
   logError({ type: 'analytics_disabled_no_clickhouse_url' });
@@ -10106,26 +10662,16 @@ if (PROMO_CODES_ENABLED && DATABASE_URL) {
     });
   }
 }
-const server = app.listen(port, () => console.log(`API listening on ${port}`));
 
-app.use((err, req, res, next) => {
-  logError({
-    type: 'unhandled_http_error',
-    requestId: req.requestId || null,
-    path: req.path || null,
-    error: err?.message || 'unknown'
-  });
-  if (res.headersSent) return next(err);
-  return res.status(500).json({
-    status: 'error',
-    code: 'INTERNAL_ERROR',
-    message: 'Internal server error',
-    requestId: req.requestId
-  });
-});
+let server = null;
+if (!SERVERLESS_RUNTIME) {
+  const port = process.env.PORT || 3000;
+  server = app.listen(port, () => console.log(`API listening on ${port}`));
+}
 
 let shuttingDown = false;
 const shutdown = async (signal) => {
+  if (SERVERLESS_RUNTIME) return;
   if (shuttingDown) return;
   shuttingDown = true;
   log({ type: 'shutdown_start', signal });
@@ -10135,7 +10681,10 @@ const shutdown = async (signal) => {
   }, 15000);
   if (typeof forceTimer.unref === 'function') forceTimer.unref();
   try {
-    await new Promise((resolve) => server.close(resolve));
+    if (server) {
+      await new Promise((resolve) => server.close(resolve));
+      server = null;
+    }
     if (analyticsFlushTimer) {
       clearInterval(analyticsFlushTimer);
       analyticsFlushTimer = null;
@@ -10156,6 +10705,10 @@ const shutdown = async (signal) => {
   }
 };
 
-process.on('SIGINT', () => { shutdown('SIGINT'); });
-process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+if (!SERVERLESS_RUNTIME) {
+  process.on('SIGINT', () => { shutdown('SIGINT'); });
+  process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+}
+
+module.exports = app;
 

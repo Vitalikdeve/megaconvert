@@ -75,7 +75,7 @@ const isNetworkLikeError = (error) => {
 const isRetryableSignError = (error) => {
   if (isNetworkLikeError(error)) return true;
   if (error instanceof ConversionError) {
-    return ['UPLOAD_SIGN_FAILED', 'QUEUE_UNAVAILABLE', 'NETWORK_ERROR', 'TIMEOUT'].includes(error.code);
+    return ['UPLOAD_SIGN_FAILED', 'NETWORK_ERROR', 'TIMEOUT'].includes(error.code);
   }
   return false;
 };
@@ -83,7 +83,7 @@ const isRetryableSignError = (error) => {
 const isRetryableProxyError = (error) => {
   if (isNetworkLikeError(error)) return true;
   if (error instanceof ConversionError) {
-    return ['UPLOAD_PROXY_FAILED', 'QUEUE_UNAVAILABLE', 'NETWORK_ERROR', 'TIMEOUT'].includes(error.code);
+    return ['UPLOAD_PROXY_FAILED', 'NETWORK_ERROR', 'TIMEOUT'].includes(error.code);
   }
   return false;
 };
@@ -147,7 +147,7 @@ export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeo
     }
   }, {
     attempts: 4,
-    shouldRetry: (error) => ['NETWORK_ERROR', 'TIMEOUT', 'UPLOAD_SIGN_FAILED', 'QUEUE_UNAVAILABLE'].includes(error?.code)
+    shouldRetry: (error) => ['NETWORK_ERROR', 'TIMEOUT', 'UPLOAD_SIGN_FAILED'].includes(error?.code)
   });
 };
 

@@ -6,8 +6,8 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
   .trim()
   .replace(/\/+$/, '');
-const RETRYABLE_CREATE_CODES = new Set(['JOB_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);
-const RETRYABLE_STATUS_CODES = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);
+const RETRYABLE_CREATE_CODES = new Set(['JOB_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT']);
+const RETRYABLE_STATUS_CODES = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT']);
 
 const parseResponseBody = async (res) => {
   const contentType = String(res.headers.get('content-type') || '').toLowerCase();
@@ -180,7 +180,7 @@ export const pollJob = async ({
         () => getJob(apiBase, authHeaders, jobId, 25_000),
         {
           attempts: 5,
-          shouldRetry: (error) => ['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE'].includes(error?.code)
+          shouldRetry: (error) => ['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT'].includes(error?.code)
             || error?.name === 'AbortError'
         }
       );

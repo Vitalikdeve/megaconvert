@@ -31,7 +31,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const BOT_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || '').trim();
 const SUPPORT_CHAT_ID = Number(process.env.TELEGRAM_SUPPORT_CHAT_ID || 0);
-const API_BASE_URL = String(process.env.API_BASE_URL || 'https://megaconvert-api.fly.dev').trim();
+const API_BASE_URL = String(process.env.API_BASE_URL || 'https://megaconvert-web.vercel.app/api').trim();
 const INTERNAL_LINK_SECRET = String(process.env.INTERNAL_LINK_SECRET || '').trim();
 const INTERNAL_LINK_PORT = Math.max(1, Number(process.env.INTERNAL_LINK_PORT || 8788));
 const LINK_CODE_TTL_SEC = Math.max(60, Number(process.env.LINK_CODE_TTL_SEC || 600));
