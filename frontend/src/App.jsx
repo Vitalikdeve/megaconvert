@@ -3614,7 +3614,7 @@ export default function App() {
         UPLOAD_PROXY_FAILED: t.errorUploadFailed,
         JOB_CREATE_FAILED: t.errorStartJob,
         JOB_STATUS_FETCH: t.errorFetchStatus,
-        QUEUE_UNAVAILABLE: t.errorFetchStatus,
+        QUEUE_UNAVAILABLE: null,
         NETWORK_ERROR: t.errorFetchStatus,
         VERIFY_FAILED: t.errorVerificationFailed,
         CONVERSION_FAILED: t.errorConversionFailed,
@@ -3625,8 +3625,11 @@ export default function App() {
       setPipelineStage(null);
       setEtaSeconds(null);
       appendAssistantLog(`Pipeline: ошибка (${errorObj?.code || 'unknown'})`);
+      const queueUnavailableMessage = errorObj?.message || 'Queue is temporarily unavailable. Please try again in a few minutes.';
       const userMessage = errorObj?.code === 'CONVERSION_FAILED'
         ? (errorObj.message || t.errorConversionFailed)
+        : errorObj?.code === 'QUEUE_UNAVAILABLE'
+          ? queueUnavailableMessage
         : (errorMessages[errorObj?.code] || errorObj?.message || t.errorConversionFailedRetry);
       setErrorInfo(userMessage);
       track('job_complete', { tool: activeTab, jobId: createdJobId, success: false, error: errorObj?.code || errorObj?.message });

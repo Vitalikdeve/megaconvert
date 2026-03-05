@@ -8,6 +8,7 @@ const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '
 const COMPAT_FALLBACK_CODES = new Set([
   'UPLOAD_SIGN_FAILED',
   'UPLOAD_PROXY_FAILED',
+  'QUEUE_UNAVAILABLE',
   'NETWORK_ERROR',
   'TIMEOUT',
   'UNAUTHORIZED',
@@ -182,7 +183,7 @@ export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeo
     }
   }, {
     attempts: 4,
-    shouldRetry: (error) => ['NETWORK_ERROR', 'TIMEOUT', 'UPLOAD_SIGN_FAILED'].includes(error?.code)
+    shouldRetry: (error) => ['NETWORK_ERROR', 'TIMEOUT', 'UPLOAD_SIGN_FAILED', 'QUEUE_UNAVAILABLE'].includes(error?.code)
   });
 };
 
