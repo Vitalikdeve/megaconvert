@@ -10214,9 +10214,22 @@ app.post('/api/uploads/sign', async (req, res) => {
         Key: key,
         ContentType: contentType
       }), { expiresIn: 15 * 60 });
-      return res.json({ ok: true, key, uploadUrl, method: 'PUT', headers: { 'Content-Type': contentType } });
+      return res.json({
+        ok: true,
+        key,
+        inputKey: key,
+        uploadUrl,
+        method: 'PUT',
+        headers: { 'Content-Type': contentType }
+      });
     }
-    return res.json({ ok: true, key, uploadUrl: `/api/uploads/proxy?key=${encodeURIComponent(key)}`, method: 'POST' });
+    return res.json({
+      ok: true,
+      key,
+      inputKey: key,
+      uploadUrl: `/api/uploads/proxy?key=${encodeURIComponent(key)}`,
+      method: 'POST'
+    });
   } catch (error) {
     logError({ type: 'api_upload_sign_failed', requestId: req.requestId, apiKeyId: req.apiKey?.id || null, error: error?.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'UPLOAD_SIGN_FAILED', message: 'Failed to sign upload URL', requestId: req.requestId });
@@ -10327,6 +10340,7 @@ app.post('/api/convert', async (req, res) => {
     }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
     return res.status(202).json({
       ok: true,
+      jobId,
       job_id: jobId,
       status: 'queued',
       tool,
@@ -10382,13 +10396,17 @@ app.get('/api/jobs/:id', async (req, res) => {
         });
       });
     }
+    const errorMessage = state === 'failed' ? (job.failedReason || 'Conversion failed') : null;
     return res.json({
       ok: true,
+      jobId: req.params.id,
       job_id: req.params.id,
       status: state,
       progress,
+      downloadUrl,
       download_url: downloadUrl,
-      error: state === 'failed' ? (job.failedReason || 'Conversion failed') : null
+      error: errorMessage,
+      error_detail: errorMessage ? { message: errorMessage } : null
     });
   } catch (error) {
     if (isQueueUnavailableError(error)) {

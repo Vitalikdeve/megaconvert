@@ -9,6 +9,13 @@ const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '
 const RETRYABLE_CREATE_CODES = new Set(['JOB_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT']);
 const RETRYABLE_STATUS_CODES = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT']);
 
+const getCompatApiBase = (apiBase) => {
+  const normalized = String(apiBase || '').trim().replace(/\/+$/, '');
+  if (!normalized) return '';
+  if (/\/api$/i.test(normalized)) return normalized.slice(0, -4);
+  return '';
+};
+
 const parseResponseBody = async (res) => {
   const contentType = String(res.headers.get('content-type') || '').toLowerCase();
   if (contentType.includes('application/json')) {
@@ -80,7 +87,15 @@ const fetchCreateJob = async (apiBase, authHeaders, payload, timeoutMs) => {
   if (!isObject(data)) {
     throw new ConversionError('JOB_CREATE_FAILED', `Invalid job create response (${res.status}).`);
   }
-  return data;
+  const normalizedJobId = String(data.jobId || data.job_id || data.id || '').trim();
+  if (!normalizedJobId) {
+    throw new ConversionError('JOB_CREATE_FAILED', 'Job id is missing in create response.');
+  }
+  return {
+    ...data,
+    id: String(data.id || normalizedJobId),
+    jobId: normalizedJobId
+  };
 };
 
 const fetchJobStatus = async (apiBase, authHeaders, jobId, timeoutMs) => {
@@ -100,7 +115,17 @@ const fetchJobStatus = async (apiBase, authHeaders, jobId, timeoutMs) => {
     const suffix = rawSnippet ? ` (${rawSnippet})` : '';
     throw new ConversionError('JOB_STATUS_FETCH', `Invalid status response.${suffix}`);
   }
-  return data;
+  const normalizedStatus = {
+    ...data,
+    jobId: data.jobId || data.job_id || undefined,
+    downloadUrl: data.downloadUrl || data.download_url || null
+  };
+  if (typeof normalizedStatus.error === 'string' && normalizedStatus.error.trim()) {
+    normalizedStatus.error = { message: normalizedStatus.error.trim() };
+  } else if (!normalizedStatus.error && data.error_detail && typeof data.error_detail === 'object') {
+    normalizedStatus.error = data.error_detail;
+  }
+  return normalizedStatus;
 };
 
 export const createJob = async (apiBase, authHeaders, payload, timeoutMs = 20_000) => {
@@ -109,8 +134,17 @@ export const createJob = async (apiBase, authHeaders, payload, timeoutMs = 20_00
       try {
         return await fetchCreateJob(apiBase, authHeaders, payload, timeoutMs);
       } catch (error) {
-        if (!shouldTryDirectFallback(apiBase) || !isRetryableCreateError(error)) {
-          throw error;
+        const compatBase = getCompatApiBase(apiBase);
+        let fallbackError = error;
+        if (compatBase && compatBase !== apiBase && isRetryableCreateError(error)) {
+          try {
+            return await fetchCreateJob(compatBase, authHeaders, payload, timeoutMs);
+          } catch (compatError) {
+            fallbackError = compatError;
+          }
+        }
+        if (!shouldTryDirectFallback(apiBase) || !isRetryableCreateError(fallbackError)) {
+          throw fallbackError;
         }
         return await fetchCreateJob(DIRECT_API_FALLBACK, authHeaders, payload, timeoutMs);
       }
@@ -132,8 +166,17 @@ export const getJob = async (apiBase, authHeaders, jobId, timeoutMs = 15_000) =>
     try {
       return await fetchJobStatus(apiBase, authHeaders, jobId, timeoutMs);
     } catch (error) {
-      if (!shouldTryDirectFallback(apiBase) || !isRetryableStatusError(error)) {
-        throw error;
+      const compatBase = getCompatApiBase(apiBase);
+      let fallbackError = error;
+      if (compatBase && compatBase !== apiBase && isRetryableStatusError(error)) {
+        try {
+          return await fetchJobStatus(compatBase, authHeaders, jobId, timeoutMs);
+        } catch (compatError) {
+          fallbackError = compatError;
+        }
+      }
+      if (!shouldTryDirectFallback(apiBase) || !isRetryableStatusError(fallbackError)) {
+        throw fallbackError;
       }
       return await fetchJobStatus(DIRECT_API_FALLBACK, authHeaders, jobId, timeoutMs);
     }

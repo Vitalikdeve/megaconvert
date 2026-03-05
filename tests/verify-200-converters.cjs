@@ -119,6 +119,16 @@ const getArg = (args, name) => {
   return null;
 };
 
+const parsePositiveIntArg = (args, name, defaultValue) => {
+  const raw = getArg(args, name);
+  if (raw == null) return defaultValue;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return value;
+};
+
 const mockHelpers = {
   exec: async (cmd, args = [], options = {}) => {
     const cwd = options.cwd || process.cwd();
@@ -211,33 +221,40 @@ const mockHelpers = {
   buildAudioArgs: () => ({ pre: [], post: [] })
 };
 
-const verifyWorkerCoverage = async (toolDefs) => {
+const verifyWorkerCoverage = async (toolDefs, iterations = 1) => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-tool-check-'));
   const failures = [];
   try {
-    for (const tool of toolDefs) {
-      const workDir = path.join(tmpRoot, tool.id.replace(/[^a-z0-9_-]/gi, '_'));
-      fs.mkdirSync(workDir, { recursive: true });
-      try {
-        const inputPath = makeInputFile(workDir, tool);
-        const outputs = await convertTool({
-          tool: tool.id,
-          inputPath,
-          workDir,
-          settings: {},
-          meta: tool,
-          helpers: mockHelpers
-        });
-        if (!Array.isArray(outputs) || outputs.length === 0) {
-          failures.push({ id: tool.id, reason: 'empty_output' });
-          continue;
+    for (let run = 1; run <= iterations; run += 1) {
+      for (const tool of toolDefs) {
+        const safeToolId = tool.id.replace(/[^a-z0-9_-]/gi, '_');
+        const workDir = path.join(tmpRoot, `${safeToolId}_run_${run}`);
+        fs.mkdirSync(workDir, { recursive: true });
+        try {
+          const inputPath = makeInputFile(workDir, tool);
+          const outputs = await convertTool({
+            tool: tool.id,
+            inputPath,
+            workDir,
+            settings: {},
+            meta: tool,
+            helpers: mockHelpers
+          });
+          if (!Array.isArray(outputs) || outputs.length === 0) {
+            failures.push({ id: tool.id, run, reason: 'empty_output' });
+            continue;
+          }
+          const missing = outputs.filter((outPath) => !fs.existsSync(outPath));
+          if (missing.length) {
+            failures.push({ id: tool.id, run, reason: 'missing_output', missing });
+          }
+        } catch (error) {
+          failures.push({ id: tool.id, run, reason: error.message || 'unknown_error' });
+        } finally {
+          try {
+            fs.rmSync(workDir, { recursive: true, force: true });
+          } catch {}
         }
-        const missing = outputs.filter((outPath) => !fs.existsSync(outPath));
-        if (missing.length) {
-          failures.push({ id: tool.id, reason: 'missing_output', missing });
-        }
-      } catch (error) {
-        failures.push({ id: tool.id, reason: error.message || 'unknown_error' });
       }
     }
   } finally {
@@ -249,6 +266,7 @@ const verifyWorkerCoverage = async (toolDefs) => {
 };
 
 const check = async () => {
+  const iterations = parsePositiveIntArg(process.argv, '--iterations', 1);
   const sharedDefs = loadToolDefsFromShared();
   const workerDefs = loadToolDefsFromCommonJs('worker/shared/tools.js');
   const apiDefs = loadToolDefsFromCommonJs('api/shared/tools.js');
@@ -310,7 +328,7 @@ const check = async () => {
     issues.push(`Legacy tool->slug mappings point to unknown slugs: ${JSON.stringify(invalidLegacyToolSlug)}`);
   }
 
-  const workerFailures = await verifyWorkerCoverage(sharedDefs);
+  const workerFailures = await verifyWorkerCoverage(sharedDefs, iterations);
   if (workerFailures.length) {
     issues.push(`Worker dry-run failures: ${JSON.stringify(workerFailures)}`);
   }
@@ -325,6 +343,7 @@ const check = async () => {
   }
 
   console.log('VERIFY_200_CONVERTERS_OK');
+  console.log(`iterations=${iterations}`);
   console.log(`tools=${sharedDefs.length} conversions=${conversions.length} processors=${processors.length}`);
   console.log(`pages=${pageSlugs.size} legacyAliases=${legacySlugs.size}`);
 };

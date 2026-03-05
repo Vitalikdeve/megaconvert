@@ -71,6 +71,7 @@ const referredByMetaKey = (userId) => `referredBy:${userId}`;
 const referralCountMetaKey = (userId) => `referralCount:${userId}`;
 const CONVERTER_POLL_MS = 2500;
 const CONVERTER_MAX_POLLS = 140;
+const CONVERTER_MAX_TRANSIENT_POLL_ERRORS = 6;
 const CONVERTERS_PER_PAGE = 12;
 const aiCooldownUntil = new Map();
 const aiHistoryMetaKey = (userId) => `aiHistory:${userId}`;
@@ -754,8 +755,21 @@ const deriveOutputFileName = (converter, sourceName, downloadUrl, outputMeta) =>
 
 const waitForConversionResult = async ({ apiBaseUrl, jobId, onProgress }) => {
   let previousProgress = -1;
+  let transientFailures = 0;
   for (let i = 0; i < CONVERTER_MAX_POLLS; i += 1) {
-    const status = await fetchConversionJob({ apiBaseUrl, jobId });
+    let status = null;
+    try {
+      status = await fetchConversionJob({ apiBaseUrl, jobId });
+      transientFailures = 0;
+    } catch (error) {
+      transientFailures += 1;
+      if (transientFailures >= CONVERTER_MAX_TRANSIENT_POLL_ERRORS) {
+        throw error;
+      }
+      const backoff = Math.min(10000, CONVERTER_POLL_MS + (transientFailures * 750));
+      await waitMs(backoff);
+      continue;
+    }
     const state = String(status?.status || '').toLowerCase();
     const progress = Number(status?.progress || 0);
     if (Number.isFinite(progress) && progress !== previousProgress) {
@@ -1014,11 +1028,13 @@ async function runConversionWithInput(ctx, converter, input) {
       inputSize: inputBuffer.length,
       settings: {}
     });
+    const createdJobId = String(created?.jobId || created?.job_id || created?.id || '').trim();
+    if (!createdJobId) throw new Error('Job creation succeeded but job id is missing');
 
     let lastProgressNotice = -1;
     const done = await waitForConversionResult({
       apiBaseUrl: API_BASE_URL,
-      jobId: created.jobId,
+      jobId: createdJobId,
       onProgress: async (progress) => {
         const rounded = Math.round(Number(progress || 0));
         if (rounded >= 10 && rounded < 100 && (rounded - lastProgressNotice) >= 20) {

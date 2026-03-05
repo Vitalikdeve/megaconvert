@@ -5,6 +5,16 @@ import { retry } from '../infra/retries';
 const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
   .trim()
   .replace(/\/+$/, '');
+const COMPAT_FALLBACK_CODES = new Set([
+  'UPLOAD_SIGN_FAILED',
+  'UPLOAD_PROXY_FAILED',
+  'NETWORK_ERROR',
+  'TIMEOUT',
+  'UNAUTHORIZED',
+  'API_KEY_REQUIRED',
+  'NOT_FOUND',
+  'INTERNAL_ERROR'
+]);
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isLoopbackHost = (host) => host === 'localhost' || host === '127.0.0.1' || host === '::1';
@@ -41,6 +51,13 @@ const shouldTryDirectFallback = (apiBase) => {
   return base.startsWith('/');
 };
 
+const getCompatApiBase = (apiBase) => {
+  const normalized = String(apiBase || '').trim().replace(/\/+$/, '');
+  if (!normalized) return '';
+  if (/\/api$/i.test(normalized)) return normalized.slice(0, -4);
+  return '';
+};
+
 const shouldPreferProxyUpload = () => {
   try {
     const mode = String(import.meta.env.VITE_UPLOAD_MODE || '').trim().toLowerCase();
@@ -75,7 +92,7 @@ const isNetworkLikeError = (error) => {
 const isRetryableSignError = (error) => {
   if (isNetworkLikeError(error)) return true;
   if (error instanceof ConversionError) {
-    return ['UPLOAD_SIGN_FAILED', 'NETWORK_ERROR', 'TIMEOUT'].includes(error.code);
+    return COMPAT_FALLBACK_CODES.has(error.code);
   }
   return false;
 };
@@ -83,7 +100,7 @@ const isRetryableSignError = (error) => {
 const isRetryableProxyError = (error) => {
   if (isNetworkLikeError(error)) return true;
   if (error instanceof ConversionError) {
-    return ['UPLOAD_PROXY_FAILED', 'NETWORK_ERROR', 'TIMEOUT'].includes(error.code);
+    return COMPAT_FALLBACK_CODES.has(error.code);
   }
   return false;
 };
@@ -124,7 +141,16 @@ const fetchSignedUpload = async (apiBase, authHeaders, file, nameOverride, timeo
   if (!isObject(data)) {
     throw new ConversionError('UPLOAD_SIGN_FAILED', `Invalid upload sign response (${res.status}).`);
   }
-  return data;
+  const inputKey = String(data.inputKey || data.key || '').trim();
+  const uploadUrl = String(data.uploadUrl || data.url || '').trim();
+  if (!inputKey || !uploadUrl) {
+    throw new ConversionError('UPLOAD_SIGN_FAILED', `Upload sign response is incomplete (${res.status}).`);
+  }
+  return {
+    ...data,
+    inputKey,
+    uploadUrl
+  };
 };
 
 export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeoutMs = 15_000) => {
@@ -133,8 +159,17 @@ export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeo
       try {
         return await fetchSignedUpload(apiBase, authHeaders, file, nameOverride, timeoutMs);
       } catch (error) {
-        if (!shouldTryDirectFallback(apiBase) || !isRetryableSignError(error)) {
-          throw error;
+        const compatBase = getCompatApiBase(apiBase);
+        let fallbackError = error;
+        if (compatBase && compatBase !== apiBase && isRetryableSignError(error)) {
+          try {
+            return await fetchSignedUpload(compatBase, authHeaders, file, nameOverride, timeoutMs);
+          } catch (compatError) {
+            fallbackError = compatError;
+          }
+        }
+        if (!shouldTryDirectFallback(apiBase) || !isRetryableSignError(fallbackError)) {
+          throw fallbackError;
         }
         return await fetchSignedUpload(DIRECT_API_FALLBACK, authHeaders, file, nameOverride, timeoutMs);
       }
@@ -179,8 +214,18 @@ const proxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs) => {
     try {
       await fetchProxyUpload(apiBase, authHeaders, file, signed, timeoutMs);
     } catch (error) {
-      if (!shouldTryDirectFallback(apiBase) || !isRetryableProxyError(error)) {
-        throw error;
+      const compatBase = getCompatApiBase(apiBase);
+      let fallbackError = error;
+      if (compatBase && compatBase !== apiBase && isRetryableProxyError(error)) {
+        try {
+          await fetchProxyUpload(compatBase, authHeaders, file, signed, timeoutMs);
+          return;
+        } catch (compatError) {
+          fallbackError = compatError;
+        }
+      }
+      if (!shouldTryDirectFallback(apiBase) || !isRetryableProxyError(fallbackError)) {
+        throw fallbackError;
       }
       await fetchProxyUpload(DIRECT_API_FALLBACK, authHeaders, file, signed, timeoutMs);
     }

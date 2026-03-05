@@ -7,6 +7,13 @@ const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '
   .trim()
   .replace(/\/+$/, '');
 
+const getCompatApiBase = (apiBase) => {
+  const normalized = String(apiBase || '').trim().replace(/\/+$/, '');
+  if (!normalized) return '';
+  if (/\/api$/i.test(normalized)) return normalized.slice(0, -4);
+  return '';
+};
+
 export const b64ToBytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 export const bytesToB64 = (bytes) => btoa(String.fromCharCode(...bytes));
 
@@ -79,11 +86,24 @@ export const createSession = async (apiBase, authHeaders, { timeoutMs = 15_000, 
       try {
         return await fetchSession(apiBase);
       } catch (error) {
-        if (!shouldTryDirectFallback(apiBase)) throw error;
         if (!(error instanceof ConversionError)) throw error;
-        if (!['SESSION_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE'].includes(error.code)) {
+        if (!['SESSION_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE', 'UNAUTHORIZED', 'API_KEY_REQUIRED', 'NOT_FOUND'].includes(error.code)) {
           throw error;
         }
+
+        const compatBase = getCompatApiBase(apiBase);
+        if (compatBase && compatBase !== apiBase) {
+          try {
+            return await fetchSession(compatBase);
+          } catch (compatError) {
+            if (!(compatError instanceof ConversionError)) throw compatError;
+            if (!['SESSION_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE', 'UNAUTHORIZED', 'API_KEY_REQUIRED', 'NOT_FOUND'].includes(compatError.code)) {
+              throw compatError;
+            }
+          }
+        }
+
+        if (!shouldTryDirectFallback(apiBase)) throw error;
         return await fetchSession(DIRECT_API_FALLBACK);
       }
     } catch (error) {
