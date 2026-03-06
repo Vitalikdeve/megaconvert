@@ -5010,15 +5010,22 @@ function normalizeAiFormatToken(value) {
 }
 
 function parseAiJsonObject(rawContent) {
+  if (rawContent && typeof rawContent === 'object' && !Array.isArray(rawContent)) {
+    return rawContent;
+  }
   const raw = String(rawContent || '').trim();
   if (!raw) return null;
+  const sanitized = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
   try {
-    return JSON.parse(raw);
+    return JSON.parse(sanitized);
   } catch {
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
+    const start = sanitized.indexOf('{');
+    const end = sanitized.lastIndexOf('}');
     if (start < 0 || end <= start) return null;
-    const candidate = raw.slice(start, end + 1);
+    const candidate = sanitized.slice(start, end + 1);
     try {
       return JSON.parse(candidate);
     } catch {
@@ -5035,6 +5042,123 @@ function normalizeAiIntentPayload(rawIntent) {
   const from = normalizeAiFormatToken(payload.from);
   const to = normalizeAiFormatToken(payload.to);
   return { intent, from, to };
+}
+
+function normalizeAiProviderText(rawValue) {
+  if (typeof rawValue === 'string') return rawValue.trim();
+  if (Array.isArray(rawValue)) {
+    return rawValue
+      .map((entry) => normalizeAiProviderText(entry))
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+  }
+  if (rawValue && typeof rawValue === 'object') {
+    const text = String(
+      rawValue.text
+      || rawValue.content
+      || rawValue.arguments
+      || rawValue.output_text
+      || ''
+    ).trim();
+    if (text) return text;
+    try {
+      return JSON.stringify(rawValue);
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+function collectAiIntentCandidates(providerPayload) {
+  const candidates = [];
+  const pushCandidate = (value) => {
+    if (value === null || value === undefined) return;
+    candidates.push(value);
+  };
+
+  const choice = asObject(providerPayload?.choices?.[0] || {});
+  const message = asObject(choice.message || {});
+  pushCandidate(message.content);
+  pushCandidate(choice.text);
+  const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  for (const toolCall of toolCalls) {
+    pushCandidate(toolCall?.function?.arguments);
+    pushCandidate(toolCall?.function?.parsed_arguments);
+  }
+
+  const output = Array.isArray(providerPayload?.output) ? providerPayload.output : [];
+  for (const item of output) {
+    pushCandidate(item?.content);
+    pushCandidate(item?.text);
+  }
+  pushCandidate(providerPayload?.output_text);
+
+  return candidates
+    .map((value) => normalizeAiProviderText(value))
+    .filter(Boolean);
+}
+
+function extractAiIntentObject(providerPayload) {
+  const candidates = collectAiIntentCandidates(providerPayload);
+  for (const candidate of candidates) {
+    const parsed = parseAiJsonObject(candidate);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function getAiProviderErrorMessage(providerPayload, providerResponse) {
+  const raw = providerPayload?.error?.message
+    || providerPayload?.message
+    || providerResponse?.statusText
+    || 'provider_request_failed';
+  return String(raw || 'provider_request_failed').trim() || 'provider_request_failed';
+}
+
+function isAiResponseFormatUnsupported(statusCode, errorMessage) {
+  const status = Number(statusCode || 0);
+  if (status !== 400 && status !== 422) return false;
+  const message = String(errorMessage || '').toLowerCase();
+  if (!message) return false;
+  return (
+    message.includes('response_format')
+    || message.includes('json_object')
+    || message.includes('json mode')
+    || message.includes('json output')
+  );
+}
+
+async function requestAiIntentFromGroq(text, { includeResponseFormat = true } = {}) {
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
+  try {
+    const payload = {
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: AI_PARSE_INTENT_SYSTEM_PROMPT },
+        { role: 'user', content: text }
+      ],
+      temperature: 0
+    };
+    if (includeResponseFormat) {
+      payload.response_format = { type: 'json_object' };
+    }
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    const body = await response.json().catch(() => null);
+    return { response, body };
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 }
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp', 'tif', 'tiff', 'svg', 'ico']);
@@ -9942,31 +10066,16 @@ app.post('/ai/parse-intent', async (req, res) => {
       });
     }
 
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
-    let providerResponse = null;
-    let providerPayload = null;
-    try {
-      providerResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${GROQ_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          messages: [
-            { role: 'system', content: AI_PARSE_INTENT_SYSTEM_PROMPT },
-            { role: 'user', content: text }
-          ],
-          temperature: 0,
-          response_format: { type: 'json_object' }
-        }),
-        signal: controller.signal
-      });
-      providerPayload = await providerResponse.json().catch(() => null);
-    } finally {
-      clearTimeout(timeoutHandle);
+    let providerAttempt = await requestAiIntentFromGroq(text, { includeResponseFormat: true });
+    let providerResponse = providerAttempt?.response || null;
+    let providerPayload = providerAttempt?.body || null;
+    let providerError = getAiProviderErrorMessage(providerPayload, providerResponse);
+
+    if ((!providerResponse || !providerResponse.ok) && isAiResponseFormatUnsupported(providerResponse?.status, providerError)) {
+      providerAttempt = await requestAiIntentFromGroq(text, { includeResponseFormat: false });
+      providerResponse = providerAttempt?.response || null;
+      providerPayload = providerAttempt?.body || null;
+      providerError = getAiProviderErrorMessage(providerPayload, providerResponse);
     }
 
     if (!providerResponse || !providerResponse.ok) {
@@ -9974,28 +10083,35 @@ app.post('/ai/parse-intent', async (req, res) => {
         type: 'ai_parse_intent_provider_failed',
         requestId: req.requestId,
         status: providerResponse?.status || null,
-        error: providerPayload?.error?.message || providerPayload?.message || 'provider_request_failed'
+        error: providerError
       });
-      return res.status(502).json({
-        status: 'error',
-        code: 'AI_PROVIDER_FAILED',
-        message: 'Failed to parse intent via AI provider',
+      const fallbackIntent = normalizeAiIntentPayload({});
+      return res.json({
+        ok: true,
+        intent: {
+          ...fallbackIntent,
+          tool: null
+        },
+        providerWarning: providerError,
         requestId: req.requestId
       });
     }
 
-    const content = String(providerPayload?.choices?.[0]?.message?.content || '').trim();
-    const parsedRaw = parseAiJsonObject(content);
+    const parsedRaw = extractAiIntentObject(providerPayload);
     if (!parsedRaw) {
       logError({
         type: 'ai_parse_intent_invalid_json',
         requestId: req.requestId,
-        content: content.slice(0, 300)
+        content: normalizeAiProviderText(providerPayload?.choices?.[0]?.message?.content).slice(0, 300)
       });
-      return res.status(502).json({
-        status: 'error',
-        code: 'AI_PROVIDER_INVALID_RESPONSE',
-        message: 'AI provider returned invalid JSON',
+      const fallbackIntent = normalizeAiIntentPayload({});
+      return res.json({
+        ok: true,
+        intent: {
+          ...fallbackIntent,
+          tool: null
+        },
+        providerWarning: 'invalid_json_response',
         requestId: req.requestId
       });
     }

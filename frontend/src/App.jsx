@@ -4621,17 +4621,27 @@ export default function App() {
     appendAssistantLog('AI: ИИ анализирует запрос...');
 
     try {
-      const response = await fetch(`${API_BASE}/ai/parse-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: promptText })
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.message || 'Не удалось разобрать запрос.');
+      let parsedIntent = null;
+      try {
+        const response = await fetch(`${API_BASE}/ai/parse-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: promptText })
+        });
+        const payload = await response.json().catch(() => null);
+        if (response.ok) {
+          parsedIntent = payload?.intent || null;
+          if (payload?.providerWarning) {
+            appendAssistantLog(`AI: провайдер вернул предупреждение (${payload.providerWarning}), применяем fallback-роутинг`);
+          }
+        } else {
+          appendAssistantLog(`AI: провайдер недоступен (${payload?.message || response.status}), применяем fallback-роутинг`);
+        }
+      } catch (providerError) {
+        appendAssistantLog(`AI: провайдер недоступен (${String(providerError?.message || 'network_error')}), применяем fallback-роутинг`);
       }
 
-      const route = resolveAiIntentRoute(payload?.intent, file, promptText);
+      const route = resolveAiIntentRoute(parsedIntent, file, promptText);
       if (!route?.toolId) {
         throw new Error('Не удалось определить поддерживаемую пару форматов. Уточните запрос.');
       }
