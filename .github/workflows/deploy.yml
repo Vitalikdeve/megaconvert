@@ -65,6 +65,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SERVER_APP_DIR: ${{ secrets.SERVER_APP_DIR }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ secrets.GROQ_MODEL }}
+          GROQ_TIMEOUT_MS: ${{ secrets.GROQ_TIMEOUT_MS }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -72,7 +75,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           timeout: 60m
           command_timeout: 60m
-          envs: GITHUB_TOKEN,SERVER_APP_DIR
+          envs: GITHUB_TOKEN,SERVER_APP_DIR,GROQ_API_KEY,GROQ_MODEL,GROQ_TIMEOUT_MS
           script: |
             set -euo pipefail
 
@@ -83,6 +86,14 @@ jobs:
             git fetch origin main
             git checkout main
             git pull --ff-only origin main
+
+            if [ -z "${GROQ_API_KEY:-}" ]; then
+              echo "GROQ_API_KEY secret is empty"
+              exit 1
+            fi
+            export GROQ_API_KEY="$GROQ_API_KEY"
+            export GROQ_MODEL="${GROQ_MODEL:-llama3-8b-8192}"
+            export GROQ_TIMEOUT_MS="${GROQ_TIMEOUT_MS:-15000}"
 
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u vitalikdeve --password-stdin
             docker system prune -f

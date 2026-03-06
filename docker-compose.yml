@@ -22,6 +22,9 @@ services:
       - CORS_ORIGIN=https://megaconvert-web.vercel.app,https://35.202.253.153.nip.io,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174
       - ALLOW_ALL_HTTPS_ORIGINS=true
       - DATABASE_URL=postgresql://megaconvert:megaconvert@postgres:5432/megaconvert
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-llama3-8b-8192}
+      - GROQ_TIMEOUT_MS=${GROQ_TIMEOUT_MS:-15000}
       - PROMO_CODES_ENABLED=1
       - ADMIN_PASSWORD=AdminMega2026!
       - ADMIN_JWT_SECRET=superconvert_admin_jwt_secret_prod_2026_change_me
