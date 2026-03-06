@@ -85,6 +85,7 @@ jobs:
             git pull --ff-only origin main
 
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u vitalikdeve --password-stdin
+            docker system prune -af
             docker compose pull api worker caddy
             docker compose up -d api worker caddy
 
