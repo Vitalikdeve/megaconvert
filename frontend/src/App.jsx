@@ -4584,9 +4584,12 @@ export default function App() {
 
     for (const from of fromCandidates) {
       for (const to of toCandidates) {
-        const toolId = resolveToolByFormats(from, to);
-        if (toolId) {
-          return { toolId, from, to };
+        const resolvedTool = resolveToolByFormats(from, to);
+        const resolvedToolId = typeof resolvedTool === 'string'
+          ? resolvedTool
+          : String(resolvedTool?.id || '').trim();
+        if (resolvedToolId) {
+          return { toolId: resolvedToolId, from, to };
         }
       }
     }
