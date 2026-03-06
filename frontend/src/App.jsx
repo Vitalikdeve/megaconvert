@@ -45,6 +45,7 @@ import ShareButton from './features/sharing/ShareButton.jsx';
 import HistoryList from './features/history/HistoryList.jsx';
 import BatchUploader from './features/batch/BatchUploader.jsx';
 import NextActions from './features/recommendations/NextActions.jsx';
+import SmartAssistantPanel from './features/ai/SmartAssistantPanel.jsx';
 import { getSmartTips } from './features/tips/TipsEngine.js';
 import AdminApp from './admin/AdminApp.tsx';
 
@@ -1294,23 +1295,27 @@ export default function App() {
   const [showCookie, setShowCookie] = useState(true);
   const [etaSeconds, setEtaSeconds] = useState(null);
   const [smartSuggestion, setSmartSuggestion] = useState(null);
-  const [assistantState, setAssistantState] = useState('idle');
-  const [assistantInsights, setAssistantInsights] = useState([]);
+  const [_assistantState, setAssistantState] = useState('idle');
+  const [_assistantInsights, setAssistantInsights] = useState([]);
   const [assistantActions, setAssistantActions] = useState([]);
   const [assistantEntry, setAssistantEntry] = useState('');
   const [assistantMeta, setAssistantMeta] = useState({ insight: '', structure: '', quality: '', sizeReduction: null });
   const [assistantSuggestions, setAssistantSuggestions] = useState({ edit: '', web: '', small: '' });
-  const [assistantLearningHint, setAssistantLearningHint] = useState('');
+  const [_assistantLearningHint, setAssistantLearningHint] = useState('');
   const [assistantAutomationHint, setAssistantAutomationHint] = useState('');
-  const [assistantExplanations, setAssistantExplanations] = useState([]);
+  const [_assistantExplanations, setAssistantExplanations] = useState([]);
   const [assistantPredictiveActions, setAssistantPredictiveActions] = useState([]);
-  const [assistantWorkflow, setAssistantWorkflow] = useState([]);
+  const [_assistantWorkflow, setAssistantWorkflow] = useState([]);
   const [assistantContextSummary, setAssistantContextSummary] = useState(null);
   const [aiMode, setAiMode] = useState('balanced');
   const [aiPriority, setAiPriority] = useState('quality');
   const [aiTargetFormat, setAiTargetFormat] = useState('auto');
-  const [assistantNotice, setAssistantNotice] = useState('');
-  const [assistantExecutionLog, setAssistantExecutionLog] = useState([]);
+  const [aiAssistantPrompt, setAiAssistantPrompt] = useState('');
+  const [aiAssistantStage, setAiAssistantStage] = useState('idle');
+  const [aiAssistantError, setAiAssistantError] = useState('');
+  const [aiAssistantIntent, setAiAssistantIntent] = useState(null);
+  const [_assistantNotice, setAssistantNotice] = useState('');
+  const [_assistantExecutionLog, setAssistantExecutionLog] = useState([]);
   const [shareLink, setShareLink] = useState('');
   const [shareExpiryPreset, setShareExpiryPreset] = useState('seven_days');
   const [privacyDeleteAfter, setPrivacyDeleteAfter] = useState(false);
@@ -1982,6 +1987,9 @@ export default function App() {
     }
     setFiles(selected);
     setFile(selected[0] || null);
+    setAiAssistantError('');
+    setAiAssistantStage('idle');
+    setAiAssistantIntent(null);
     if (selected[0]) {
       const suggested = inferToolFromName(selected[0].name);
       if (suggested) setSmartSuggestion(suggested);
@@ -4167,6 +4175,10 @@ export default function App() {
     setAiMode('balanced');
     setAiPriority('quality');
     setAiTargetFormat('auto');
+    setAiAssistantPrompt('');
+    setAiAssistantStage('idle');
+    setAiAssistantError('');
+    setAiAssistantIntent(null);
     setShareHint('');
     setShareLink('');
     setPrivacyDeleteAfter(false);
@@ -4379,15 +4391,26 @@ export default function App() {
     return false;
   };
 
-  const handleProcess = async () => {
-    if (!file && files.length === 0) { scrollToConverter(); openFilePicker(); return; }
-    if (status === 'processing') return;
+  const handleProcess = async ({ toolId: preferredToolId = '', initialStage = '' } = {}) => {
+    if (!file && files.length === 0) {
+      scrollToConverter();
+      openFilePicker();
+      return { ok: false, code: 'MISSING_FILE', message: t.labelDropHere };
+    }
+    if (status === 'processing') {
+      return { ok: false, code: 'PROCESSING_IN_PROGRESS', message: t.processing };
+    }
+    const normalizedToolId = String(preferredToolId || '').trim();
+    const targetToolId = toolIds.has(normalizedToolId) ? normalizedToolId : activeTab;
+    if (!toolIds.has(targetToolId)) {
+      return { ok: false, code: 'INVALID_TOOL', message: 'Selected conversion tool is unavailable.' };
+    }
 
     setShareHint('');
     setShareLink('');
     setStatus('processing');
     setProgress(5);
-    setPipelineStage(stageLabels.validate);
+    setPipelineStage(String(initialStage || '').trim() || stageLabels.validate);
     setErrorInfo(null);
     setDownloadUrlSafe(null);
     setDownloadFileName('');
@@ -4418,11 +4441,11 @@ export default function App() {
     };
 
     jobStartRef.current = Date.now();
-    track('job_start', { tool: activeTab, batch: batchMode, count: uploadFiles.length });
+    track('job_start', { tool: targetToolId, batch: batchMode, count: uploadFiles.length });
 
     try {
       const result = await runConversion({
-        toolId: activeTab,
+        toolId: targetToolId,
         files: uploadFiles,
         batchMode,
         settings,
@@ -4443,7 +4466,7 @@ export default function App() {
             createdJobId = jobId;
             appendAssistantLog(`Job created: ${jobId}`);
             setLastJobId(jobId);
-            setRecentJobs((jobs) => [{ id: jobId, tool: activeTab, ts: Date.now(), status: 'processing' }, ...jobs].slice(0, 12));
+            setRecentJobs((jobs) => [{ id: jobId, tool: targetToolId, ts: Date.now(), status: 'processing' }, ...jobs].slice(0, 12));
             encryptionKey = encryption?.key || null;
             if (encryptionKey) encryptionContextRef.current.set(jobId, { key: encryptionKey, meta: null });
           },
@@ -4479,7 +4502,8 @@ export default function App() {
       setPipelineStage(stageLabels.cleanup);
       setEtaSeconds(null);
       appendAssistantLog('Pipeline: завершено успешно');
-      track('job_complete', { tool: activeTab, jobId: result.jobId, success: true });
+      track('job_complete', { tool: targetToolId, jobId: result.jobId, success: true });
+      return { ok: true, jobId: result.jobId || createdJobId || null, toolId: targetToolId };
     } catch (e) {
       let errorObj = e;
       const recoverableCodes = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE', 'VERIFY_FAILED']);
@@ -4501,8 +4525,8 @@ export default function App() {
           setPipelineStage(stageLabels.cleanup);
           setEtaSeconds(null);
           appendAssistantLog('Pipeline: восстановлено после сети, успешно завершено');
-          track('job_complete', { tool: activeTab, jobId: createdJobId, success: true, recovered: true });
-          return;
+          track('job_complete', { tool: targetToolId, jobId: createdJobId, success: true, recovered: true });
+          return { ok: true, jobId: createdJobId, toolId: targetToolId, recovered: true };
         }
         if (recovered?.status === 'failed') {
           errorObj = { ...errorObj, code: 'CONVERSION_FAILED', message: recovered.error?.message || errorObj?.message };
@@ -4539,7 +4563,96 @@ export default function App() {
           ? queueUnavailableMessage
         : (errorMessages[errorObj?.code] || errorObj?.message || t.errorConversionFailedRetry);
       setErrorInfo(userMessage);
-      track('job_complete', { tool: activeTab, jobId: createdJobId, success: false, error: errorObj?.code || errorObj?.message });
+      track('job_complete', { tool: targetToolId, jobId: createdJobId, success: false, error: errorObj?.code || errorObj?.message });
+      return { ok: false, code: errorObj?.code || 'CONVERSION_FAILED', message: userMessage, toolId: targetToolId };
+    }
+  };
+
+  const resolveAiIntentRoute = useCallback((intentPayload, selectedFile, promptText) => {
+    const intent = intentPayload && typeof intentPayload === 'object' ? intentPayload : {};
+    const fileExt = normalizeFormatToken(String(selectedFile?.name || '').split('.').pop());
+    const parsedFallback = parseFormatQuery(promptText);
+    const fromCandidates = [
+      normalizeFormatToken(intent.from),
+      normalizeFormatToken(parsedFallback?.from),
+      fileExt
+    ].filter(Boolean);
+    const toCandidates = [
+      normalizeFormatToken(intent.to),
+      normalizeFormatToken(parsedFallback?.to)
+    ].filter(Boolean);
+
+    for (const from of fromCandidates) {
+      for (const to of toCandidates) {
+        const toolId = resolveToolByFormats(from, to);
+        if (toolId) {
+          return { toolId, from, to };
+        }
+      }
+    }
+
+    const hintedTool = String(intent.tool || intent.toolId || intent.tool_id || '').trim();
+    if (hintedTool && toolIds.has(hintedTool)) {
+      const toolMeta = tools.find((tool) => tool.id === hintedTool) || null;
+      return {
+        toolId: hintedTool,
+        from: normalizeFormatToken(intent.from) || toolMeta?.fromFormats?.[0] || fileExt || null,
+        to: normalizeFormatToken(intent.to) || toolMeta?.toFormats?.[0] || null
+      };
+    }
+
+    return null;
+  }, [resolveToolByFormats, toolIds, tools]);
+
+  const handleAiAssistantSubmit = async () => {
+    const promptText = String(aiAssistantPrompt || '').trim();
+    if (!promptText) {
+      setAiAssistantError('Введите запрос для ассистента.');
+      return;
+    }
+    if (!file) {
+      setAiAssistantError('Сначала загрузите файл.');
+      return;
+    }
+
+    setAiAssistantError('');
+    setAiAssistantIntent(null);
+    setAiAssistantStage('analyzing');
+    appendAssistantLog('AI: ИИ анализирует запрос...');
+
+    try {
+      const response = await fetch(`${API_BASE}/ai/parse-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: promptText })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Не удалось разобрать запрос.');
+      }
+
+      const route = resolveAiIntentRoute(payload?.intent, file, promptText);
+      if (!route?.toolId) {
+        throw new Error('Не удалось определить поддерживаемую пару форматов. Уточните запрос.');
+      }
+
+      setAiAssistantIntent({ from: route.from || null, to: route.to || null, toolId: route.toolId });
+      setActiveTab(route.toolId);
+      setAiAssistantStage('converting');
+      appendAssistantLog(`AI: маршрут ${route.from || 'unknown'} -> ${route.to || 'unknown'}, tool=${route.toolId}`);
+
+      const conversionResult = await handleProcess({
+        toolId: route.toolId,
+        initialStage: 'Конвертируем файл...'
+      });
+      if (!conversionResult?.ok) {
+        throw new Error(conversionResult?.message || 'Конвертация не удалась.');
+      }
+    } catch (error) {
+      setAiAssistantError(String(error?.message || 'Не удалось выполнить AI-конвертацию.'));
+      appendAssistantLog(`AI: ошибка ${String(error?.message || 'unknown')}`);
+    } finally {
+      setAiAssistantStage('idle');
     }
   };
 
@@ -5233,219 +5346,35 @@ export default function App() {
                 </div>
               )}
 
-              {file && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 ai-panel">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs uppercase tracking-widest text-slate-500">AI‑ассистент</div>
-                      <div className="text-lg font-semibold text-slate-900 mt-2">{assistantEntry || 'Файл готов. Вот что можно сделать.'}</div>
-                      {assistantMeta.insight && <div className="text-sm text-slate-600 mt-2">{assistantMeta.insight}</div>}
-                    </div>
-                    <Badge color="purple" variant="dark">AI Layer</Badge>
-                  </div>
-
-                  {assistantState === 'loading' && (
-                    <div className="mt-4 grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <div className="skeleton h-4 w-1/2"></div>
-                        <div className="skeleton h-4 w-2/3"></div>
-                        <div className="skeleton h-4 w-1/3"></div>
-                        <div className="text-xs text-slate-500 mt-2">Анализируем файл…</div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="skeleton h-10 w-full"></div>
-                        <div className="skeleton h-10 w-full"></div>
-                        <div className="skeleton h-10 w-full"></div>
-                      </div>
-                    </div>
-                  )}
-
-                  {assistantState !== 'loading' && (
-                    <>
-                      <div className="mt-6 grid md:grid-cols-3 gap-3">
-                        {assistantActions.slice(0, 3).map((action) => {
-                          const isDisabled = action.kind === 'convert' && !action.toolId;
-                          return (
-                            <button
-                              key={action.id}
-                              type="button"
-                              onClick={() => !isDisabled && handleAssistantAction(action)}
-                              className={`ai-action-card rounded-2xl border px-4 py-4 text-left transition ${action.tag === 'recommended' ? 'ai-action-recommended' : 'border-slate-200 bg-white'} ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:bg-slate-50'}`}
-                            >
-                              <div className="text-xs uppercase tracking-widest text-slate-500">{action.tag === 'recommended' ? '⭐ Рекомендуем' : (action.tag === 'fastest' ? '⚡ Самое быстрое' : 'Самый компактный')}</div>
-                              <div className="mt-2 font-semibold text-slate-900">{action.title}</div>
-                              <div className="text-xs text-slate-500 mt-1">{action.desc}</div>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="mt-6 grid md:grid-cols-[1.1fr_0.9fr] gap-4">
-                        <div>
-                          <div className="text-xs uppercase tracking-widest text-slate-500">Интеллект файла</div>
-                          <div className="mt-3 space-y-2 text-sm">
-                            {assistantInsights.map((item) => (
-                              <div key={item.label} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                                <span className="text-slate-600">{item.label}</span>
-                                <span className="font-semibold text-slate-800">{item.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                          {assistantMeta.insight && (
-                            <div className="mt-3 text-xs text-slate-500">{assistantMeta.insight}</div>
-                          )}
-                          <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-3 py-3 text-xs text-slate-600">
-                            <div className="text-[11px] uppercase tracking-widest text-slate-500">Лучший формат</div>
-                            <div className="mt-2 flex flex-wrap gap-3">
-                              <span>Редактирование: <strong>{assistantSuggestions.edit || '—'}</strong></span>
-                              <span>Web: <strong>{assistantSuggestions.web || '—'}</strong></span>
-                              <span>Минимальный размер: <strong>{assistantSuggestions.small || '—'}</strong></span>
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs uppercase tracking-widest text-slate-500">Рекомендуемые действия</div>
-                          <div className="mt-3 space-y-2">
-                            {assistantActions.map((action) => {
-                              const isDisabled = action.kind === 'convert' && !action.toolId;
-                              return (
-                                <button
-                                  key={action.id}
-                                  type="button"
-                                  onClick={() => !isDisabled && handleAssistantAction(action)}
-                                  className={`w-full text-left rounded-xl border px-4 py-3 transition ${action.tag === 'recommended' ? 'ai-action-recommended' : 'border-slate-200 bg-white'} ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-slate-300 hover:bg-slate-50'}`}
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="font-semibold text-slate-900">{action.title}</div>
-                                    <span className="text-[11px] uppercase tracking-widest text-slate-500">
-                                      {action.tag === 'recommended' ? '⭐ Рекомендуем' : (action.tag === 'fastest' ? '⚡ Самое быстрое' : 'Самый компактный')}
-                                    </span>
-                                  </div>
-                                  <div className="text-xs text-slate-500 mt-1">{action.desc}</div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 grid md:grid-cols-[1fr_1fr] gap-4">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-xs uppercase tracking-widest text-slate-500">Learning</div>
-                          <div className="mt-2 text-sm text-slate-700">
-                            {assistantLearningHint || 'Мы запомним этот выбор для следующих файлов.'}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-xs uppercase tracking-widest text-slate-500">Automation</div>
-                          <div className="mt-2 text-sm text-slate-700">
-                            {assistantAutomationHint || 'Создайте автоматизацию для этого типа файлов.'}
-                          </div>
-                          <div className="mt-3">
-                            <Button variant="secondary" onClick={() => { void createAssistantAutomationWorkflow(); }}>
-                              Создать workflow
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="text-xs uppercase tracking-widest text-slate-500">Advanced AI</div>
-                        <div className="mt-3 grid md:grid-cols-3 gap-3 text-sm">
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs uppercase tracking-widest text-slate-500">Режим качества</span>
-                            <select value={aiMode} onChange={(e) => setAiMode(e.target.value)} className="border rounded-lg px-3 py-2">
-                              <option value="balanced">Баланс</option>
-                              <option value="quality">Макс. качество</option>
-                              <option value="speed">Макс. скорость</option>
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs uppercase tracking-widest text-slate-500">Приоритет</span>
-                            <select value={aiPriority} onChange={(e) => setAiPriority(e.target.value)} className="border rounded-lg px-3 py-2">
-                              <option value="quality">Качество</option>
-                              <option value="size">Размер</option>
-                              <option value="speed">Скорость</option>
-                            </select>
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs uppercase tracking-widest text-slate-500">Формат</span>
-                            <select value={aiTargetFormat} onChange={(e) => setAiTargetFormat(e.target.value)} className="border rounded-lg px-3 py-2">
-                              <option value="auto">Авто</option>
-                              <option value="docx">DOCX</option>
-                              <option value="pdf">PDF</option>
-                              <option value="mp4">MP4</option>
-                              <option value="webp">WEBP</option>
-                            </select>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 grid md:grid-cols-2 gap-4">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-xs uppercase tracking-widest text-slate-500">Explainable AI</div>
-                          <div className="mt-3 space-y-2 text-sm text-slate-700">
-                            {(assistantExplanations.length ? assistantExplanations : ['Рекомендации пока не сформированы.']).map((item) => (
-                              <div key={item}>{item}</div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-xs uppercase tracking-widest text-slate-500">Predictive Actions</div>
-                          <div className="mt-3 space-y-2 text-sm text-slate-700">
-                            {(assistantPredictiveActions.length ? assistantPredictiveActions : ['Следующие шаги появятся после анализа файла.']).map((item) => (
-                              <div key={item}>{item}</div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 grid md:grid-cols-2 gap-4">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-xs uppercase tracking-widest text-slate-500">Automation Workflow</div>
-                          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                            {(assistantWorkflow.length ? assistantWorkflow : [{ id: 'empty', label: 'Upload -> Convert -> Compress -> Rename' }]).map((step) => (
-                              <span key={step.id} className="px-3 py-1 rounded-full border border-slate-200 bg-white text-slate-700 font-semibold">
-                                {step.label}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                          <div className="text-xs uppercase tracking-widest text-slate-500">AI Context</div>
-                          <div className="mt-3 text-sm text-slate-700 space-y-1">
-                            <div>file_type: <strong>{assistantContextSummary?.file_type || 'unknown'}</strong></div>
-                            <div>intent_prediction: <strong>{assistantContextSummary?.intent_prediction || 'unknown'}</strong></div>
-                            <div>size: <strong>{assistantContextSummary?.file_metadata?.size_human || '—'}</strong></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="text-xs uppercase tracking-widest text-slate-500">Observability Log</div>
-                        <div className="mt-3 space-y-2 text-xs text-slate-600">
-                          {(assistantExecutionLog.length ? assistantExecutionLog : [{ id: 'idle', ts: Date.now(), message: 'Логи появятся после старта обработки.' }]).map((entry) => (
-                            <div key={entry.id} className="flex items-center justify-between gap-2 rounded-lg bg-white border border-slate-200 px-3 py-2">
-                              <span>{entry.message}</span>
-                              <span className="text-slate-500">{new Date(entry.ts).toLocaleTimeString()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {(assistantState === 'limited' || assistantState === 'error') && (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                      {assistantState === 'error' ? t.assistantError : t.assistantLimited}
-                    </div>
-                  )}
-
-                  {assistantNotice && (
-                    <div className="mt-4 text-xs text-slate-600">{assistantNotice}</div>
-                  )}
-                </div>
-              )}
+              <SmartAssistantPanel
+                file={file}
+                isDragOver={isDragOver}
+                onDragEnter={() => setIsDragOver(true)}
+                onDragLeave={() => setIsDragOver(false)}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setIsDragOver(true);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setIsDragOver(false);
+                  handleFilesSelected(event.dataTransfer.files);
+                }}
+                onBrowseClick={openFilePicker}
+                onClear={reset}
+                prompt={aiAssistantPrompt}
+                onPromptChange={(value) => {
+                  setAiAssistantPrompt(value);
+                  if (aiAssistantError) setAiAssistantError('');
+                }}
+                onSubmit={() => {
+                  void handleAiAssistantSubmit();
+                }}
+                disabled={aiAssistantStage !== 'idle' || !file || !String(aiAssistantPrompt || '').trim()}
+                stage={aiAssistantStage}
+                intent={aiAssistantIntent}
+                error={aiAssistantError}
+              />
 
               {file && (
                 <div className="rounded-2xl border border-slate-200 p-4">

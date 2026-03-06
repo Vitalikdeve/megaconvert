@@ -199,6 +199,10 @@ const ADMIN_COOKIE_SECURE = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.ADMIN_COOKIE_SECURE || (process.env.NODE_ENV === 'production' ? '1' : '0')).trim().toLowerCase()
 );
 const ADMIN_AUTH_ENABLED = Boolean(ADMIN_PASSWORD && ADMIN_JWT_SECRET);
+const GROQ_API_KEY = String(process.env.GROQ_API_KEY || '').trim();
+const GROQ_MODEL = String(process.env.GROQ_MODEL || 'llama3-8b-8192').trim() || 'llama3-8b-8192';
+const GROQ_TIMEOUT_MS = Math.max(1000, Number(process.env.GROQ_TIMEOUT_MS || 15000));
+const AI_PARSE_INTENT_SYSTEM_PROMPT = 'Ты — умный маршрутизатор для сервиса конвертации файлов. Тебе на вход дают текст пользователя. Твоя задача — извлечь исходный формат файла (from) и желаемый формат конвертации (to). Ты ДОЛЖЕН отвечать ТОЛЬКО валидным JSON без markdown-разметки, без приветствий и без объяснений. Структура ответа строго такая: {"intent": "convert", "from": "pdf", "to": "docx"}. Если какой-то формат не ясен, пиши null.';
 const BOOLEAN_TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled']);
 const BOOLEAN_FALSE_VALUES = new Set(['0', 'false', 'no', 'off', 'disabled']);
 const parseEnvBoolean = (rawValue, defaultValue = false) => {
@@ -4983,6 +4987,54 @@ function resolveToolByFormats(inputExt, toFormat) {
     if (output === target && inputExts.includes(input)) return toolId;
   }
   return null;
+}
+
+const AI_FORMAT_TOKEN_ALIASES = {
+  jpeg: 'jpg',
+  tif: 'tiff',
+  htm: 'html',
+  ppt: 'pptx',
+  powerpoint: 'pptx',
+  word: 'docx',
+  excel: 'xlsx'
+};
+
+function normalizeAiFormatToken(value) {
+  const token = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^[.]+/, '')
+    .replace(/[^a-z0-9.+-]/g, '');
+  if (!token) return null;
+  return AI_FORMAT_TOKEN_ALIASES[token] || token;
+}
+
+function parseAiJsonObject(rawContent) {
+  const raw = String(rawContent || '').trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) return null;
+    const candidate = raw.slice(start, end + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function normalizeAiIntentPayload(rawIntent) {
+  const payload = asObject(rawIntent || {});
+  const intent = String(payload.intent || '').trim().toLowerCase() === 'convert'
+    ? 'convert'
+    : 'convert';
+  const from = normalizeAiFormatToken(payload.from);
+  const to = normalizeAiFormatToken(payload.to);
+  return { intent, from, to };
 }
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp', 'tif', 'tiff', 'svg', 'ico']);
@@ -9863,6 +9915,124 @@ app.post('/account/workspaces/:id/items', requireUserAuth, (req, res) => {
   } catch (error) {
     logError({ type: 'account_workspace_item_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'WORKSPACE_WRITE_FAILED', message: 'Failed to create workspace item', requestId: req.requestId });
+  }
+});
+
+app.post('/ai/parse-intent', async (req, res) => {
+  try {
+    const body = asObject(req.body || {});
+    const text = clampText(
+      String(body.text || body.query || body.prompt || body.message || '').trim(),
+      2000
+    );
+    if (!text) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_TEXT',
+        message: 'Text query is required',
+        requestId: req.requestId
+      });
+    }
+    if (!GROQ_API_KEY) {
+      return res.status(503).json({
+        status: 'error',
+        code: 'AI_PROVIDER_NOT_CONFIGURED',
+        message: 'Groq API key is not configured',
+        requestId: req.requestId
+      });
+    }
+
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
+    let providerResponse = null;
+    let providerPayload = null;
+    try {
+      providerResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            { role: 'system', content: AI_PARSE_INTENT_SYSTEM_PROMPT },
+            { role: 'user', content: text }
+          ],
+          temperature: 0,
+          response_format: { type: 'json_object' }
+        }),
+        signal: controller.signal
+      });
+      providerPayload = await providerResponse.json().catch(() => null);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+
+    if (!providerResponse || !providerResponse.ok) {
+      logError({
+        type: 'ai_parse_intent_provider_failed',
+        requestId: req.requestId,
+        status: providerResponse?.status || null,
+        error: providerPayload?.error?.message || providerPayload?.message || 'provider_request_failed'
+      });
+      return res.status(502).json({
+        status: 'error',
+        code: 'AI_PROVIDER_FAILED',
+        message: 'Failed to parse intent via AI provider',
+        requestId: req.requestId
+      });
+    }
+
+    const content = String(providerPayload?.choices?.[0]?.message?.content || '').trim();
+    const parsedRaw = parseAiJsonObject(content);
+    if (!parsedRaw) {
+      logError({
+        type: 'ai_parse_intent_invalid_json',
+        requestId: req.requestId,
+        content: content.slice(0, 300)
+      });
+      return res.status(502).json({
+        status: 'error',
+        code: 'AI_PROVIDER_INVALID_RESPONSE',
+        message: 'AI provider returned invalid JSON',
+        requestId: req.requestId
+      });
+    }
+
+    const intent = normalizeAiIntentPayload(parsedRaw);
+    const tool = intent.from && intent.to
+      ? resolveToolByFormats(intent.from, intent.to)
+      : null;
+
+    return res.json({
+      ok: true,
+      intent: {
+        ...intent,
+        tool
+      },
+      requestId: req.requestId
+    });
+  } catch (error) {
+    if (String(error?.name || '') === 'AbortError') {
+      return res.status(504).json({
+        status: 'error',
+        code: 'AI_PROVIDER_TIMEOUT',
+        message: 'AI provider timeout',
+        requestId: req.requestId
+      });
+    }
+    logError({
+      type: 'ai_parse_intent_failed',
+      requestId: req.requestId,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'AI_PARSE_INTENT_FAILED',
+      message: 'Failed to parse intent',
+      requestId: req.requestId
+    });
   }
 });
 
