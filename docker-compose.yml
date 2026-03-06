@@ -23,6 +23,9 @@ services:
       - ALLOW_ALL_HTTPS_ORIGINS=true
       - DATABASE_URL=postgresql://megaconvert:megaconvert@postgres:5432/megaconvert
       - PROMO_CODES_ENABLED=1
+      - ADMIN_PASSWORD=AdminMega2026!
+      - ADMIN_JWT_SECRET=superconvert_admin_jwt_secret_prod_2026_change_me
+      - ADMIN_COOKIE_SECURE=1
       - STORAGE_MODE=s3
       - S3_ENDPOINT=http://minio:9000
       - S3_REGION=us-east-1
