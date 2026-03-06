@@ -16,6 +16,16 @@ const isSoftFailure = (check) => {
 };
 
 export const verifyOutput = async ({ url, expectedExt }) => {
+  const normalizedUrl = String(url || '').trim().toLowerCase();
+  if (normalizedUrl.startsWith('blob:') || normalizedUrl.startsWith('data:')) {
+    return {
+      ok: true,
+      checks: {
+        mime: { ok: true, reason: 'local_output' },
+        open: { ok: true, reason: 'local_output' }
+      }
+    };
+  }
   const mimeCheck = await verifyDownloadMime(url, expectedExt);
   const openCheck = await openTest(url);
   const hardFailures = [mimeCheck, openCheck].filter((check) => check && !check.ok && !isSoftFailure(check));

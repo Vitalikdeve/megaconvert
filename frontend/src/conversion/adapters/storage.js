@@ -1,6 +1,7 @@
 import { ConversionError } from '../core/errors';
 import { fetchWithTimeout } from '../infra/timeouts';
 import { retry } from '../infra/retries';
+import { computeChecksum } from '../verification/checksum';
 
 const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
   .trim()
@@ -16,6 +17,10 @@ const COMPAT_FALLBACK_CODES = new Set([
   'NOT_FOUND',
   'INTERNAL_ERROR'
 ]);
+const HASH_DEDUPE_MAX_BYTES = Math.max(
+  1,
+  Number(import.meta.env.VITE_UPLOAD_HASH_DEDUPE_MAX_BYTES || 100 * 1024 * 1024)
+);
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isLoopbackHost = (host) => host === 'localhost' || host === '127.0.0.1' || host === '::1';
@@ -120,7 +125,8 @@ const extractErrorMessage = (payload, fallback) => {
   return fallback;
 };
 
-const fetchSignedUpload = async (apiBase, authHeaders, file, nameOverride, timeoutMs) => {
+const fetchSignedUpload = async (apiBase, authHeaders, file, nameOverride, timeoutMs, sha256 = '') => {
+  const normalizedSha = String(sha256 || '').trim().toLowerCase();
   const res = await fetchWithTimeout(`${apiBase}/uploads/sign`, {
     method: 'POST',
     cache: 'no-store',
@@ -128,7 +134,8 @@ const fetchSignedUpload = async (apiBase, authHeaders, file, nameOverride, timeo
     body: JSON.stringify({
       filename: nameOverride || file.name,
       contentType: file.type || 'application/octet-stream',
-      size: file.size
+      size: file.size,
+      sha256: normalizedSha || undefined
     })
   }, timeoutMs);
   const body = await parseResponseBody(res);
@@ -154,17 +161,17 @@ const fetchSignedUpload = async (apiBase, authHeaders, file, nameOverride, timeo
   };
 };
 
-export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeoutMs = 15_000) => {
+export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeoutMs = 15_000, sha256 = '') => {
   return retry(async () => {
     try {
       try {
-        return await fetchSignedUpload(apiBase, authHeaders, file, nameOverride, timeoutMs);
+        return await fetchSignedUpload(apiBase, authHeaders, file, nameOverride, timeoutMs, sha256);
       } catch (error) {
         const compatBase = getCompatApiBase(apiBase);
         let fallbackError = error;
         if (compatBase && compatBase !== apiBase && isRetryableSignError(error)) {
           try {
-            return await fetchSignedUpload(compatBase, authHeaders, file, nameOverride, timeoutMs);
+            return await fetchSignedUpload(compatBase, authHeaders, file, nameOverride, timeoutMs, sha256);
           } catch (compatError) {
             fallbackError = compatError;
           }
@@ -172,7 +179,7 @@ export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeo
         if (!shouldTryDirectFallback(apiBase) || !isRetryableSignError(fallbackError)) {
           throw fallbackError;
         }
-        return await fetchSignedUpload(DIRECT_API_FALLBACK, authHeaders, file, nameOverride, timeoutMs);
+        return await fetchSignedUpload(DIRECT_API_FALLBACK, authHeaders, file, nameOverride, timeoutMs, sha256);
       }
     } catch (error) {
       if (error?.name === 'AbortError') {
@@ -187,7 +194,8 @@ export const signUpload = async (apiBase, authHeaders, file, nameOverride, timeo
   });
 };
 
-const fetchProxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs) => {
+const fetchProxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs, sha256 = '') => {
+  const normalizedSha = String(sha256 || '').trim().toLowerCase();
   const res = await fetchWithTimeout(`${apiBase}/uploads/proxy`, {
     method: 'POST',
     headers: {
@@ -195,7 +203,8 @@ const fetchProxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs) =
       'Content-Type': file.type || 'application/octet-stream',
       'x-input-key': signed.inputKey,
       'x-file-size': String(file.size || 0),
-      'x-file-name': String(file.name || 'upload.bin')
+      'x-file-name': String(file.name || 'upload.bin'),
+      ...(normalizedSha ? { 'x-file-sha256': normalizedSha } : {})
     },
     body: file
   }, timeoutMs);
@@ -210,16 +219,16 @@ const fetchProxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs) =
   }
 };
 
-const proxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs) => {
+const proxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs, sha256 = '') => {
   try {
     try {
-      await fetchProxyUpload(apiBase, authHeaders, file, signed, timeoutMs);
+      await fetchProxyUpload(apiBase, authHeaders, file, signed, timeoutMs, sha256);
     } catch (error) {
       const compatBase = getCompatApiBase(apiBase);
       let fallbackError = error;
       if (compatBase && compatBase !== apiBase && isRetryableProxyError(error)) {
         try {
-          await fetchProxyUpload(compatBase, authHeaders, file, signed, timeoutMs);
+          await fetchProxyUpload(compatBase, authHeaders, file, signed, timeoutMs, sha256);
           return;
         } catch (compatError) {
           fallbackError = compatError;
@@ -228,7 +237,7 @@ const proxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs) => {
       if (!shouldTryDirectFallback(apiBase) || !isRetryableProxyError(fallbackError)) {
         throw fallbackError;
       }
-      await fetchProxyUpload(DIRECT_API_FALLBACK, authHeaders, file, signed, timeoutMs);
+      await fetchProxyUpload(DIRECT_API_FALLBACK, authHeaders, file, signed, timeoutMs, sha256);
     }
   } catch (error) {
     if (error?.name === 'AbortError') {
@@ -249,17 +258,87 @@ const isDirectUploadFallbackCandidate = (error) => {
   return false;
 };
 
+const normalizeSha256 = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(normalized) ? normalized : '';
+};
+
+const resolveUploadHash = async (apiBase, authHeaders, sha256, timeoutMs) => {
+  const hash = normalizeSha256(sha256);
+  if (!hash) return null;
+  const res = await fetchWithTimeout(`${apiBase}/uploads/resolve-hash`, {
+    method: 'POST',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
+    body: JSON.stringify({ sha256: hash })
+  }, timeoutMs);
+  const body = await parseResponseBody(res);
+  const data = body.json;
+  if (!res.ok || !isObject(data)) return null;
+  const inputKey = String(data.inputKey || data.input_key || '').trim();
+  if (!inputKey) return null;
+  return {
+    inputKey,
+    source: String(data.source || 'hash_cache').trim() || 'hash_cache'
+  };
+};
+
+const registerUploadHash = async (apiBase, authHeaders, { sha256, inputKey, file }, timeoutMs) => {
+  const hash = normalizeSha256(sha256);
+  const key = String(inputKey || '').trim();
+  if (!hash || !key) return;
+  try {
+    await fetchWithTimeout(`${apiBase}/uploads/register-hash`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({
+        sha256: hash,
+        inputKey: key,
+        filename: String(file?.name || 'upload.bin'),
+        size: Number(file?.size || 0)
+      })
+    }, timeoutMs);
+  } catch (error) {
+    void error;
+  }
+};
+
 export const uploadToStorage = async (apiBase, authHeaders, file, nameOverride, timeoutMs, logger) => {
-  const signed = await signUpload(apiBase, authHeaders, file, nameOverride, timeoutMs);
+  const computedSha256 = await computeChecksum(file, HASH_DEDUPE_MAX_BYTES);
+  if (computedSha256) {
+    try {
+      const reused = await resolveUploadHash(apiBase, authHeaders, computedSha256, timeoutMs);
+      if (reused?.inputKey) {
+        logger?.info('upload_dedup_reused_existing_input', {
+          inputKey: reused.inputKey,
+          source: reused.source
+        });
+        return { inputKey: reused.inputKey, dedup: true, sha256: computedSha256 };
+      }
+    } catch (error) {
+      logger?.warn('upload_dedup_lookup_failed', {
+        code: error?.code || null,
+        reason: error?.message || String(error)
+      });
+    }
+  }
+  const signed = await signUpload(apiBase, authHeaders, file, nameOverride, timeoutMs, computedSha256 || '');
   let uploadMode = 'direct';
   let proxyAttempted = false;
   if (shouldPreferProxyUpload()) {
     proxyAttempted = true;
     try {
-      await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs);
+      await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs, computedSha256 || '');
       uploadMode = 'proxy';
+      if (computedSha256) {
+        await registerUploadHash(apiBase, authHeaders, {
+          sha256: computedSha256,
+          inputKey: signed.inputKey,
+          file
+        }, timeoutMs);
+      }
       logger?.info('upload_complete', { inputKey: signed.inputKey, mode: uploadMode, reason: 'proxy_first' });
-      return { inputKey: signed.inputKey };
+      return { inputKey: signed.inputKey, sha256: computedSha256 || null };
     } catch (error) {
       logger?.warn('upload_proxy_preferred_failed_fallback_direct', {
         inputKey: signed.inputKey,
@@ -271,9 +350,16 @@ export const uploadToStorage = async (apiBase, authHeaders, file, nameOverride, 
     logger?.warn('upload_direct_disabled_mixed_content', { inputKey: signed.inputKey });
     if (!proxyAttempted) {
       uploadMode = 'proxy';
-      await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs);
+      await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs, computedSha256 || '');
+      if (computedSha256) {
+        await registerUploadHash(apiBase, authHeaders, {
+          sha256: computedSha256,
+          inputKey: signed.inputKey,
+          file
+        }, timeoutMs);
+      }
       logger?.info('upload_complete', { inputKey: signed.inputKey, mode: uploadMode, reason: 'mixed_content_guard' });
-      return { inputKey: signed.inputKey };
+      return { inputKey: signed.inputKey, sha256: computedSha256 || null };
     }
     throw new ConversionError(
       'UPLOAD_PROXY_FAILED',
@@ -303,8 +389,15 @@ export const uploadToStorage = async (apiBase, authHeaders, file, nameOverride, 
       inputKey: signed.inputKey,
       reason: error?.message || String(error)
     });
-    await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs);
+    await proxyUpload(apiBase, authHeaders, file, signed, timeoutMs, computedSha256 || '');
+  }
+  if (computedSha256) {
+    await registerUploadHash(apiBase, authHeaders, {
+      sha256: computedSha256,
+      inputKey: signed.inputKey,
+      file
+    }, timeoutMs);
   }
   logger?.info('upload_complete', { inputKey: signed.inputKey, mode: uploadMode });
-  return { inputKey: signed.inputKey };
+  return { inputKey: signed.inputKey, sha256: computedSha256 || null };
 };

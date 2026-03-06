@@ -28,7 +28,9 @@ import { translations, defaultLang } from './i18n';
 import SeoPage from './SeoPage.jsx';
 import { CONVERSIONS, getConversionBySlug } from './seo/conversions';
 import { runConversion, decryptFileGcm } from './conversion';
+import { extractLocalNameFromUrl } from './conversion/local/converter';
 import { listProcessors } from './conversion/processors/registry';
+import { uploadToStorage } from './conversion/adapters/storage';
 import { createIntelligencePlan, registerAssistantFeedback } from './ai/intelligenceEngine';
 import { withRetry } from './lib/retry';
 import { emitSystemEvent } from './lib/events';
@@ -59,6 +61,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+if (typeof window !== 'undefined' && window.location.hostname === '127.0.0.1') {
+  // Google OAuth in this Firebase project is allowed for localhost, not raw loopback IP.
+  const nextUrl = new URL(window.location.href);
+  nextUrl.hostname = 'localhost';
+  window.location.replace(nextUrl.toString());
+}
 
 // --- Languages ---
 const LANGUAGES = [
@@ -111,12 +119,22 @@ const toolIcon = (type) => {
 const TOP_TOOL_IDS = ['pdf-word', 'mp4-mp3', 'heic-jpg', 'jpg-pdf', 'pdf-png-hires'];
 const TOOL_OPEN_COUNTS_STORAGE_KEY = 'tool_open_counts';
 const CLIENT_SESSION_ID_STORAGE_KEY = 'mc_client_session_id';
+const TEST_MODE_SESSION_STORAGE_KEY = 'mc_test_mode_session';
 const MAX_BATCH_FILES_DEFAULT = 10;
 const OAUTH_PROVIDER_IDS = {
   google: 'google.com',
   github: 'github.com'
 };
 const FULL_ACCESS_PLAN_TIERS = new Set(['pro', 'pro_trial', 'team', 'team_trial', 'individual', 'individual_trial']);
+const ACCOUNT_WORKFLOW_NODE_TYPES = [
+  { value: 'upload', label: 'Upload' },
+  { value: 'analyze', label: 'Analyze' },
+  { value: 'preprocess', label: 'Preprocess' },
+  { value: 'convert', label: 'Convert' },
+  { value: 'compress', label: 'Compress' },
+  { value: 'postprocess', label: 'Postprocess' },
+  { value: 'deliver', label: 'Deliver' }
+];
 
 const normalizePlanTier = (value) => String(value || '')
   .trim()
@@ -137,9 +155,30 @@ const formatShortTimestamp = (value, locale = 'en-US') => {
   }
 };
 
+const isLocalDownloadUrl = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized.startsWith('blob:') || normalized.startsWith('data:');
+};
+
+const revokeBlobObjectUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw || !raw.toLowerCase().startsWith('blob:')) return;
+  const objectUrl = raw.split('#')[0];
+  try {
+    URL.revokeObjectURL(objectUrl);
+  } catch {
+    // ignore
+  }
+};
+
 const getExtensionFromValue = (value) => {
-  const raw = String(value || '').split('?')[0];
-  const parts = raw.split('.');
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const localName = extractLocalNameFromUrl(raw);
+  const source = localName || raw.split('#')[0];
+  const normalized = source.split('?')[0];
+  const lastSegment = normalized.split('/').pop() || normalized;
+  const parts = lastSegment.split('.');
   if (parts.length < 2) return '';
   return parts.pop().toLowerCase();
 };
@@ -183,6 +222,28 @@ const createShareToken = () => {
     return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
   }
   return Math.random().toString(36).slice(2, 14);
+};
+
+const getFileExt = (value) => {
+  const parts = String(value || '').trim().toLowerCase().split('.');
+  if (parts.length < 2) return '';
+  return parts.pop() || '';
+};
+
+const formatSizeMbLabel = (bytes) => `${(Math.max(0, Number(bytes || 0)) / (1024 * 1024)).toFixed(1)} MB`;
+
+const buildSequentialWorkflowEdges = (nodes) => {
+  if (!Array.isArray(nodes)) return [];
+  const cleaned = nodes.filter((node) => String(node?.id || '').trim());
+  const edges = [];
+  for (let i = 0; i < cleaned.length - 1; i += 1) {
+    edges.push({
+      id: `edge_${i + 1}`,
+      source: String(cleaned[i].id),
+      target: String(cleaned[i + 1].id)
+    });
+  }
+  return edges;
 };
 
 const statusLabelMap = (t) => ({
@@ -250,6 +311,62 @@ const writeToolOpenCounts = (counts) => {
     localStorage.setItem(TOOL_OPEN_COUNTS_STORAGE_KEY, JSON.stringify(counts));
   } catch {
     // Ignore storage write failures in private mode or quota limits.
+  }
+};
+
+const normalizeTestModeUser = (value) => {
+  const user = value && typeof value === 'object' ? value : null;
+  const uid = String(user?.uid || '').trim();
+  if (!uid) return null;
+  const email = String(user?.email || '').trim() || null;
+  const name = String(user?.name || '').trim() || (email ? email.split('@')[0] : 'Test User');
+  return {
+    uid,
+    name,
+    email,
+    photo: null,
+    isAnon: false,
+    isTestMode: true,
+    provider_data: [
+      {
+        provider_id: 'test_mode',
+        uid,
+        email
+      }
+    ]
+  };
+};
+
+const readStoredTestModeUser = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(TEST_MODE_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return normalizeTestModeUser(parsed);
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredTestModeUser = (user) => {
+  if (typeof window === 'undefined') return null;
+  const normalized = normalizeTestModeUser(user);
+  if (!normalized) return null;
+  try {
+    localStorage.setItem(TEST_MODE_SESSION_STORAGE_KEY, JSON.stringify(normalized));
+  } catch {
+    // Ignore storage write failures.
+  }
+  return normalized;
+};
+
+const clearStoredTestModeUser = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(TEST_MODE_SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
   }
 };
 
@@ -1228,6 +1345,7 @@ export default function App() {
   const [pipelineStage, setPipelineStage] = useState(null);
   const [activeTab, setActiveTab] = useState('png-jpg');
   const [downloadUrl, setDownloadUrl] = useState(null);
+  const [downloadFileName, setDownloadFileName] = useState('');
   const [batchMode, setBatchMode] = useState(false);
   const [settings, setSettings] = useState({
     image: { quality: 90, resize: "", crop: "", dpi: "" },
@@ -1241,6 +1359,9 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
+  const [testModeLoading, setTestModeLoading] = useState(false);
+  const [testModeUnlockLoading, setTestModeUnlockLoading] = useState(false);
+  const [testModeUnlockError, setTestModeUnlockError] = useState('');
   const encryptionContextRef = useRef(new Map());
   const [lastJobId, setLastJobId] = useState(null);
 
@@ -1310,6 +1431,17 @@ export default function App() {
     failed: false
   });
   const [accountApiWebhookSecret, setAccountApiWebhookSecret] = useState('');
+  const [accountPipelines, setAccountPipelines] = useState([]);
+  const [accountPipelinesLoading, setAccountPipelinesLoading] = useState(false);
+  const [accountPipelinesError, setAccountPipelinesError] = useState('');
+  const [accountPipelineActionPending, setAccountPipelineActionPending] = useState('');
+  const [accountPipelineRunPending, setAccountPipelineRunPending] = useState('');
+  const [accountWorkflowPrompt, setAccountWorkflowPrompt] = useState('');
+  const [accountPipelineDraftId, setAccountPipelineDraftId] = useState('');
+  const [accountPipelineDraftName, setAccountPipelineDraftName] = useState('');
+  const [accountPipelineDraftSource, setAccountPipelineDraftSource] = useState('manual');
+  const [accountPipelineDraftNodes, setAccountPipelineDraftNodes] = useState([]);
+  const [accountSelectedPipelineId, setAccountSelectedPipelineId] = useState('');
   const accountTimersRef = useRef({
     slow: null,
     verySlow: null,
@@ -1319,7 +1451,23 @@ export default function App() {
   const persistedHistoryJobRef = useRef('');
   const analyticsBackoffUntilRef = useRef(0);
   const analyticsFailureCountRef = useRef(0);
+  const downloadUrlRef = useRef(null);
   const isAccountPath = path === '/account' || path === '/settings/billing';
+
+  const setDownloadUrlSafe = useCallback((nextValue) => {
+    const normalizedNext = String(nextValue || '').trim() || null;
+    const previous = downloadUrlRef.current;
+    if (previous && previous !== normalizedNext) {
+      revokeBlobObjectUrl(previous);
+    }
+    downloadUrlRef.current = normalizedNext;
+    setDownloadUrl(normalizedNext);
+  }, []);
+
+  useEffect(() => () => {
+    revokeBlobObjectUrl(downloadUrlRef.current);
+    downloadUrlRef.current = null;
+  }, []);
 
   const clearAccountTimer = useCallback((key) => {
     const timer = accountTimersRef.current[key];
@@ -1463,9 +1611,19 @@ export default function App() {
     const fromEnv = normalizeApiBase(rawEnv || fallback);
     if (typeof window === 'undefined') return fromEnv;
     const currentHost = String(window.location.hostname || '').trim().toLowerCase();
+    if (/^https?:\/\//i.test(rawEnv)) {
+      try {
+        const parsedEnv = new URL(rawEnv);
+        if (!isLoopbackHost(currentHost) && isLoopbackHost(String(parsedEnv.hostname || '').toLowerCase())) {
+          return fallback;
+        }
+      } catch (error) {
+        void error;
+      }
+      return normalizeApiBase(rawEnv);
+    }
     // In deployed environments always use same-origin /api to avoid stale cross-origin configs.
     if (!isLoopbackHost(currentHost)) return fallback;
-    if (/^https?:\/\//i.test(rawEnv)) return normalizeApiBase(rawEnv);
     try {
       const parsed = new URL(fromEnv, window.location.origin);
       if (isLoopbackHost(parsed.hostname) && !isLoopbackHost(currentHost)) {
@@ -1650,6 +1808,119 @@ export default function App() {
     });
   }, [aiMode, aiPriority, currentTool, resolveToolByFormats]);
 
+  const hydrateAssistantFromApi = useCallback(async (selectedFile, localPayload) => {
+    if (!selectedFile || !user?.uid) return;
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-user-id': user.uid
+      };
+      if (clientSessionId) {
+        headers['x-session-id'] = clientSessionId;
+      }
+      const response = await fetch(`${API_BASE}/account/assistant/respond`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          file_name: selectedFile.name,
+          file_size: Number(selectedFile.size || 0),
+          goal: localPayload?.intent?.intent || assistantContextSummary?.intent_prediction || 'convert',
+          target_format: localPayload?.targetFormat && localPayload.targetFormat !== 'auto'
+            ? localPayload.targetFormat
+            : undefined,
+          settings
+        })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.assistant) return;
+
+      const assistant = payload.assistant;
+      const recommendation = assistant.recommendation && typeof assistant.recommendation === 'object'
+        ? assistant.recommendation
+        : {};
+      const remoteActions = [];
+      if (recommendation.tool) {
+        remoteActions.push({
+          id: `remote-convert-${recommendation.tool}`,
+          kind: 'convert',
+          title: `Конвертировать (${recommendation.tool})`,
+          desc: `Формат: ${String(recommendation.target_format || '').toUpperCase()}`,
+          tag: 'recommended',
+          toolId: recommendation.tool
+        });
+      }
+      remoteActions.push({
+        id: 'remote-compress',
+        kind: 'compress',
+        title: 'Оптимизировать размер',
+        desc: 'AI рассчитает параметры сжатия',
+        tag: 'smallest',
+        toolId: null
+      });
+      remoteActions.push({
+        id: 'remote-automation',
+        kind: 'automation',
+        title: 'Сгенерировать workflow',
+        desc: 'Создать node-based workflow в аккаунте',
+        tag: 'recommended',
+        toolId: null
+      });
+      if (downloadUrl) {
+        remoteActions.push({
+          id: 'remote-share',
+          kind: 'share',
+          title: 'Поделиться результатом',
+          desc: 'Скопировать ссылку на результат',
+          tag: 'fastest',
+          toolId: null
+        });
+      }
+      setAssistantActions((prev) => {
+        const fallback = Array.isArray(prev) ? prev : [];
+        return remoteActions.length ? remoteActions : fallback;
+      });
+
+      const workflowNodes = Array.isArray(assistant?.workflow?.nodes) ? assistant.workflow.nodes : [];
+      if (workflowNodes.length) {
+        setAssistantWorkflow(workflowNodes.map((node, index) => ({
+          id: String(node.id || `wf_${index + 1}`),
+          label: String(node.label || node.type || `Step ${index + 1}`)
+        })));
+      }
+      if (Array.isArray(assistant.pipeline) && assistant.pipeline.length) {
+        setAssistantExplanations(assistant.pipeline.map((step) => `${step.step}: ${step.status || 'planned'}`));
+      }
+
+      if (assistant?.message) setAssistantEntry(String(assistant.message));
+      if (assistant?.intent) {
+        setAssistantContextSummary((prev) => ({
+          ...(prev || {}),
+          intent_prediction: String(assistant.intent || prev?.intent_prediction || 'convert'),
+          file_type: String(assistant?.file?.ext || prev?.file_type || ''),
+            file_metadata: {
+              ...(prev?.file_metadata || {}),
+              size_bytes: Number(assistant?.file?.size_bytes || prev?.file_metadata?.size_bytes || 0),
+              size_human: prev?.file_metadata?.size_human || formatSizeMbLabel(assistant?.file?.size_bytes || 0)
+            }
+          }));
+      }
+      if (recommendation.target_format) {
+        setAiTargetFormat(String(recommendation.target_format));
+      }
+      appendAssistantLog(`AI API: intent=${assistant.intent || 'unknown'}, workflow_nodes=${workflowNodes.length}`);
+    } catch (error) {
+      void error;
+    }
+  }, [
+    API_BASE,
+    appendAssistantLog,
+    assistantContextSummary?.intent_prediction,
+    clientSessionId,
+    downloadUrl,
+    settings,
+    user?.uid
+  ]);
+
   const primeAssistant = useCallback((selectedFile, { immediate = false } = {}) => {
     clearAssistantTimer();
     if (!selectedFile) {
@@ -1689,13 +1960,14 @@ export default function App() {
       setAssistantContextSummary(payload.context || null);
       setAiTargetFormat(payload.targetFormat || 'auto');
       appendAssistantLog(`AI: intent=${payload.intent?.intent || 'unknown'}, strategy=${payload.decision?.strategy || 'default'}`);
+      void hydrateAssistantFromApi(selectedFile, payload);
     };
     if (immediate) {
       applyPayload();
       return;
     }
     assistantTimerRef.current = window.setTimeout(applyPayload, 320);
-  }, [appendAssistantLog, buildAssistantPayload, clearAssistantTimer]);
+  }, [appendAssistantLog, buildAssistantPayload, clearAssistantTimer, hydrateAssistantFromApi]);
 
   const handleFilesSelected = (list) => {
     const selectedRaw = Array.from(list || []);
@@ -1848,6 +2120,7 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
+        clearStoredTestModeUser();
         setUser({
           name: u.displayName || u.email?.split('@')[0] || defaultUserName,
           email: u.email,
@@ -1887,8 +2160,15 @@ export default function App() {
           }
         }
       } else {
-        setUser(null);
-        setIsPro(false);
+        const testUser = readStoredTestModeUser();
+        if (testUser) {
+          setUser(testUser);
+          setIsPro(true);
+          setShowTwofaModal(false);
+        } else {
+          setUser(null);
+          setIsPro(false);
+        }
       }
     });
     return () => unsubscribe();
@@ -2033,9 +2313,7 @@ export default function App() {
   useEffect(() => {
     track('page_view', { path });
     if (path === '/login') setShowAuthModal(true);
-    if (path === '/account' || path === '/settings/billing') {
-      setAccountSection('billing');
-    }
+    if (path === '/settings/billing') setAccountSection('billing');
     setIsMobileMenuOpen(false);
     setIsLangMenuOpen(false);
   }, [path, track]);
@@ -2113,6 +2391,59 @@ export default function App() {
       return await response.json();
     } catch {
       return null;
+    }
+  }, []);
+
+  const createPipelineDraftNode = useCallback((partial = {}, index = 0) => {
+    const rawType = String(partial?.type || partial?.kind || 'convert').trim().toLowerCase();
+    const type = ACCOUNT_WORKFLOW_NODE_TYPES.some((item) => item.value === rawType) ? rawType : 'convert';
+    const id = String(partial?.id || `node_${Date.now()}_${index}`).trim() || `node_${Date.now()}_${index}`;
+    const label = String(partial?.label || partial?.title || (type === 'convert' ? 'Convert' : type)).trim()
+      || (type === 'convert' ? 'Convert' : type);
+    const tool = String(partial?.tool || '').trim();
+    return {
+      id,
+      type,
+      label,
+      tool: type === 'convert' ? (tool || activeTab) : '',
+      settings: partial?.settings && typeof partial.settings === 'object' ? partial.settings : {}
+    };
+  }, [activeTab]);
+
+  const normalizePipelineDraftNodes = useCallback((nodes) => {
+    if (!Array.isArray(nodes) || !nodes.length) {
+      return [createPipelineDraftNode({ type: 'convert', label: 'Convert', tool: activeTab }, 0)];
+    }
+    const list = nodes
+      .map((item, index) => createPipelineDraftNode(item, index))
+      .filter((item) => String(item.id || '').trim());
+    if (!list.length) {
+      return [createPipelineDraftNode({ type: 'convert', label: 'Convert', tool: activeTab }, 0)];
+    }
+    return list.slice(0, 20);
+  }, [activeTab, createPipelineDraftNode]);
+
+  const resetPipelineDraft = useCallback(() => {
+    setAccountPipelineDraftId('');
+    setAccountPipelineDraftName('');
+    setAccountPipelineDraftSource('manual');
+    setAccountPipelineDraftNodes(normalizePipelineDraftNodes([]));
+  }, [normalizePipelineDraftNodes]);
+
+  const logoutCurrentUser = useCallback(async () => {
+    try {
+      localStorage.removeItem('twofa_token');
+    } catch (error) {
+      void error;
+    }
+    clearStoredTestModeUser();
+    setShowTwofaModal(false);
+    setUser(null);
+    setIsPro(false);
+    try {
+      await signOut(auth);
+    } catch (error) {
+      void error;
     }
   }, []);
 
@@ -2457,7 +2788,7 @@ export default function App() {
       }
       track('account_session_revoked', { session_id: id, current: Boolean(payload?.current) });
       if (payload?.current) {
-        await signOut(auth);
+        await logoutCurrentUser();
         setShowAuthModal(true);
       } else {
         setAccountActionNotice(t.noticeSessionRevoked);
@@ -2468,7 +2799,7 @@ export default function App() {
     } finally {
       setAccountSessionPending('');
     }
-  }, [API_BASE, accountSessionPending, buildAuthHeaders, loadAccountSessions, parseApiPayload, t, track, user?.uid]);
+  }, [API_BASE, accountSessionPending, buildAuthHeaders, loadAccountSessions, logoutCurrentUser, parseApiPayload, t, track, user?.uid]);
 
   const logoutAllAccountSessions = useCallback(async () => {
     if (!user?.uid || accountLogoutAllPending) return;
@@ -2489,14 +2820,14 @@ export default function App() {
         throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
       }
       track('account_logout_all', { revoked_count: Number(payload?.revoked_count || 0) });
-      await signOut(auth);
+      await logoutCurrentUser();
       setShowAuthModal(true);
     } catch (error) {
       setAccountSessionsError(error?.message || t.errorLogoutAllSessions);
     } finally {
       setAccountLogoutAllPending(false);
     }
-  }, [API_BASE, accountLogoutAllPending, buildAuthHeaders, parseApiPayload, t, track, user?.uid]);
+  }, [API_BASE, accountLogoutAllPending, buildAuthHeaders, logoutCurrentUser, parseApiPayload, t, track, user?.uid]);
 
   const generateTelegramLinkCode = useCallback(async () => {
     if (!user?.uid) {
@@ -2944,6 +3275,400 @@ export default function App() {
     }
   }, [API_BASE, accountApiActionPending, buildAuthHeaders, loadAccountApiWebhooks, parseApiPayload, t]);
 
+  const loadAccountPipelines = useCallback(async ({ signal, silent = false, preferredId = '' } = {}) => {
+    if (!user?.uid) {
+      setAccountPipelines([]);
+      setAccountPipelinesLoading(false);
+      setAccountPipelinesError('');
+      if (!silent) resetPipelineDraft();
+      return [];
+    }
+    if (!silent) setAccountPipelinesLoading(true);
+    setAccountPipelinesError('');
+    try {
+      const response = await fetch(`${API_BASE}/account/pipelines`, {
+        headers: buildAuthHeaders(),
+        signal
+      });
+      const payload = await parseApiPayload(response);
+      if (response.status === 401) {
+        setShowAuthModal(true);
+        throw new Error(t.authSignInRequired);
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
+      }
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      setAccountPipelines(items);
+      const preferred = String(preferredId || '').trim();
+      const selected = (preferred
+        ? items.find((item) => String(item?.id || '').trim() === preferred)
+        : null) || items[0] || null;
+      if (!selected) {
+        if (!silent) resetPipelineDraft();
+        setAccountSelectedPipelineId('');
+        return items;
+      }
+
+      const selectedId = String(selected.id || '').trim();
+      setAccountSelectedPipelineId(selectedId);
+      const nodes = normalizePipelineDraftNodes(selected.nodes);
+      setAccountPipelineDraftId(selectedId);
+      setAccountPipelineDraftName(String(selected.name || '').trim());
+      setAccountPipelineDraftSource(String(selected.source || 'manual').trim() || 'manual');
+      setAccountPipelineDraftNodes(nodes);
+      return items;
+    } catch (error) {
+      if (signal?.aborted) return [];
+      setAccountPipelinesError(error?.message || 'Failed to load pipelines');
+      return [];
+    } finally {
+      if (!silent) setAccountPipelinesLoading(false);
+    }
+  }, [
+    API_BASE,
+    buildAuthHeaders,
+    normalizePipelineDraftNodes,
+    parseApiPayload,
+    resetPipelineDraft,
+    t,
+    user?.uid
+  ]);
+
+  const openAccountPipelineForEdit = useCallback((item) => {
+    if (!item || typeof item !== 'object') return;
+    const id = String(item.id || '').trim();
+    const nodes = normalizePipelineDraftNodes(item.nodes);
+    setAccountPipelineDraftId(id);
+    setAccountSelectedPipelineId(id);
+    setAccountPipelineDraftName(String(item.name || '').trim());
+    setAccountPipelineDraftSource(String(item.source || 'manual').trim() || 'manual');
+    setAccountPipelineDraftNodes(nodes);
+    setAccountPipelinesError('');
+  }, [normalizePipelineDraftNodes]);
+
+  const updateAccountPipelineNode = useCallback((nodeId, field, value) => {
+    const targetId = String(nodeId || '').trim();
+    if (!targetId) return;
+    setAccountPipelineDraftNodes((prev) => prev.map((node) => {
+      if (String(node.id || '') !== targetId) return node;
+      if (field === 'type') {
+        const nextType = String(value || '').trim().toLowerCase();
+        const typeAllowed = ACCOUNT_WORKFLOW_NODE_TYPES.some((item) => item.value === nextType);
+        const finalType = typeAllowed ? nextType : 'convert';
+        return {
+          ...node,
+          type: finalType,
+          tool: finalType === 'convert' ? (node.tool || activeTab) : ''
+        };
+      }
+      if (field === 'tool') {
+        return {
+          ...node,
+          tool: String(value || '').trim()
+        };
+      }
+      if (field === 'label') {
+        return {
+          ...node,
+          label: String(value || '').trim()
+        };
+      }
+      return node;
+    }));
+  }, [activeTab]);
+
+  const addAccountPipelineNode = useCallback(() => {
+    setAccountPipelineDraftNodes((prev) => {
+      const next = [...prev];
+      next.push(createPipelineDraftNode({ type: 'convert', label: 'Convert', tool: activeTab }, next.length));
+      return normalizePipelineDraftNodes(next);
+    });
+  }, [activeTab, createPipelineDraftNode, normalizePipelineDraftNodes]);
+
+  const removeAccountPipelineNode = useCallback((nodeId) => {
+    const targetId = String(nodeId || '').trim();
+    if (!targetId) return;
+    setAccountPipelineDraftNodes((prev) => {
+      const next = prev.filter((node) => String(node.id || '') !== targetId);
+      return normalizePipelineDraftNodes(next);
+    });
+  }, [normalizePipelineDraftNodes]);
+
+  const saveAccountPipelineDraft = useCallback(async () => {
+    if (!user?.uid) {
+      setShowAuthModal(true);
+      return;
+    }
+    if (accountPipelineActionPending) return;
+    const name = String(accountPipelineDraftName || '').trim();
+    if (!name) {
+      setAccountPipelinesError('Укажите название workflow.');
+      return;
+    }
+    const nodes = normalizePipelineDraftNodes(accountPipelineDraftNodes);
+    const edges = buildSequentialWorkflowEdges(nodes);
+    const editingId = String(accountPipelineDraftId || '').trim();
+    const isEdit = Boolean(editingId);
+    setAccountPipelineActionPending(isEdit ? `save:${editingId}` : 'create');
+    setAccountPipelinesError('');
+    setAccountActionNotice('');
+    try {
+      const response = await fetch(
+        isEdit
+          ? `${API_BASE}/account/pipelines/${encodeURIComponent(editingId)}`
+          : `${API_BASE}/account/pipelines`,
+        {
+          method: isEdit ? 'PATCH' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...buildAuthHeaders()
+          },
+          body: JSON.stringify({
+            name,
+            source: accountPipelineDraftSource || 'manual',
+            nodes,
+            edges,
+            enabled: true
+          })
+        }
+      );
+      const payload = await parseApiPayload(response);
+      if (response.status === 401) {
+        setShowAuthModal(true);
+        throw new Error(t.authSignInRequired);
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
+      }
+      const item = payload?.item && typeof payload.item === 'object' ? payload.item : null;
+      if (item?.id) {
+        setAccountPipelineDraftId(String(item.id));
+        setAccountSelectedPipelineId(String(item.id));
+      }
+      setAccountActionNotice(isEdit ? 'Workflow обновлен.' : 'Workflow создан.');
+      await loadAccountPipelines({ silent: true, preferredId: String(item?.id || editingId || '') });
+    } catch (error) {
+      setAccountPipelinesError(error?.message || 'Failed to save workflow');
+    } finally {
+      setAccountPipelineActionPending('');
+    }
+  }, [
+    API_BASE,
+    accountPipelineActionPending,
+    accountPipelineDraftId,
+    accountPipelineDraftName,
+    accountPipelineDraftNodes,
+    accountPipelineDraftSource,
+    buildAuthHeaders,
+    loadAccountPipelines,
+    normalizePipelineDraftNodes,
+    parseApiPayload,
+    t,
+    user?.uid
+  ]);
+
+  const deleteAccountPipeline = useCallback(async (pipelineId) => {
+    const id = String(pipelineId || '').trim();
+    if (!id || accountPipelineActionPending) return;
+    if (!window.confirm('Удалить workflow?')) return;
+    setAccountPipelineActionPending(`delete:${id}`);
+    setAccountPipelinesError('');
+    try {
+      const response = await fetch(`${API_BASE}/account/pipelines/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: buildAuthHeaders()
+      });
+      const payload = await parseApiPayload(response);
+      if (response.status === 401) {
+        setShowAuthModal(true);
+        throw new Error(t.authSignInRequired);
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
+      }
+      if (String(accountPipelineDraftId || '') === id || String(accountSelectedPipelineId || '') === id) {
+        resetPipelineDraft();
+        setAccountSelectedPipelineId('');
+      }
+      await loadAccountPipelines({ silent: true });
+      setAccountActionNotice('Workflow удален.');
+    } catch (error) {
+      setAccountPipelinesError(error?.message || 'Failed to delete workflow');
+    } finally {
+      setAccountPipelineActionPending('');
+    }
+  }, [
+    API_BASE,
+    accountPipelineActionPending,
+    accountPipelineDraftId,
+    accountSelectedPipelineId,
+    buildAuthHeaders,
+    loadAccountPipelines,
+    parseApiPayload,
+    resetPipelineDraft,
+    t
+  ]);
+
+  const generateWorkflowWithAi = useCallback(async ({ save = false } = {}) => {
+    if (!user?.uid) {
+      setShowAuthModal(true);
+      return null;
+    }
+    const prompt = String(accountWorkflowPrompt || assistantEntry || '').trim();
+    if (!prompt) {
+      setAccountPipelinesError('Опиши цель: например "сделай видео для TikTok".');
+      return null;
+    }
+    const selectedFile = file || files[0] || null;
+    setAccountPipelineActionPending(save ? 'ai_generate_save' : 'ai_generate');
+    setAccountPipelinesError('');
+    try {
+      const response = await fetch(`${API_BASE}/account/workflow/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildAuthHeaders()
+        },
+        body: JSON.stringify({
+          prompt,
+          name: String(accountPipelineDraftName || '').trim() || undefined,
+          save,
+          auto_create_pipeline: save,
+          file_name: selectedFile?.name || undefined,
+          file_size: selectedFile?.size || undefined,
+          goal: assistantContextSummary?.intent_prediction || undefined
+        })
+      });
+      const payload = await parseApiPayload(response);
+      if (response.status === 401) {
+        setShowAuthModal(true);
+        throw new Error(t.authSignInRequired);
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
+      }
+      const workflow = payload?.workflow && typeof payload.workflow === 'object' ? payload.workflow : null;
+      if (workflow) {
+        const nodes = normalizePipelineDraftNodes(workflow.nodes);
+        setAccountPipelineDraftNodes(nodes);
+        setAccountPipelineDraftName(String(workflow.name || accountPipelineDraftName || 'AI workflow'));
+        setAccountPipelineDraftSource('workflow_generator');
+      }
+      const created = payload?.pipeline && typeof payload.pipeline === 'object' ? payload.pipeline : null;
+      if (created?.id) {
+        const nextId = String(created.id);
+        setAccountPipelineDraftId(nextId);
+        setAccountSelectedPipelineId(nextId);
+        await loadAccountPipelines({ silent: true, preferredId: nextId });
+        setAccountActionNotice('AI workflow создан и сохранен.');
+      } else {
+        setAccountActionNotice('AI workflow сгенерирован. Проверь узлы и сохрани.');
+      }
+      return payload;
+    } catch (error) {
+      setAccountPipelinesError(error?.message || 'Failed to generate workflow');
+      return null;
+    } finally {
+      setAccountPipelineActionPending('');
+    }
+  }, [
+    API_BASE,
+    accountPipelineDraftName,
+    accountWorkflowPrompt,
+    assistantContextSummary?.intent_prediction,
+    assistantEntry,
+    buildAuthHeaders,
+    file,
+    files,
+    loadAccountPipelines,
+    normalizePipelineDraftNodes,
+    parseApiPayload,
+    t,
+    user?.uid
+  ]);
+
+  const runAccountPipeline = async (pipelineId) => {
+    const id = String(pipelineId || accountSelectedPipelineId || '').trim();
+    if (!id || accountPipelineRunPending) return;
+    const selectedFile = file || files[0] || null;
+    if (!selectedFile) {
+      setAccountPipelinesError('Сначала выбери файл.');
+      scrollToConverter();
+      return;
+    }
+    setAccountPipelineRunPending(id);
+    setAccountPipelinesError('');
+    setAccountActionNotice('');
+    setStatus('processing');
+    setProgress(8);
+    setPipelineStage('Pipeline: upload');
+    try {
+      const authHeaders = buildAuthHeaders();
+      const upload = await uploadToStorage(
+        API_BASE,
+        authHeaders,
+        selectedFile,
+        selectedFile.name,
+        20_000
+      );
+      const inputFormat = getFileExt(selectedFile.name);
+      const response = await fetch(`${API_BASE}/account/pipelines/${encodeURIComponent(id)}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
+        body: JSON.stringify({
+          inputKey: upload?.inputKey,
+          originalName: selectedFile.name,
+          inputSize: Number(selectedFile.size || 0),
+          inputFormat
+        })
+      });
+      const payload = await parseApiPayload(response);
+      if (response.status === 401) {
+        setShowAuthModal(true);
+        throw new Error(t.authSignInRequired);
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
+      }
+      const jobId = String(payload?.jobId || payload?.job_id || '').trim();
+      if (!jobId) throw new Error('Pipeline run did not return job id');
+      setLastJobId(jobId);
+      setPipelineStage('Pipeline: processing');
+      setProgress(45);
+      const finalJob = await recoverCompletedJob(jobId, authHeaders, 180000);
+      if (!finalJob) throw new Error('Pipeline run timed out');
+      const finalStatus = String(finalJob.status || '').toLowerCase();
+      if (finalStatus !== 'completed') {
+        throw new Error(finalJob?.error?.message || 'Pipeline execution failed');
+      }
+      const resolvedDownloadUrl = finalJob.downloadUrl || finalJob.outputUrl || null;
+      setDownloadUrlSafe(resolvedDownloadUrl);
+      setDownloadFileName(
+        String(finalJob?.outputMeta?.outputName || '').trim()
+        || extractLocalNameFromUrl(resolvedDownloadUrl)
+        || ''
+      );
+      setStatus('done');
+      setProgress(100);
+      setPipelineStage('Pipeline: completed');
+      setAccountActionNotice('Workflow выполнен успешно.');
+      track('pipeline_run_complete', { pipeline_id: id, job_id: jobId, success: true });
+    } catch (error) {
+      setStatus('error');
+      setPipelineStage(null);
+      setProgress(0);
+      setErrorInfo(error?.message || 'Failed to run workflow');
+      setAccountPipelinesError(error?.message || 'Failed to run workflow');
+      track('pipeline_run_complete', { pipeline_id: id, success: false, error: error?.message || 'unknown' });
+    } finally {
+      setAccountPipelineRunPending('');
+    }
+  };
+
   const redeemAccountPromoCode = async () => {
     if (!user?.uid) {
       setShowAuthModal(true);
@@ -3070,6 +3795,17 @@ export default function App() {
       setAccountApiWebhookKeyId('');
       setAccountApiWebhookEvents({ completed: true, failed: false });
       setAccountApiWebhookSecret('');
+      setAccountPipelines([]);
+      setAccountPipelinesLoading(false);
+      setAccountPipelinesError('');
+      setAccountPipelineActionPending('');
+      setAccountPipelineRunPending('');
+      setAccountWorkflowPrompt('');
+      setAccountPipelineDraftId('');
+      setAccountPipelineDraftName('');
+      setAccountPipelineDraftSource('manual');
+      setAccountPipelineDraftNodes(normalizePipelineDraftNodes([]));
+      setAccountSelectedPipelineId('');
       return undefined;
     }
     const controller = new AbortController();
@@ -3079,12 +3815,30 @@ export default function App() {
       loadAccountConnections({ signal: controller.signal }),
       loadAccountSessions({ signal: controller.signal }),
       loadAccountApiKeys({ signal: controller.signal }),
-      loadAccountApiWebhooks({ signal: controller.signal })
+      loadAccountApiWebhooks({ signal: controller.signal }),
+      loadAccountPipelines({ signal: controller.signal })
     ]);
     return () => {
       controller.abort();
     };
-  }, [isAccountPath, loadAccountApiKeys, loadAccountApiWebhooks, loadAccountBilling, loadAccountConnections, loadAccountProfile, loadAccountSessions, user?.uid]);
+  }, [
+    isAccountPath,
+    loadAccountApiKeys,
+    loadAccountApiWebhooks,
+    loadAccountBilling,
+    loadAccountConnections,
+    loadAccountPipelines,
+    loadAccountProfile,
+    loadAccountSessions,
+    normalizePipelineDraftNodes,
+    user?.uid
+  ]);
+
+  useEffect(() => {
+    if (accountSection !== 'pipelines') return;
+    if (accountPipelineDraftNodes.length > 0) return;
+    setAccountPipelineDraftNodes(normalizePipelineDraftNodes([]));
+  }, [accountPipelineDraftNodes.length, accountSection, normalizePipelineDraftNodes]);
 
   const getBlogLikeView = (post) => {
     if (!post?.id) {
@@ -3245,6 +3999,86 @@ export default function App() {
     }
   };
 
+  const handleTestModeLogin = async () => {
+    if (testModeLoading) return;
+    setAuthError('');
+    const pass = String(password || '').trim();
+    if (!pass) {
+      setAuthError('Enter test mode password.');
+      return;
+    }
+    setTestModeLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/auth/test-mode/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: pass,
+          login: String(email || '').trim() || 'tester'
+        })
+      });
+      const payload = await parseApiPayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
+      }
+      const userFromApi = normalizeTestModeUser(payload?.user);
+      if (!userFromApi) {
+        throw new Error('Test mode user data is invalid.');
+      }
+      const persisted = writeStoredTestModeUser(userFromApi) || userFromApi;
+      setUser(persisted);
+      setIsPro(true);
+      setShowTwofaModal(false);
+      setShowAuthModal(false);
+      setPassword('');
+    } catch (error) {
+      setAuthError(error?.message || 'Failed to login in test mode.');
+    } finally {
+      setTestModeLoading(false);
+    }
+  };
+
+  const handleTestModeUnlock = useCallback(async () => {
+    if (testModeUnlockLoading) return;
+    if (!user?.uid || !user?.isTestMode) return;
+    setTestModeUnlockError('');
+    setTestModeUnlockLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/auth/test-mode/unlock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildAuthHeaders()
+        },
+        body: JSON.stringify({
+          user_id: user.uid
+        })
+      });
+      const payload = await parseApiPayload(response);
+      if (!response.ok) {
+        throw new Error(payload?.message || t.errorRequestWithStatus.replace('{status}', String(response.status)));
+      }
+      if (payload?.access && payload.access.blocked === false) {
+        setAccountBilling((prev) => {
+          const base = prev && typeof prev === 'object' ? prev : {};
+          return {
+            ...base,
+            access: {
+              blocked: false,
+              reason: null,
+              blocked_at: null
+            }
+          };
+        });
+      }
+      await loadAccountBilling({ silent: true, suppressError: true });
+    } catch (error) {
+      setTestModeUnlockError(error?.message || 'Failed to unlock test mode account.');
+    } finally {
+      setTestModeUnlockLoading(false);
+    }
+  }, [API_BASE, buildAuthHeaders, loadAccountBilling, parseApiPayload, t, testModeUnlockLoading, user?.isTestMode, user?.uid]);
+
   const handleGuest = async () => {
     try {
       await signInAnonymously(auth);
@@ -3312,7 +4146,8 @@ export default function App() {
     setStatus('idle');
     setProgress(0);
     setPipelineStage(null);
-    setDownloadUrl(null);
+    setDownloadUrlSafe(null);
+    setDownloadFileName('');
     setEtaSeconds(null);
     setSmartSuggestion(null);
     setErrorInfo(null);
@@ -3337,7 +4172,7 @@ export default function App() {
     setPrivacyDeleteAfter(false);
     setAssistantExecutionLog([]);
     clearAssistantTimer();
-  }, [clearAssistantTimer]);
+  }, [clearAssistantTimer, setDownloadUrlSafe]);
 
 
   const selectTool = useCallback((toolId) => {
@@ -3373,6 +4208,43 @@ export default function App() {
     navigate(targetPath);
     if (autoPick) setPendingOpenToolId(canonicalToolId);
   }, [navigate, recordToolOpen, selectTool, toolIds, track]);
+
+  const createAssistantAutomationWorkflow = useCallback(async () => {
+    if (!user?.uid) {
+      setShowAuthModal(true);
+      setAssistantNotice('Войди в аккаунт, чтобы создать workflow.');
+      return;
+    }
+    const prompt = String(
+      assistantEntry
+      || assistantAutomationHint
+      || assistantContextSummary?.intent_prediction
+      || `Convert ${file?.name || 'file'}`
+    ).trim();
+    if (!prompt) {
+      setAssistantNotice('Не удалось определить цель workflow.');
+      return;
+    }
+    setAccountWorkflowPrompt(prompt);
+    const payload = await generateWorkflowWithAi({ save: true });
+    if (!payload) {
+      setAssistantNotice('AI не смог создать workflow.');
+      return;
+    }
+    setAccountSection('pipelines');
+    navigate('/account');
+    setAssistantNotice('Workflow создан и сохранен в разделе Pipelines.');
+    appendAssistantLog('AI: workflow создан через generator API');
+  }, [
+    assistantAutomationHint,
+    assistantContextSummary?.intent_prediction,
+    assistantEntry,
+    appendAssistantLog,
+    file?.name,
+    generateWorkflowWithAi,
+    navigate,
+    user?.uid
+  ]);
 
   const handleAssistantAction = useCallback((action) => {
     if (!action) return;
@@ -3441,18 +4313,38 @@ export default function App() {
     }
 
     if (action.kind === 'automation') {
-      setAccountSection('pipelines');
-      navigate('/account');
-      setAssistantNotice('Workflow создан в разделе Pipelines.');
+      void createAssistantAutomationWorkflow();
       register(aiTargetFormat);
       appendAssistantLog('AI: инициирован automation pipeline');
       return;
     }
 
     if (action.kind === 'share') {
-      setAssistantNotice(t.assistantNoticeUnavailable);
+      if (!downloadUrl) {
+        setAssistantNotice('Сначала запусти конвертацию и получи результат.');
+        return;
+      }
+      const link = isLocalDownloadUrl(downloadUrl) ? window.location.href : downloadUrl;
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(link)
+          .then(() => setAssistantNotice('Ссылка скопирована в буфер.'))
+          .catch(() => setAssistantNotice('Не удалось скопировать ссылку.'));
+      } else {
+        setAssistantNotice('Копирование не поддерживается в этом браузере.');
+      }
+      appendAssistantLog('AI: выполнено действие share');
     }
-  }, [aiTargetFormat, appendAssistantLog, assistantContextSummary?.intent_prediction, currentTool?.type, file?.name, navigate, openToolRoute, t]);
+  }, [
+    aiTargetFormat,
+    appendAssistantLog,
+    assistantContextSummary?.intent_prediction,
+    createAssistantAutomationWorkflow,
+    currentTool?.type,
+    downloadUrl,
+    file?.name,
+    openToolRoute,
+    t
+  ]);
 
   const submitFormatSearch = (source = 'enter') => {
     const query = searchTerm.trim();
@@ -3492,10 +4384,13 @@ export default function App() {
     if (status === 'processing') return;
 
     setShareHint('');
+    setShareLink('');
     setStatus('processing');
     setProgress(5);
     setPipelineStage(stageLabels.validate);
     setErrorInfo(null);
+    setDownloadUrlSafe(null);
+    setDownloadFileName('');
     setEtaSeconds(null);
     appendAssistantLog('Pipeline: старт обработки');
 
@@ -3572,7 +4467,13 @@ export default function App() {
         }
       }
 
-      setDownloadUrl(result.downloadUrl || null);
+      const resolvedDownloadUrl = result.downloadUrl || null;
+      setDownloadUrlSafe(resolvedDownloadUrl);
+      setDownloadFileName(
+        String(result?.outputMeta?.outputName || '').trim() ||
+        extractLocalNameFromUrl(resolvedDownloadUrl) ||
+        ''
+      );
       setStatus('done');
       setProgress(100);
       setPipelineStage(stageLabels.cleanup);
@@ -3588,7 +4489,13 @@ export default function App() {
           if (recovered.outputMeta && encryptionKey) {
             encryptionContextRef.current.set(createdJobId, { key: encryptionKey, meta: recovered.outputMeta });
           }
-          setDownloadUrl(recovered.downloadUrl || recovered.outputUrl || null);
+          const recoveredDownloadUrl = recovered.downloadUrl || recovered.outputUrl || null;
+          setDownloadUrlSafe(recoveredDownloadUrl);
+          setDownloadFileName(
+            String(recovered?.outputMeta?.outputName || '').trim() ||
+            extractLocalNameFromUrl(recoveredDownloadUrl) ||
+            ''
+          );
           setStatus('done');
           setProgress(100);
           setPipelineStage(stageLabels.cleanup);
@@ -3654,10 +4561,20 @@ export default function App() {
     if (!downloadUrl) return;
     const context = lastJobId ? encryptionContextRef.current.get(lastJobId) : null;
     const fileName = (() => {
+      const explicit = String(downloadFileName || '').trim();
+      if (explicit) return explicit;
+      const localName = extractLocalNameFromUrl(downloadUrl);
+      if (localName) return localName;
       try {
         const u = new URL(downloadUrl);
         const parts = u.pathname.split('/');
-        return parts[parts.length - 1] || `converted_${Date.now()}`;
+        const last = parts[parts.length - 1] || '';
+        if (!last) return `converted_${Date.now()}`;
+        try {
+          return decodeURIComponent(last);
+        } catch {
+          return last;
+        }
       } catch {
         return `converted_${Date.now()}`;
       }
@@ -3685,17 +4602,18 @@ export default function App() {
       });
   };
   const handleShare = async () => {
-    const link = downloadUrl || window.location.href;
+    const localOutput = isLocalDownloadUrl(downloadUrl);
+    const link = localOutput ? window.location.href : (downloadUrl || window.location.href);
     setShareHint('');
     try {
       if (navigator.share) {
         await navigator.share({ title: 'MegaConvert', url: link });
-        setShareHint('Ссылка отправлена.');
+        setShareHint(localOutput ? 'Ссылка на страницу отправлена. Локальный файл сначала скачайте.' : 'Ссылка отправлена.');
         return;
       }
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(link);
-        setShareHint('Ссылка скопирована.');
+        setShareHint(localOutput ? 'Скопирована ссылка на страницу. Локальный файл сначала скачайте.' : 'Ссылка скопирована.');
         return;
       }
       setShareHint('Скопируйте ссылку вручную.');
@@ -3706,6 +4624,10 @@ export default function App() {
 
   const handleCreateShareLink = async (requestedPreset) => {
     if (!downloadUrl) return;
+    if (isLocalDownloadUrl(downloadUrl)) {
+      setShareHint('Локальный результат нельзя опубликовать ссылкой. Скачайте файл или включите серверный режим.');
+      return;
+    }
     const normalizedPreset = String(requestedPreset || shareExpiryPreset || 'seven_days').trim().toLowerCase();
     const presetLabel = {
       one_hour: '1 час',
@@ -3714,7 +4636,7 @@ export default function App() {
       thirty_days: '30 дней',
       never: 'без срока'
     }[normalizedPreset] || normalizedPreset;
-    const ext = getExtensionFromValue(downloadUrl);
+    const ext = getExtensionFromValue(downloadFileName || downloadUrl);
     const fallback = async () => {
       const token = createShareToken();
       const next = {
@@ -3841,6 +4763,12 @@ export default function App() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
   }).length;
   const freeTierRemaining = Math.max(0, FREE_TIER_DAILY_LIMIT - todayDoneCount);
+  const accountAccess = accountBilling?.access && typeof accountBilling.access === 'object'
+    ? accountBilling.access
+    : null;
+  const isAccountBlocked = Boolean(user?.uid && accountAccess?.blocked);
+  const blockedReason = String(accountAccess?.reason || '').trim();
+  const blockedSince = accountAccess?.blocked_at || null;
 
   useEffect(() => {
     const aliasTarget = SEO_ROUTE_ALIASES[path];
@@ -4414,7 +5342,7 @@ export default function App() {
                             {assistantAutomationHint || 'Создайте автоматизацию для этого типа файлов.'}
                           </div>
                           <div className="mt-3">
-                            <Button variant="secondary" onClick={() => { setAccountSection('pipelines'); navigate('/account'); }}>
+                            <Button variant="secondary" onClick={() => { void createAssistantAutomationWorkflow(); }}>
                               Создать workflow
                             </Button>
                           </div>
@@ -4702,7 +5630,7 @@ export default function App() {
                   <Suspense fallback={<div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-slate-400">Загружаем превью…</div>}>
                     <PreviewViewer
                       fileUrl={downloadUrl}
-                      type={getPreviewType(getExtensionFromValue(downloadUrl) || '')}
+                      type={getPreviewType(getExtensionFromValue(downloadFileName || downloadUrl) || '')}
                     />
                   </Suspense>
                 </div>
@@ -5605,7 +6533,12 @@ export default function App() {
                         ? 'bg-slate-900 text-white'
                         : 'text-slate-600 hover:bg-slate-50'
                     }`}
-                    onClick={() => setAccountSection(item.id)}
+                    onClick={() => {
+                      setAccountSection(item.id);
+                      if (item.id === 'pipelines') {
+                        void loadAccountPipelines({ silent: true, preferredId: accountSelectedPipelineId });
+                      }
+                    }}
                   >
                     {item.label}
                   </button>
@@ -6021,33 +6954,191 @@ export default function App() {
               {accountSection === 'pipelines' && (
                 <PageCard className="account-card-enter">
                   <div className="text-xs uppercase tracking-widest text-slate-500">{t.accountSectionPipelines || 'Pipelines'}</div>
-                  <h2 className="text-xl font-semibold mt-2">Пресеты и пайплайны</h2>
+                  <h2 className="text-xl font-semibold mt-2">AI Workflow Builder</h2>
                   <p className="text-sm text-slate-600 mt-2">
-                    Автоматизируйте повторяющиеся конвертации через визуальные цепочки.
+                    Реальный node-based редактор: генерируй workflow через AI, редактируй узлы и запускай его на выбранном файле.
                   </p>
-                  <div className="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
-                    {['Загрузка', 'Конвертация', 'Доставка'].map((step) => (
-                      <div key={step} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                        <div className="text-xs uppercase tracking-widest text-slate-500">Шаг</div>
-                        <div className="mt-2 font-semibold text-slate-100">{step}</div>
-                        <div className="text-xs text-slate-500 mt-1">Настраиваемый модуль</div>
+
+                  <div className="mt-4 grid lg:grid-cols-[1.2fr_0.8fr] gap-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-xs uppercase tracking-widest text-slate-500">AI Workflow Generator</div>
+                      <textarea
+                        value={accountWorkflowPrompt}
+                        onChange={(event) => setAccountWorkflowPrompt(event.target.value)}
+                        placeholder='Например: "сделай видео для TikTok и минимизируй размер"'
+                        className="mt-3 w-full min-h-[96px] border border-slate-300 rounded-xl px-3 py-2 text-sm bg-white"
+                      />
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => { void generateWorkflowWithAi({ save: false }); }}
+                          disabled={Boolean(accountPipelineActionPending)}
+                        >
+                          {accountPipelineActionPending === 'ai_generate' ? 'Generating...' : 'Generate'}
+                        </Button>
+                        <Button
+                          onClick={() => { void generateWorkflowWithAi({ save: true }); }}
+                          disabled={Boolean(accountPipelineActionPending)}
+                        >
+                          {accountPipelineActionPending === 'ai_generate_save' ? 'Saving...' : 'Generate + Save'}
+                        </Button>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs uppercase tracking-widest text-slate-500">Runtime</div>
+                      <div className="mt-2 text-sm text-slate-700">Pipelines: <strong>{accountPipelines.length}</strong></div>
+                      <div className="mt-1 text-sm text-slate-700">Selected: <strong>{accountPipelineDraftName || '—'}</strong></div>
+                      <div className="mt-1 text-sm text-slate-700">Nodes: <strong>{accountPipelineDraftNodes.length}</strong></div>
+                      <div className="mt-1 text-sm text-slate-700">Source: <strong>{accountPipelineDraftSource || 'manual'}</strong></div>
+                      <div className="mt-3 flex gap-2">
+                        <Button variant="secondary" onClick={() => void loadAccountPipelines()} disabled={accountPipelinesLoading}>
+                          {accountPipelinesLoading ? t.accountLoading : t.accountReload}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            resetPipelineDraft();
+                            setAccountSelectedPipelineId('');
+                          }}
+                          disabled={Boolean(accountPipelineActionPending)}
+                        >
+                          New draft
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Button onClick={() => { setAccountNotice('Пайплайн создан и сохранен как черновик.'); navigate('/tools'); }}>
-                      Создать пайплайн
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setAccountNotice('Пресет запущен. Выберите файл для конвертации.');
-                        navigate('/tools');
-                      }}
-                    >
-                      Запустить пресет
-                    </Button>
+
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs uppercase tracking-widest text-slate-500">Node Graph</div>
+                    <div className="mt-3">
+                      <input
+                        type="text"
+                        value={accountPipelineDraftName}
+                        onChange={(event) => setAccountPipelineDraftName(event.target.value)}
+                        placeholder="Workflow name"
+                        className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {accountPipelineDraftNodes.map((node, index) => (
+                        <div key={node.id} className="rounded-xl border border-slate-200 p-3 bg-slate-50">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-semibold flex items-center justify-center">
+                              {index + 1}
+                            </div>
+                            <select
+                              value={node.type}
+                              onChange={(event) => updateAccountPipelineNode(node.id, 'type', event.target.value)}
+                              className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white"
+                            >
+                              {ACCOUNT_WORKFLOW_NODE_TYPES.map((item) => (
+                                <option key={item.value} value={item.value}>{item.label}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={node.label}
+                              onChange={(event) => updateAccountPipelineNode(node.id, 'label', event.target.value)}
+                              className="flex-1 min-w-[180px] border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white"
+                              placeholder="Node label"
+                            />
+                            {node.type === 'convert' && (
+                              <select
+                                value={node.tool || ''}
+                                onChange={(event) => updateAccountPipelineNode(node.id, 'tool', event.target.value)}
+                                className="border border-slate-300 rounded-lg px-2 py-1 text-xs bg-white min-w-[170px]"
+                              >
+                                <option value="">Select tool</option>
+                                {tools.map((tool) => (
+                                  <option key={tool.id} value={tool.id}>{tool.name}</option>
+                                ))}
+                              </select>
+                            )}
+                            <Button
+                              variant="outline"
+                              onClick={() => removeAccountPipelineNode(node.id)}
+                              disabled={accountPipelineDraftNodes.length <= 1 || Boolean(accountPipelineActionPending)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button variant="secondary" onClick={addAccountPipelineNode} disabled={Boolean(accountPipelineActionPending)}>
+                        Add node
+                      </Button>
+                      <Button onClick={() => { void saveAccountPipelineDraft(); }} disabled={Boolean(accountPipelineActionPending)}>
+                        {accountPipelineActionPending.startsWith('save:') || accountPipelineActionPending === 'create' ? 'Saving...' : 'Save workflow'}
+                      </Button>
+                      {accountSelectedPipelineId && (
+                        <Button
+                          variant="outline"
+                          onClick={() => { void runAccountPipeline(accountSelectedPipelineId); }}
+                          disabled={Boolean(accountPipelineRunPending)}
+                        >
+                          {accountPipelineRunPending === accountSelectedPipelineId ? 'Running...' : 'Run workflow'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
+
+                  <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs uppercase tracking-widest text-slate-500">Saved Workflows</div>
+                    {accountPipelines.length === 0 ? (
+                      <div className="text-sm text-slate-500 mt-3">No workflows yet. Generate one with AI or create manually.</div>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {accountPipelines.map((item) => {
+                          const itemId = String(item?.id || '');
+                          const summary = item?.summary && typeof item.summary === 'object' ? item.summary : {};
+                          const selected = itemId && itemId === accountSelectedPipelineId;
+                          return (
+                            <div
+                              key={itemId}
+                              className={`rounded-xl border px-3 py-3 ${selected ? 'border-slate-900 bg-slate-50' : 'border-slate-200'}`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <div className="font-semibold text-slate-900">{item.name || 'Workflow'}</div>
+                                  <div className="text-xs text-slate-500 mt-1">
+                                    nodes: {Number(summary.nodes_total || 0)} · steps: {Number(summary.steps_total || 0)} · tool: {summary.primary_tool || '—'}
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Button variant="secondary" onClick={() => openAccountPipelineForEdit(item)}>
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => { void runAccountPipeline(itemId); }}
+                                    disabled={Boolean(accountPipelineRunPending)}
+                                  >
+                                    {accountPipelineRunPending === itemId ? 'Running...' : 'Run'}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => { void deleteAccountPipeline(itemId); }}
+                                    disabled={Boolean(accountPipelineActionPending)}
+                                  >
+                                    Delete
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {accountPipelinesError && (
+                    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {accountPipelinesError}
+                    </div>
+                  )}
                 </PageCard>
               )}
               {accountSection === 'api' && (
@@ -7060,6 +8151,52 @@ console.log(job.status, job.downloadUrl)`}
       </Section>
     </>
   );
+  if (isAccountBlocked) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 px-4 py-8 flex items-center justify-center">
+        <div className="w-full max-w-2xl rounded-3xl border border-red-500/30 bg-red-950/30 backdrop-blur p-8 md:p-10 text-center shadow-[0_24px_80px_rgba(220,38,38,0.22)]">
+          <div className="inline-flex items-center rounded-full border border-red-400/40 bg-red-500/15 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-red-200">
+            Account blocked
+          </div>
+          <h1 className="mt-5 text-3xl md:text-4xl font-semibold text-red-100">
+            Ваш аккаунт заблокирован
+          </h1>
+          <p className="mt-4 text-base md:text-lg text-red-50/90">
+            Доступ к сайту полностью отключен. Вы больше не можете пользоваться функциями и переходить по разделам.
+          </p>
+          {blockedReason && (
+            <p className="mt-4 text-sm text-red-200">
+              Причина: <span className="font-semibold">{blockedReason.replace(/[_-]+/g, ' ')}</span>
+            </p>
+          )}
+          {blockedSince && (
+            <p className="mt-2 text-sm text-red-200">
+              Дата блокировки: <span className="font-semibold">{formatUiDateTime(blockedSince)}</span>
+            </p>
+          )}
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {user?.isTestMode && (
+              <Button
+                variant="secondary"
+                onClick={() => void handleTestModeUnlock()}
+                disabled={testModeUnlockLoading}
+              >
+                {testModeUnlockLoading ? 'Разблокировка...' : 'Разблокировать тестовый режим'}
+              </Button>
+            )}
+            <Button onClick={() => void logoutCurrentUser()}>
+              Выйти из аккаунта
+            </Button>
+          </div>
+          {user?.isTestMode && testModeUnlockError && (
+            <p className="mt-4 text-sm text-red-200">
+              {testModeUnlockError}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (isAdmin) {
     return (
       <AdminApp
@@ -7114,7 +8251,7 @@ console.log(job.status, job.downloadUrl)`}
                   <button onClick={() => navigate('/account')} className="font-medium text-slate-200 hover:text-white">
                     {t.navAccount}
                   </button>
-                  <button onClick={() => { localStorage.removeItem('twofa_token'); signOut(auth); }} className="p-2 hover:bg-white/10 rounded-full" aria-label="Logout"><X size={20} /></button>
+                  <button onClick={() => { void logoutCurrentUser(); }} className="p-2 hover:bg-white/10 rounded-full" aria-label="Logout"><X size={20} /></button>
                 </div>
               )}
               <button className="lg:hidden px-3 py-2 rounded-lg border border-white/10 text-sm font-semibold text-slate-200" onClick={() => setIsMobileMenuOpen((v) => !v)}>
@@ -7289,6 +8426,14 @@ console.log(job.status, job.downloadUrl)`}
                 {authError && <p className="text-xs text-red-500 text-center">{authError}</p>}
                 <Button type="submit" className="w-full justify-center">{t.authEmail}</Button>
               </form>
+              <button
+                type="button"
+                onClick={handleTestModeLogin}
+                disabled={testModeLoading}
+                className="w-full py-2.5 border border-amber-300 text-amber-700 rounded-xl hover:bg-amber-50 disabled:opacity-60"
+              >
+                {testModeLoading ? 'Signing in test mode...' : 'Login by test password'}
+              </button>
               <button onClick={handleGuest} className="w-full text-sm text-slate-500 hover:text-slate-800">{t.authGuest}</button>
             </div>
             <div className="mt-4 pt-4 border-t text-center">

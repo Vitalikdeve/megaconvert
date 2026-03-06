@@ -15,8 +15,50 @@ import { uploadToStorage } from '../adapters/storage';
 import { createJob, pollJob } from '../adapters/jobs';
 import { verifyOutput } from '../verification';
 import { computeChecksum } from '../verification/checksum';
+import { resolveExecutionMode, tryRunLocalConversion } from '../local/converter';
 
 const DEFAULT_STAGE_ORDER = ['validate', 'detect', 'normalize', 'convert', 'verify', 'deliver', 'cleanup'];
+
+const toStableString = (value) => {
+  try {
+    return JSON.stringify(value ?? null);
+  } catch {
+    return 'null';
+  }
+};
+
+const hashString = (value) => {
+  const text = String(value || '');
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+};
+
+const buildJobIdempotencyKey = ({
+  toolId,
+  batchMode,
+  settings,
+  uploadedItems
+}) => {
+  const items = Array.isArray(uploadedItems) ? uploadedItems : [];
+  const itemSignature = items.map((item) => {
+    const checksumValue = String(item?.checksum?.value || item?.checksum || '').trim().toLowerCase();
+    const format = String(item?.inputFormat || '').trim().toLowerCase();
+    const size = Number(item?.inputSize || 0);
+    const key = String(item?.inputKey || '').trim();
+    return `${checksumValue || key}:${format}:${size}`;
+  }).join('|');
+  const base = [
+    String(toolId || '').trim().toLowerCase(),
+    batchMode ? 'batch' : 'single',
+    hashString(toStableString(settings)),
+    hashString(itemSignature)
+  ].join(':');
+  return `job_${base}`;
+};
 
 const buildJobPayload = ({
   toolId,
@@ -25,10 +67,17 @@ const buildJobPayload = ({
   encryption,
   uploadedItems
 }) => {
+  const items = Array.isArray(uploadedItems) ? uploadedItems : [];
   const payload = {
     tool: toolId,
     batch: batchMode ? 'true' : 'false',
     settings,
+    idempotency_key: buildJobIdempotencyKey({
+      toolId,
+      batchMode,
+      settings,
+      uploadedItems: items
+    }),
     encryption: encryption ? {
       enabled: true,
       keyWrap: encryption.wrap?.keyWrap,
@@ -37,13 +86,14 @@ const buildJobPayload = ({
   };
 
   if (batchMode) {
-    payload.items = uploadedItems;
-  } else if (uploadedItems[0]) {
-    const single = uploadedItems[0];
+    payload.items = items;
+  } else if (items[0]) {
+    const single = items[0];
     payload.inputKey = single.inputKey;
     payload.originalName = single.originalName;
     payload.inputSize = single.inputSize;
     payload.inputFormat = single.inputFormat;
+    payload.checksum = single.checksum || null;
     payload.encryptedSize = single.encryptedSize;
     payload.encryption = { ...payload.encryption, ...single.encryption };
   }
@@ -122,6 +172,44 @@ export const runConversion = async ({
       name: 'convert',
       run: async (context) => {
         hooks.onProgress?.(20);
+        const executionMode = resolveExecutionMode(context.settings);
+        const localResult = await tryRunLocalConversion({
+          toolId,
+          processor,
+          files: context.normalizedFiles,
+          batchMode,
+          executionMode,
+          logger
+        });
+        if (localResult) {
+          context.job = {
+            id: localResult.jobId,
+            status: 'completed',
+            local: true
+          };
+          context.encryption = null;
+          context.output = {
+            downloadUrl: localResult.downloadUrl,
+            outputMeta: localResult.outputMeta
+          };
+          hooks.onStatus?.('running');
+          hooks.onJobCreated?.({ jobId: localResult.jobId, encryption: null, local: true });
+          hooks.onJobUpdate?.({
+            jobId: localResult.jobId,
+            status: 'completed',
+            progress: 100,
+            downloadUrl: localResult.downloadUrl,
+            outputMeta: localResult.outputMeta,
+            local: true
+          });
+          hooks.onProgress?.(95);
+          logger?.info('local_conversion_completed', {
+            tool: toolId,
+            jobId: localResult.jobId,
+            outputName: localResult.outputMeta?.outputName || null
+          });
+          return;
+        }
         const uploadItems = [];
         const cryptoSupport = getCryptoSupport();
         const encryptionAvailable = context.encryptionEnabled && cryptoSupport.webCrypto;

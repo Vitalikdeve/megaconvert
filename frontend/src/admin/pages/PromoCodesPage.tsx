@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdminAuth } from '../auth/useAdminAuth';
 import { useAdminI18n } from '../i18n/AdminI18nContext';
 
@@ -9,6 +9,33 @@ const BENEFIT_TYPES = [
   'credits',
   'feature_access'
 ];
+const BLOCK_FEATURE_TOKENS = new Set([
+  'account_block',
+  'account_blocked',
+  'account_blocked_forever',
+  'blocked_forever',
+  'ban_account',
+  'banned'
+]);
+
+const normalizeFeatureToken = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[\s-]+/g, '_');
+
+const isBlockingBenefitPayload = (benefitType, rawBenefit) => {
+  if (String(benefitType || '').trim() !== 'feature_access') return false;
+  const benefit = rawBenefit && typeof rawBenefit === 'object' && !Array.isArray(rawBenefit) ? rawBenefit : {};
+  const rawFeatures = Array.isArray(benefit.features)
+    ? benefit.features
+    : (benefit.feature ? [benefit.feature] : []);
+  const hasBlockingFeature = rawFeatures.some((item) => BLOCK_FEATURE_TOKENS.has(normalizeFeatureToken(item)));
+  return hasBlockingFeature
+    || benefit.blocked === true
+    || benefit.blocked_forever === true
+    || benefit.account_blocked === true
+    || benefit.banned === true;
+};
 
 const BENEFIT_DEFAULTS_BY_TYPE = {
   percent_discount: { percent: 20 },
@@ -45,6 +72,21 @@ const PROMO_PRESETS = [
     max_redemptions: 50,
     active_days: 60,
     code_prefix: 'LIFEIND'
+  },
+  {
+    id: 'account_block_forever',
+    label: 'Account block forever',
+    benefit_type: 'feature_access',
+    benefit: {
+      features: ['account_blocked_forever'],
+      blocked: true,
+      blocked_forever: true,
+      reason: 'policy_violation',
+      scope: 'account'
+    },
+    max_redemptions: 100,
+    active_days: 3650,
+    code_prefix: 'BAN'
   },
   {
     id: 'pro_discount_20',
@@ -213,6 +255,22 @@ export const PromoCodesPage = () => {
   const [campaignCodePrefix, setCampaignCodePrefix] = useState('MEGA');
   const [campaignRunning, setCampaignRunning] = useState(false);
   const [campaignLastBatch, setCampaignLastBatch] = useState([]);
+  const selectedCampaignPreset = useMemo(
+    () => PROMO_PRESETS.find((item) => item.id === campaignPresetId) || PROMO_PRESETS[0],
+    [campaignPresetId]
+  );
+  const campaignCreatesPermanentBlock = isBlockingBenefitPayload(
+    selectedCampaignPreset?.benefit_type,
+    selectedCampaignPreset?.benefit
+  );
+  const parsedFormBenefit = useMemo(() => {
+    try {
+      return JSON.parse(String(form.benefit_json || '{}'));
+    } catch {
+      return null;
+    }
+  }, [form.benefit_json]);
+  const formCreatesPermanentBlock = isBlockingBenefitPayload(form.benefit_type, parsedFormBenefit);
 
   const loadPromoCodes = useCallback(async () => {
     setLoading(true);
@@ -462,6 +520,11 @@ export const PromoCodesPage = () => {
             <p className="text-sm text-slate-500 mt-1">
               Generate batches for subscription plans, trials, discounts and retention campaigns.
             </p>
+            {campaignCreatesPermanentBlock && (
+              <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                This preset permanently blocks accounts that redeem the promo code.
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -630,6 +693,11 @@ export const PromoCodesPage = () => {
           className="w-full min-h-[160px] border border-slate-300 rounded-xl px-3 py-2 text-sm font-mono bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200/60"
           required
         />
+        {formCreatesPermanentBlock && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            Warning: this promo permanently blocks the account that redeems it.
+          </div>
+        )}
 
         <div className="grid md:grid-cols-4 gap-3">
           <input
@@ -713,7 +781,14 @@ export const PromoCodesPage = () => {
                 {codes.map((promo) => (
                   <tr key={promo.id} className="border-t border-slate-100">
                     <td className="py-2 text-slate-800 font-medium">{promo.code}</td>
-                    <td className="py-2 text-slate-700">{promo.benefit_type}</td>
+                    <td className="py-2 text-slate-700">
+                      <div>{promo.benefit_type}</div>
+                      {isBlockingBenefitPayload(promo.benefit_type, promo.benefit) && (
+                        <div className="inline-block mt-1 rounded-md bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                          PERMANENT ACCOUNT BLOCK
+                        </div>
+                      )}
+                    </td>
                     <td className="py-2 text-slate-700">{limitLabel(promo, t)}</td>
                     <td className="py-2 text-slate-600">
                       <div>{promo.starts_at || '-'}</div>

@@ -174,6 +174,16 @@ const localRoot = process.env.LOCAL_STORAGE_DIR || '/data';
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 const RATE_LIMIT_UPLOADS_PER_MIN = Number(process.env.RATE_LIMIT_UPLOADS_PER_MIN || 30);
 const RATE_LIMIT_JOBS_PER_MIN = Number(process.env.RATE_LIMIT_JOBS_PER_MIN || 20);
+const JOB_IDEMPOTENCY_KEY_MAX_LEN = Math.max(16, Number(process.env.JOB_IDEMPOTENCY_KEY_MAX_LEN || 128));
+const JOB_IDEMPOTENCY_TTL_SEC = Math.max(60, Number(process.env.JOB_IDEMPOTENCY_TTL_SEC || 24 * 60 * 60));
+const JOB_DEDUPE_TTL_SEC = Math.max(60, Number(process.env.JOB_DEDUPE_TTL_SEC || 30 * 60));
+const JOB_EVENTS_POLL_INTERVAL_MS = Math.max(250, Number(process.env.JOB_EVENTS_POLL_INTERVAL_MS || 1000));
+const UPLOAD_HASH_CACHE_TTL_SEC = Math.max(60, Number(process.env.UPLOAD_HASH_CACHE_TTL_SEC || 7 * 24 * 60 * 60));
+const UPLOAD_HASH_COMPUTE_MAX_BYTES = Math.max(1, Number(process.env.UPLOAD_HASH_COMPUTE_MAX_BYTES || 100 * 1024 * 1024));
+const AUTOSCALER_MIN_WORKERS = Math.max(1, Number(process.env.AUTOSCALER_MIN_WORKERS || 1));
+const AUTOSCALER_MAX_WORKERS = Math.max(AUTOSCALER_MIN_WORKERS, Number(process.env.AUTOSCALER_MAX_WORKERS || 20));
+const AUTOSCALER_TARGET_BACKLOG_PER_WORKER = Math.max(1, Number(process.env.AUTOSCALER_TARGET_BACKLOG_PER_WORKER || 4));
+const AUTOSCALER_TARGET_ACTIVE_PER_WORKER = Math.max(1, Number(process.env.AUTOSCALER_TARGET_ACTIVE_PER_WORKER || 2));
 const ZK_SESSION_TTL_SEC = Number(process.env.ZK_SESSION_TTL_SEC || 180);
 const ENCRYPTION_KEY_VERSION = String(process.env.ENCRYPTION_KEY_VERSION || 'v1').trim() || 'v1';
 const ENCRYPTION_MIN_CHUNK_SIZE = Math.max(16 * 1024, Number(process.env.ENCRYPTION_MIN_CHUNK_SIZE || 64 * 1024));
@@ -327,6 +337,14 @@ const DEVELOPER_BIO_MAX_LEN = Math.max(64, Number(process.env.DEVELOPER_BIO_MAX_
 const POST_LIKE_RATE_LIMIT_PER_MIN = Math.max(1, Number(process.env.POST_LIKE_RATE_LIMIT_PER_MIN || 10));
 const PROMO_CODE_ALLOWED = /^[A-Z0-9][A-Z0-9_-]*$/;
 const PROMO_BENEFIT_TYPES = new Set(['percent_discount', 'trial_days', 'lifetime_access', 'credits', 'feature_access']);
+const ACCOUNT_BLOCK_FEATURE_TOKENS = new Set([
+  'account_block',
+  'account_blocked',
+  'account_blocked_forever',
+  'blocked_forever',
+  'ban_account',
+  'banned'
+]);
 const PROMO_ADMIN_LIST_LIMIT = Math.max(10, Number(process.env.PROMO_ADMIN_LIST_LIMIT || 500));
 const ACCOUNT_CONNECTION_PROVIDERS = new Set(['google', 'github']);
 const ACCOUNT_CONNECTION_EMAIL_MAX_LEN = Math.max(64, Number(process.env.ACCOUNT_CONNECTION_EMAIL_MAX_LEN || 160));
@@ -376,6 +394,19 @@ const BOT_INTERNAL_API_BASE = String(process.env.BOT_INTERNAL_API_BASE || '').tr
 const BOT_INTERNAL_LINK_SECRET = String(
   process.env.BOT_INTERNAL_LINK_SECRET || process.env.INTERNAL_LINK_SECRET || ''
 ).trim();
+const ACCOUNT_BLOCK_CACHE_TTL_MS = Math.max(1000, Number(process.env.ACCOUNT_BLOCK_CACHE_TTL_MS || 10000));
+const TEST_MODE_ENABLED = parseEnvBoolean(process.env.TEST_MODE_ENABLED, false);
+const TEST_MODE_PASSWORD = String(process.env.TEST_MODE_PASSWORD || '').trim();
+const TEST_MODE_USER_PREFIX = (
+  String(process.env.TEST_MODE_USER_PREFIX || 'testmode')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '')
+  || 'testmode'
+);
+const TEST_MODE_PLAN_TIER = String(process.env.TEST_MODE_PLAN_TIER || 'team').trim().toLowerCase() || 'team';
+const TEST_MODE_ALLOW_REMOTE = parseEnvBoolean(process.env.TEST_MODE_ALLOW_REMOTE, false);
+const TEST_MODE_ALIAS_MAX_LEN = Math.max(8, Number(process.env.TEST_MODE_ALIAS_MAX_LEN || 64));
 
 const twofaCodes = new Map(); // email -> { code, expiresAt }
 const twofaTokens = new Map(); // token -> { email, expiresAt }
@@ -406,6 +437,7 @@ let workerAlertEventsStore = null;
 let workerJobResultsStore = null;
 let workspacePlatformStore = null;
 let accountFallbackStore = null;
+const accountBlockStateCache = new Map();
 let postLikesMutationQueue = Promise.resolve();
 let pgPool = null;
 let pgModuleLoadAttempted = false;
@@ -749,6 +781,55 @@ function getRequestUserId(req) {
   const raw = req.headers['x-user-id'];
   const value = Array.isArray(raw) ? raw[0] : raw;
   return String(value || '').trim();
+}
+
+function sanitizeTestModeAlias(rawValue) {
+  const raw = String(rawValue || '').trim().toLowerCase();
+  const localPart = raw.includes('@') ? raw.split('@')[0] : raw;
+  const cleaned = localPart
+    .replace(/[^a-z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-_.]+|[-_.]+$/g, '')
+    .slice(0, TEST_MODE_ALIAS_MAX_LEN);
+  return cleaned;
+}
+
+function buildTestModeUserId(rawAlias = '') {
+  const alias = sanitizeTestModeAlias(rawAlias);
+  const suffix = alias || crypto.randomBytes(6).toString('hex');
+  return `${TEST_MODE_USER_PREFIX}_${suffix}`;
+}
+
+function getRequestHost(req) {
+  const rawHost = req.headers.host;
+  const hostValue = Array.isArray(rawHost) ? rawHost[0] : rawHost;
+  const host = String(hostValue || '').trim().toLowerCase();
+  return host.split(':')[0] || '';
+}
+
+function isLoopbackHost(host) {
+  const normalized = String(host || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
+}
+
+function isTestModeConfigured() {
+  return TEST_MODE_ENABLED && Boolean(TEST_MODE_PASSWORD);
+}
+
+function isTestModeRequestAllowed(req) {
+  if (!isTestModeConfigured()) return false;
+  if (TEST_MODE_ALLOW_REMOTE) return true;
+  return isLoopbackHost(getRequestHost(req));
+}
+
+function isTestModeUserId(rawUserId) {
+  const normalized = String(rawUserId || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized.startsWith(`${TEST_MODE_USER_PREFIX}_`);
+}
+
+function isUnlimitedTestRequest(req) {
+  return isTestModeUserId(getRequestUserId(req));
 }
 
 const UUID_LIKE_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1753,6 +1834,257 @@ function normalizePipelineSteps(steps) {
     })
     .filter(Boolean)
     .slice(0, 20);
+}
+
+const WORKFLOW_NODE_TYPES = new Set([
+  'upload',
+  'analyze',
+  'detect',
+  'preprocess',
+  'convert',
+  'compress',
+  'postprocess',
+  'deliver',
+  'export',
+  'notify',
+  'webhook',
+  'ocr',
+  'trim',
+  'watermark',
+  'rename',
+  'translate',
+  'summarize'
+]);
+
+const WORKFLOW_NODE_TO_ACTION = {
+  upload: 'ingest',
+  analyze: 'analyze',
+  detect: 'analyze',
+  preprocess: 'preprocess',
+  convert: 'convert',
+  compress: 'postprocess',
+  postprocess: 'postprocess',
+  deliver: 'deliver',
+  export: 'deliver',
+  notify: 'deliver',
+  webhook: 'deliver',
+  ocr: 'preprocess',
+  trim: 'preprocess',
+  watermark: 'postprocess',
+  rename: 'postprocess',
+  translate: 'postprocess',
+  summarize: 'postprocess'
+};
+
+function normalizeWorkflowNodeType(value) {
+  const type = String(value || '').trim().toLowerCase();
+  if (!type) return 'convert';
+  if (WORKFLOW_NODE_TYPES.has(type)) return type;
+  return 'convert';
+}
+
+function normalizeWorkflowNodes(nodes) {
+  if (!Array.isArray(nodes)) return [];
+  return nodes
+    .map((row, idx) => {
+      const src = asObject(row);
+      const type = normalizeWorkflowNodeType(src.type || src.kind || src.action || 'convert');
+      const rawId = String(src.id || src.node_id || `node_${idx + 1}`).trim();
+      const id = clampText(rawId || `node_${idx + 1}`, 120) || `node_${idx + 1}`;
+      const label = clampText(String(src.label || src.title || type).trim(), 140) || type;
+      const toolRaw = String(src.tool || src.tool_id || '').trim();
+      const tool = toolRaw && TOOL_IDS.has(toolRaw) ? toolRaw : null;
+      const settings = asObject(src.settings || src.config || {});
+      const positionSrc = asObject(src.position || {});
+      const x = Number(positionSrc.x);
+      const y = Number(positionSrc.y);
+      const position = {
+        x: Number.isFinite(x) ? x : 0,
+        y: Number.isFinite(y) ? y : 0
+      };
+      return {
+        id,
+        type,
+        label,
+        tool,
+        settings,
+        position
+      };
+    })
+    .filter((item) => Boolean(item?.id))
+    .slice(0, 64);
+}
+
+function normalizeWorkflowEdges(edges, nodes) {
+  if (!Array.isArray(edges)) return [];
+  const nodeIds = new Set((Array.isArray(nodes) ? nodes : []).map((item) => String(item.id || '').trim()).filter(Boolean));
+  return edges
+    .map((row, idx) => {
+      const src = asObject(row);
+      const source = clampText(String(src.source || src.from || '').trim(), 120);
+      const target = clampText(String(src.target || src.to || '').trim(), 120);
+      if (!source || !target) return null;
+      if (!nodeIds.has(source) || !nodeIds.has(target)) return null;
+      const id = clampText(String(src.id || `edge_${idx + 1}`).trim(), 120) || `edge_${idx + 1}`;
+      return {
+        id,
+        source,
+        target,
+        condition: clampText(String(src.condition || '').trim(), 240) || null
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 256);
+}
+
+function buildWorkflowGraphFromSteps(steps) {
+  const normalizedSteps = normalizePipelineSteps(steps);
+  const nodes = normalizedSteps.map((step, idx) => ({
+    id: clampText(String(step.id || `node_${idx + 1}`), 120) || `node_${idx + 1}`,
+    type: step.action === 'convert' ? 'convert' : (
+      step.action === 'analyze'
+        ? 'analyze'
+        : step.action === 'preprocess'
+          ? 'preprocess'
+          : step.action === 'postprocess'
+            ? 'postprocess'
+            : step.action === 'deliver'
+              ? 'deliver'
+              : 'convert'
+    ),
+    label: clampText(String(step.action || `Step ${idx + 1}`), 140) || `Step ${idx + 1}`,
+    tool: step.tool && TOOL_IDS.has(step.tool) ? step.tool : null,
+    settings: asObject(step.settings || {}),
+    position: { x: idx * 180, y: 0 }
+  }));
+  const edges = [];
+  for (let i = 0; i < nodes.length - 1; i += 1) {
+    edges.push({
+      id: `edge_${i + 1}`,
+      source: nodes[i].id,
+      target: nodes[i + 1].id,
+      condition: null
+    });
+  }
+  return { nodes, edges };
+}
+
+function topologicallySortWorkflow(nodes, edges) {
+  const enrichedNodes = nodes.map((item, idx) => ({ ...item, __idx: idx }));
+  const nodeById = new Map(enrichedNodes.map((item) => [item.id, item]));
+  const indegree = new Map();
+  const outgoing = new Map();
+  for (const node of enrichedNodes) {
+    indegree.set(node.id, 0);
+    outgoing.set(node.id, []);
+  }
+  for (const edge of edges) {
+    if (!nodeById.has(edge.source) || !nodeById.has(edge.target)) continue;
+    outgoing.get(edge.source).push(edge.target);
+    indegree.set(edge.target, Number(indegree.get(edge.target) || 0) + 1);
+  }
+
+  const queue = enrichedNodes
+    .filter((node) => Number(indegree.get(node.id) || 0) === 0)
+    .sort((a, b) => a.__idx - b.__idx);
+  const ordered = [];
+
+  while (queue.length) {
+    const current = queue.shift();
+    ordered.push(current);
+    const targets = outgoing.get(current.id) || [];
+    for (const targetId of targets) {
+      const nextDegree = Number(indegree.get(targetId) || 0) - 1;
+      indegree.set(targetId, nextDegree);
+      if (nextDegree === 0) {
+        const nextNode = nodeById.get(targetId);
+        if (nextNode) {
+          queue.push(nextNode);
+          queue.sort((a, b) => a.__idx - b.__idx);
+        }
+      }
+    }
+  }
+
+  if (ordered.length !== enrichedNodes.length) {
+    const error = new Error('Workflow graph contains a cycle');
+    error.code = 'PIPELINE_GRAPH_CYCLE';
+    throw error;
+  }
+  return ordered.map((item) => ({
+    id: item.id,
+    type: item.type,
+    label: item.label,
+    tool: item.tool || null,
+    settings: asObject(item.settings || {}),
+    position: asObject(item.position || { x: 0, y: 0 })
+  }));
+}
+
+function stepsFromWorkflowNodes(nodes) {
+  return normalizePipelineSteps(nodes.map((node, idx) => {
+    const action = WORKFLOW_NODE_TO_ACTION[node.type] || 'convert';
+    const tool = action === 'convert' && node.tool && TOOL_IDS.has(node.tool) ? node.tool : null;
+    return {
+      id: String(node.id || `step_${idx + 1}`),
+      action,
+      tool,
+      settings: asObject(node.settings || {})
+    };
+  }));
+}
+
+function compilePipelineDefinition(payload, current = null) {
+  const source = asObject(payload || {});
+  const hasNodes = Object.prototype.hasOwnProperty.call(source, 'nodes');
+  const hasEdges = Object.prototype.hasOwnProperty.call(source, 'edges');
+  const hasSteps = Object.prototype.hasOwnProperty.call(source, 'steps');
+
+  const baseSteps = hasSteps
+    ? normalizePipelineSteps(source.steps)
+    : normalizePipelineSteps(current?.steps);
+  let nodes = hasNodes
+    ? normalizeWorkflowNodes(source.nodes)
+    : normalizeWorkflowNodes(current?.nodes);
+  let edges = hasEdges
+    ? normalizeWorkflowEdges(source.edges, nodes)
+    : normalizeWorkflowEdges(current?.edges, nodes);
+
+  if (!nodes.length && baseSteps.length) {
+    const graph = buildWorkflowGraphFromSteps(baseSteps);
+    nodes = graph.nodes;
+    edges = graph.edges;
+  }
+
+  if (!nodes.length) {
+    return {
+      steps: baseSteps,
+      nodes: [],
+      edges: []
+    };
+  }
+
+  const orderedNodes = topologicallySortWorkflow(nodes, edges);
+  const steps = stepsFromWorkflowNodes(orderedNodes);
+  return {
+    steps: steps.length ? steps : baseSteps,
+    nodes,
+    edges
+  };
+}
+
+function buildPipelineSummary(pipeline) {
+  const steps = normalizePipelineSteps(pipeline?.steps);
+  const nodes = normalizeWorkflowNodes(pipeline?.nodes);
+  const edges = normalizeWorkflowEdges(pipeline?.edges, nodes);
+  const convertSteps = steps.filter((step) => step.action === 'convert' && step.tool && TOOL_IDS.has(step.tool));
+  return {
+    steps_total: steps.length,
+    nodes_total: nodes.length,
+    edges_total: edges.length,
+    convert_steps: convertSteps.length,
+    primary_tool: convertSteps[0]?.tool || null
+  };
 }
 
 function applyAutomationRulesForJob({ userId, tool, inputSize, settings }) {
@@ -2873,6 +3205,181 @@ function normalizeIdempotencyKey(req, rawBody) {
   return normalized || null;
 }
 
+function normalizeJobIdempotencyKey(req, rawBody) {
+  const body = asObject(rawBody);
+  const headerRaw = req.headers['idempotency-key'];
+  const headerValue = Array.isArray(headerRaw) ? headerRaw[0] : headerRaw;
+  const candidate = String(
+    body.idempotency_key
+    || body.job_idempotency_key
+    || headerValue
+    || ''
+  ).trim();
+  if (!candidate) return null;
+  if (candidate.length > JOB_IDEMPOTENCY_KEY_MAX_LEN) return null;
+  return candidate;
+}
+
+function normalizeSha256(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (!/^[a-f0-9]{64}$/.test(normalized)) return '';
+  return normalized;
+}
+
+function extractChecksumValue(rawValue) {
+  if (typeof rawValue === 'string') return normalizeSha256(rawValue);
+  if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+    return normalizeSha256(rawValue.value || rawValue.sha256 || rawValue.hash);
+  }
+  return '';
+}
+
+function getJobScopeKey(req) {
+  const userId = getRequestUserId(req);
+  if (userId) return `user:${userId}`;
+  const clientId = getClientId(req);
+  if (clientId) return `client:${clientId}`;
+  return 'anonymous';
+}
+
+function getJobIdempotencyRedisKey(scopeKey, idempotencyKey) {
+  const scope = String(scopeKey || '').trim();
+  const idempotency = String(idempotencyKey || '').trim();
+  return `job:idempotency:${scope}:${idempotency}`;
+}
+
+async function readJobIdempotencyResult(scopeKey, idempotencyKey) {
+  const key = getJobIdempotencyRedisKey(scopeKey, idempotencyKey);
+  try {
+    const raw = await withTimeout(
+      connection.get(key),
+      REDIS_OP_TIMEOUT_MS,
+      'redis_get_timeout'
+    );
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return asObject(parsed);
+  } catch {
+    return null;
+  }
+}
+
+async function writeJobIdempotencyResult(scopeKey, idempotencyKey, payload) {
+  const key = getJobIdempotencyRedisKey(scopeKey, idempotencyKey);
+  const safePayload = asObject(payload);
+  try {
+    await withTimeout(
+      connection.setex(key, JOB_IDEMPOTENCY_TTL_SEC, JSON.stringify(safePayload)),
+      REDIS_OP_TIMEOUT_MS,
+      'redis_setex_timeout'
+    );
+  } catch {
+    // Best-effort cache.
+  }
+}
+
+function buildJobDedupeSignature({ tool, settings, checksums, batch, inputSize }) {
+  const normalizedChecksums = (Array.isArray(checksums) ? checksums : [])
+    .map((item) => normalizeSha256(item))
+    .filter(Boolean)
+    .sort();
+  if (!normalizedChecksums.length) return '';
+  const safeTool = String(tool || '').trim().toLowerCase();
+  const settingsHash = crypto
+    .createHash('sha256')
+    .update(JSON.stringify(asObject(settings)))
+    .digest('hex')
+    .slice(0, 16);
+  const signaturePayload = JSON.stringify({
+    tool: safeTool,
+    batch: Boolean(batch),
+    size: Math.max(0, Number(inputSize || 0)),
+    settingsHash,
+    checksums: normalizedChecksums
+  });
+  return crypto.createHash('sha256').update(signaturePayload).digest('hex');
+}
+
+function getJobDedupeRedisKey(scopeKey, dedupeSignature) {
+  const scope = String(scopeKey || '').trim();
+  const signature = String(dedupeSignature || '').trim();
+  return `job:dedupe:${scope}:${signature}`;
+}
+
+async function readJobDedupeJobId(scopeKey, dedupeSignature) {
+  const key = getJobDedupeRedisKey(scopeKey, dedupeSignature);
+  try {
+    const value = await withTimeout(
+      connection.get(key),
+      REDIS_OP_TIMEOUT_MS,
+      'redis_get_timeout'
+    );
+    return String(value || '').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeJobDedupeJobId(scopeKey, dedupeSignature, jobId) {
+  const key = getJobDedupeRedisKey(scopeKey, dedupeSignature);
+  const normalizedJobId = String(jobId || '').trim();
+  if (!normalizedJobId) return;
+  try {
+    await withTimeout(
+      connection.setex(key, JOB_DEDUPE_TTL_SEC, normalizedJobId),
+      REDIS_OP_TIMEOUT_MS,
+      'redis_setex_timeout'
+    );
+  } catch {
+    // Best-effort cache.
+  }
+}
+
+function getUploadHashRedisKey(sha256) {
+  return `upload:sha256:${normalizeSha256(sha256)}`;
+}
+
+async function resolveInputKeyByHash(sha256) {
+  const normalized = normalizeSha256(sha256);
+  if (!normalized) return null;
+  const key = getUploadHashRedisKey(normalized);
+  try {
+    const inputKey = String(
+      await withTimeout(connection.get(key), REDIS_OP_TIMEOUT_MS, 'redis_get_timeout')
+      || ''
+    ).trim();
+    if (!inputKey) return null;
+    if (!inputKey.startsWith('inputs/')) return null;
+    if (storageMode === 's3') {
+      const head = await headObject(inputKey);
+      if (!head) return null;
+    } else {
+      const diskPath = path.join(localRoot, inputKey);
+      if (!fs.existsSync(diskPath)) return null;
+    }
+    return inputKey;
+  } catch {
+    return null;
+  }
+}
+
+async function rememberInputKeyHash(sha256, inputKey) {
+  const normalized = normalizeSha256(sha256);
+  const safeInputKey = String(inputKey || '').trim();
+  if (!normalized || !safeInputKey || !safeInputKey.startsWith('inputs/')) return;
+  const redisKey = getUploadHashRedisKey(normalized);
+  try {
+    await withTimeout(
+      connection.setex(redisKey, UPLOAD_HASH_CACHE_TTL_SEC, safeInputKey),
+      REDIS_OP_TIMEOUT_MS,
+      'redis_setex_timeout'
+    );
+  } catch {
+    // Best-effort cache.
+  }
+}
+
 function normalizePromoBenefitJson(rawBenefit) {
   const benefit = asObject(rawBenefit);
   return benefit;
@@ -2898,6 +3405,38 @@ function toIsoOrNull(value) {
   return asDate.toISOString();
 }
 
+function normalizeAccountBlockFeatureToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+}
+
+function isAccountBlockFeatureToken(value) {
+  const token = normalizeAccountBlockFeatureToken(value);
+  return token ? ACCOUNT_BLOCK_FEATURE_TOKENS.has(token) : false;
+}
+
+function isBlockedPayloadValue(value) {
+  return parseEnvBoolean(value, false);
+}
+
+function isAccountBlockPayload(payload) {
+  const safePayload = asObject(payload);
+  if (
+    isBlockedPayloadValue(safePayload.blocked)
+    || isBlockedPayloadValue(safePayload.blocked_forever)
+    || isBlockedPayloadValue(safePayload.account_blocked)
+    || isBlockedPayloadValue(safePayload.banned)
+  ) {
+    return true;
+  }
+  const rawFeatures = Array.isArray(safePayload.features)
+    ? safePayload.features
+    : (safePayload.feature ? [safePayload.feature] : []);
+  return rawFeatures.some((item) => isAccountBlockFeatureToken(item));
+}
+
 function mapEntitlementRow(row) {
   if (!row) return null;
   return {
@@ -2919,6 +3458,102 @@ function isEntitlementActive(entitlement, nowMs = Date.now()) {
   if (Number.isFinite(startsAtMs) && startsAtMs > nowMs) return false;
   if (Number.isFinite(endsAtMs) && endsAtMs <= nowMs) return false;
   return true;
+}
+
+function isAccountBlockEntitlement(entitlement, nowMs = Date.now()) {
+  if (!isEntitlementActive(entitlement, nowMs)) return false;
+  if (String(entitlement?.kind || '').trim().toLowerCase() !== 'feature_access') return false;
+  return isAccountBlockPayload(entitlement.payload);
+}
+
+function getCachedAccountBlockState(rawUserId) {
+  const userId = String(rawUserId || '').trim();
+  if (!userId) return null;
+  const cached = accountBlockStateCache.get(userId);
+  if (!cached) return null;
+  if (!Number.isFinite(cached.expiresAt) || cached.expiresAt <= Date.now()) {
+    accountBlockStateCache.delete(userId);
+    return null;
+  }
+  return cached.value;
+}
+
+function setCachedAccountBlockState(rawUserId, value) {
+  const userId = String(rawUserId || '').trim();
+  if (!userId) return;
+  accountBlockStateCache.set(userId, {
+    value: asObject(value),
+    expiresAt: Date.now() + ACCOUNT_BLOCK_CACHE_TTL_MS
+  });
+}
+
+function clearCachedAccountBlockState(rawUserId) {
+  const userId = String(rawUserId || '').trim();
+  if (!userId) return;
+  accountBlockStateCache.delete(userId);
+}
+
+async function resolveAccountBlockState(rawUserId, requestId = null) {
+  const userId = String(rawUserId || '').trim();
+  if (!userId) return { blocked: false };
+
+  const cached = getCachedAccountBlockState(userId);
+  if (cached) return cached;
+
+  const promoStorage = getPromoStorageStatus();
+  if (!promoStorage.ok) {
+    const fallback = { blocked: false };
+    setCachedAccountBlockState(userId, fallback);
+    return fallback;
+  }
+
+  const promoUserId = normalizePromoUserId(userId);
+  if (!promoUserId) {
+    const fallback = { blocked: false };
+    setCachedAccountBlockState(userId, fallback);
+    return fallback;
+  }
+
+  try {
+    const result = await promoStorage.pool.query(
+      `
+        SELECT id, kind, scope, payload, starts_at, ends_at, revoked_at
+        FROM user_entitlements
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+          AND (ends_at IS NULL OR ends_at > now())
+        ORDER BY created_at DESC
+        LIMIT 100
+      `,
+      [promoUserId]
+    );
+    const nowMs = Date.now();
+    const matched = result.rows
+      .map((row) => mapEntitlementRow(row))
+      .find((item) => isAccountBlockEntitlement(item, nowMs));
+    if (matched) {
+      const payload = asObject(matched.payload);
+      const value = {
+        blocked: true,
+        reason: toCleanText(payload.reason || payload.block_reason || 'account_blocked', 160) || 'account_blocked',
+        blocked_at: matched.starts_at || null,
+        entitlement_id: matched.id || null
+      };
+      setCachedAccountBlockState(userId, value);
+      return value;
+    }
+  } catch (error) {
+    logError({
+      type: 'account_block_lookup_failed',
+      requestId: requestId || null,
+      userId,
+      error: error?.message || 'unknown'
+    });
+  }
+
+  const fallback = { blocked: false };
+  setCachedAccountBlockState(userId, fallback);
+  return fallback;
 }
 
 function mapPromoHistoryRow(row) {
@@ -3117,6 +3752,18 @@ function buildPromoEntitlement({ benefitType, benefit, now }) {
       throw new PromoApiError(400, 'PROMO_BENEFIT_INVALID', 'Promo feature_access requires at least one feature');
     }
     const payload = { features };
+    const shouldBlockAccount = features.some((item) => isAccountBlockFeatureToken(item))
+      || isBlockedPayloadValue(safeBenefit.blocked)
+      || isBlockedPayloadValue(safeBenefit.blocked_forever)
+      || isBlockedPayloadValue(safeBenefit.account_blocked)
+      || isBlockedPayloadValue(safeBenefit.banned);
+    if (shouldBlockAccount) {
+      payload.blocked = true;
+      payload.blocked_forever = true;
+      const reason = toCleanText(safeBenefit.reason || safeBenefit.block_reason || '', 160);
+      if (reason) payload.reason = reason;
+      payload.blocked_at = nowDate.toISOString();
+    }
     return {
       kind: 'feature_access',
       scope,
@@ -4338,6 +4985,406 @@ function resolveToolByFormats(inputExt, toFormat) {
   return null;
 }
 
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'avif', 'gif', 'bmp', 'tif', 'tiff', 'svg', 'ico']);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'mkv', 'avi', 'webm', 'flv', 'wmv', 'm4v', 'ogv', 'ts', '3gp', 'mpg', 'mpeg']);
+const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg', 'opus', 'flac', 'wma', 'aiff', 'amr', 'm4r']);
+const DOCUMENT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt', 'xls', 'xlsx', 'ppt', 'pptx', 'epub', 'mobi', 'azw', 'azw3', 'csv', 'tsv', 'html', 'htm', 'md']);
+const ARCHIVE_EXTENSIONS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso', 'tar.gz']);
+
+function asFiniteNumber(value, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return Number(fallback);
+  return num;
+}
+
+function asPositiveNumberOrNull(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return num;
+}
+
+function normalizeGoalIntent(rawGoal) {
+  const value = String(rawGoal || '').trim().toLowerCase();
+  if (!value) return 'convert';
+  const contains = (tokens) => tokens.some((token) => value.includes(token));
+  if (contains(['compress', 'сж', 'уменьш', 'small', 'smaller', 'size'])) return 'compress';
+  if (contains(['print', 'печат', 'типограф'])) return 'print';
+  if (contains(['web', 'site', 'сайт', 'browser', 'брауз'])) return 'web';
+  if (contains(['edit', 'редакт', 'editable'])) return 'edit';
+  if (contains(['email', 'mail', 'почт'])) return 'email';
+  if (contains(['tiktok', 'тикток'])) return 'social_tiktok';
+  if (contains(['youtube', 'ютуб'])) return 'social_youtube';
+  if (contains(['telegram', 'телеграм'])) return 'social_telegram';
+  if (contains(['audio', 'sound', 'voice', 'аудио', 'звук'])) return 'audio';
+  return value;
+}
+
+function getFileCategory(ext) {
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image';
+  if (VIDEO_EXTENSIONS.has(ext)) return 'video';
+  if (AUDIO_EXTENSIONS.has(ext)) return 'audio';
+  if (ARCHIVE_EXTENSIONS.has(ext)) return 'archive';
+  if (DOCUMENT_EXTENSIONS.has(ext)) return 'document';
+  if (ext === 'json' || ext === 'xml' || ext === 'yaml' || ext === 'yml' || ext === 'toml' || ext === 'ini' || ext === 'sql' || ext === 'log') {
+    return 'data';
+  }
+  return 'binary';
+}
+
+function inferTargetFormat({ ext, category, intent, hasAlpha = false, codec = '' }) {
+  const normalizedCodec = String(codec || '').trim().toLowerCase();
+  if (intent === 'print') return 'pdf';
+  if (intent === 'edit' && ext === 'pdf') return 'docx';
+  if (intent === 'audio' && VIDEO_EXTENSIONS.has(ext)) return 'mp3';
+
+  if (category === 'image') {
+    if (intent === 'compress' || intent === 'web' || intent === 'email') {
+      if (hasAlpha) return 'png';
+      return 'webp';
+    }
+    if (intent === 'print') return 'pdf';
+    return ext === 'png' ? 'jpg' : 'webp';
+  }
+  if (category === 'video') {
+    if (intent === 'social_tiktok' || intent === 'social_youtube' || intent === 'social_telegram') return 'mp4';
+    if (intent === 'compress' || intent === 'web' || intent === 'email') return 'mp4';
+    if (normalizedCodec && !normalizedCodec.includes('h264') && !normalizedCodec.includes('avc')) return 'mp4';
+    return ext === 'webm' ? 'mp4' : ext;
+  }
+  if (category === 'audio') {
+    if (intent === 'compress' || intent === 'email') return 'mp3';
+    if (intent === 'web') return 'aac';
+    return ext === 'wav' || ext === 'aiff' ? 'mp3' : ext;
+  }
+  if (category === 'document') {
+    if (intent === 'edit' && ext === 'pdf') return 'docx';
+    if (intent === 'web') return 'pdf';
+    if (intent === 'compress' && ext === 'pdf') return 'pdf';
+    if (ext === 'doc' || ext === 'docx' || ext === 'txt' || ext === 'rtf') return 'pdf';
+    return ext === 'pdf' ? 'docx' : 'pdf';
+  }
+  if (category === 'archive') return 'zip';
+  return ext || 'bin';
+}
+
+function estimateOutputRatio({ category, intent, ext, targetFormat }) {
+  if (intent === 'compress') {
+    if (category === 'image') return ext === targetFormat ? 0.55 : 0.62;
+    if (category === 'video') return 0.58;
+    if (category === 'audio') return 0.64;
+    if (category === 'document' && ext === 'pdf') return 0.68;
+    return 0.72;
+  }
+  if (intent === 'email') return 0.6;
+  if (intent === 'web') return 0.72;
+  if (intent === 'social_tiktok' || intent === 'social_youtube' || intent === 'social_telegram') return 0.75;
+  if (ext === targetFormat) return 0.95;
+  return 0.9;
+}
+
+function buildPresetForIntent({ intent, category, ext, fileSize, hasAlpha, width, height, durationSec, codec }) {
+  const targetFormat = inferTargetFormat({
+    ext,
+    category,
+    intent,
+    hasAlpha,
+    codec
+  });
+  const settings = {};
+  const constraints = {};
+
+  if (intent === 'social_tiktok') {
+    settings.video = { resolution: '1080p', codec: 'h264', fps: 30, bitrate: '8M' };
+    constraints.aspect_ratio = '9:16';
+    constraints.max_duration_sec = 60;
+  } else if (intent === 'social_youtube') {
+    settings.video = { resolution: '1080p', codec: 'h264', fps: 30, bitrate: '8M' };
+    constraints.aspect_ratio = '16:9';
+  } else if (intent === 'social_telegram') {
+    settings.video = { resolution: '720p', codec: 'h264', bitrate: '3M' };
+    constraints.max_size_mb = 49;
+  } else if (intent === 'email') {
+    settings.compression = { targetRatio: 0.55, maxSizeMb: 20 };
+    if (category === 'video') settings.video = { resolution: '720p', bitrate: '2M' };
+    if (category === 'image') settings.image = { quality: hasAlpha ? 88 : 80 };
+  } else if (intent === 'compress') {
+    if (category === 'video') {
+      settings.compression = { targetRatio: 0.6 };
+      settings.video = { bitrate: '3M', codec: 'h264' };
+    }
+    if (category === 'image') {
+      settings.image = { quality: hasAlpha ? 88 : 78 };
+      settings.compression = { targetRatio: hasAlpha ? 0.72 : 0.6 };
+    }
+    if (category === 'document' && ext === 'pdf') {
+      settings.compression = { targetRatio: 0.68, pdfProfiles: ['/printer', '/ebook', '/screen'] };
+    }
+    if (category === 'audio') {
+      settings.audio = { bitrate: '128k' };
+      settings.compression = { targetRatio: 0.64 };
+    }
+  } else if (intent === 'print') {
+    settings.image = { dpi: 300 };
+    settings.document = { profile: 'print' };
+  } else if (intent === 'web') {
+    if (category === 'image') settings.image = { quality: hasAlpha ? 90 : 82 };
+    if (category === 'video') settings.video = { bitrate: '4M', codec: 'h264' };
+  }
+
+  const ratio = estimateOutputRatio({ category, intent, ext, targetFormat });
+  const estimatedOutputSize = fileSize > 0 ? Math.max(1, Math.round(fileSize * ratio)) : null;
+  const tool = resolveToolByFormats(ext, targetFormat);
+  const duration = durationSec || null;
+  const dimension = width && height ? `${width}x${height}` : null;
+  const rationale = [];
+  rationale.push(`category=${category}`);
+  rationale.push(`intent=${intent}`);
+  if (dimension) rationale.push(`resolution=${dimension}`);
+  if (duration) rationale.push(`duration=${Math.round(duration)}s`);
+  if (codec) rationale.push(`codec=${String(codec)}`);
+
+  return {
+    intent,
+    target_format: targetFormat,
+    tool,
+    settings,
+    constraints,
+    estimated_output_size: estimatedOutputSize,
+    estimated_ratio: ratio,
+    rationale
+  };
+}
+
+function mergeSettingObjects(base, override) {
+  const left = asObject(base || {});
+  const right = asObject(override || {});
+  const out = { ...left };
+  for (const [key, value] of Object.entries(right)) {
+    if (
+      value
+      && typeof value === 'object'
+      && !Array.isArray(value)
+      && out[key]
+      && typeof out[key] === 'object'
+      && !Array.isArray(out[key])
+    ) {
+      out[key] = { ...asObject(out[key]), ...asObject(value) };
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function analyzeFileIntelligence({ body, defaultGoal = 'convert' }) {
+  const payload = asObject(body || {});
+  const fileMeta = asObject(payload.file_meta || payload.fileMeta || {});
+  const fileName = String(payload.file_name || payload.fileName || payload.name || fileMeta.name || '').trim();
+  const extFromBody = String(payload.ext || payload.extension || fileMeta.ext || '').trim().toLowerCase();
+  const ext = extFromBody || path.extname(fileName).replace('.', '').toLowerCase();
+  const fileSize = Math.max(0, Number(payload.file_size || payload.fileSize || payload.size || fileMeta.size || fileMeta.size_bytes || 0));
+  const mimeType = String(payload.mime_type || payload.mimeType || fileMeta.mime_type || fileMeta.mimeType || '').trim().toLowerCase() || null;
+  const width = asPositiveNumberOrNull(payload.width || fileMeta.width);
+  const height = asPositiveNumberOrNull(payload.height || fileMeta.height);
+  const durationSec = asPositiveNumberOrNull(payload.duration_sec || payload.duration || fileMeta.duration_sec || fileMeta.duration);
+  const bitrate = asPositiveNumberOrNull(payload.bitrate || fileMeta.bitrate);
+  const codec = String(payload.codec || fileMeta.codec || '').trim().toLowerCase();
+  const dpi = asPositiveNumberOrNull(payload.dpi || fileMeta.dpi);
+  const pages = asPositiveNumberOrNull(payload.pages || fileMeta.pages);
+  const hasAlpha = payload.has_alpha === true || payload.hasAlpha === true || fileMeta.has_alpha === true || fileMeta.hasAlpha === true;
+  const intent = normalizeGoalIntent(payload.goal || payload.intent || defaultGoal);
+  const category = getFileCategory(ext);
+  const preset = buildPresetForIntent({
+    intent,
+    category,
+    ext,
+    fileSize,
+    hasAlpha,
+    width,
+    height,
+    durationSec,
+    codec
+  });
+
+  const actions = [];
+  if (preset.tool) actions.push(`create_job:${preset.tool}`);
+  actions.push(`target_format:${preset.target_format}`);
+  if (intent === 'compress') actions.push('optimize_size');
+  if (intent === 'web' || intent.startsWith('social_')) actions.push('optimize_delivery');
+  if (intent === 'print') actions.push('ensure_print_quality');
+  if (pages && pages > 250) actions.push('consider_split_or_batch');
+  if (category === 'video' && durationSec && durationSec > 600) actions.push('consider_trim_before_convert');
+
+  return {
+    file: {
+      name: fileName || null,
+      ext: ext || null,
+      category,
+      mime_type: mimeType,
+      size_bytes: fileSize || 0,
+      width,
+      height,
+      duration_sec: durationSec,
+      bitrate,
+      codec: codec || null,
+      dpi,
+      pages,
+      has_alpha: hasAlpha
+    },
+    intent,
+    preset,
+    actions
+  };
+}
+
+function buildWorkflowFromIntelligence({
+  analysis,
+  prompt = '',
+  name = '',
+  source = 'assistant'
+}) {
+  const resolvedAnalysis = analysis && typeof analysis === 'object' ? analysis : {};
+  const intent = String(resolvedAnalysis.intent || 'convert').trim().toLowerCase() || 'convert';
+  const file = asObject(resolvedAnalysis.file || {});
+  const preset = asObject(resolvedAnalysis.preset || {});
+  const ext = String(file.ext || '').trim().toLowerCase();
+  const category = String(file.category || '').trim().toLowerCase();
+  const targetFormat = String(preset.target_format || ext || 'bin').trim().toLowerCase() || 'bin';
+  const convertTool = String(preset.tool || resolveToolByFormats(ext, targetFormat) || '').trim();
+  const safeName = clampText(String(name || '').trim(), 160)
+    || clampText(`AI ${intent} workflow`, 160)
+    || 'AI workflow';
+
+  const nodes = [];
+  const addNode = (type, label, extra = {}) => {
+    const id = clampText(String(extra.id || `${type}_${nodes.length + 1}`).trim(), 120) || `${type}_${nodes.length + 1}`;
+    nodes.push({
+      id,
+      type: normalizeWorkflowNodeType(type),
+      label: clampText(String(label || type).trim(), 140) || type,
+      tool: extra.tool && TOOL_IDS.has(String(extra.tool)) ? String(extra.tool) : null,
+      settings: asObject(extra.settings || {}),
+      position: {
+        x: Number(nodes.length) * 200,
+        y: 0
+      }
+    });
+    return id;
+  };
+
+  addNode('upload', 'Upload file');
+  addNode('analyze', 'Analyze metadata', {
+    settings: {
+      intent,
+      source
+    }
+  });
+  if (category === 'image' || category === 'video' || category === 'audio' || intent === 'print') {
+    addNode('preprocess', 'Preprocess', {
+      settings: {
+        quality_profile: intent === 'print' ? 'print' : 'balanced'
+      }
+    });
+  }
+  if (convertTool && TOOL_IDS.has(convertTool)) {
+    addNode('convert', `Convert to ${targetFormat.toUpperCase()}`, {
+      tool: convertTool,
+      settings: asObject(preset.settings || {})
+    });
+  } else {
+    addNode('convert', `Convert to ${targetFormat.toUpperCase()}`, {
+      settings: asObject(preset.settings || {})
+    });
+  }
+  if (intent === 'compress' || intent === 'email' || intent === 'web' || intent.startsWith('social_')) {
+    addNode('compress', 'Optimize output size', {
+      settings: {
+        target_ratio: Number(preset.estimated_ratio || 0) || null
+      }
+    });
+  }
+  addNode('deliver', 'Deliver result', {
+    settings: {
+      channel: 'download'
+    }
+  });
+
+  const edges = [];
+  for (let i = 0; i < nodes.length - 1; i += 1) {
+    edges.push({
+      id: `edge_${i + 1}`,
+      source: nodes[i].id,
+      target: nodes[i + 1].id,
+      condition: null
+    });
+  }
+
+  const compiled = compilePipelineDefinition({
+    steps: [],
+    nodes,
+    edges
+  });
+
+  return {
+    name: safeName,
+    prompt: clampText(String(prompt || '').trim(), 500) || null,
+    intent,
+    source,
+    recommendation: {
+      tool: convertTool && TOOL_IDS.has(convertTool) ? convertTool : null,
+      target_format: targetFormat,
+      settings: asObject(preset.settings || {}),
+      rationale: Array.isArray(preset.rationale) ? preset.rationale : []
+    },
+    nodes: compiled.nodes,
+    edges: compiled.edges,
+    steps: compiled.steps,
+    summary: {
+      nodes_total: compiled.nodes.length,
+      edges_total: compiled.edges.length,
+      steps_total: compiled.steps.length
+    }
+  };
+}
+
+function buildAutoscalerRecommendation(queueCounts, currentWorkersInput) {
+  const waiting = Math.max(0, asFiniteNumber(queueCounts?.waiting || queueCounts?.wait || 0, 0));
+  const delayed = Math.max(0, asFiniteNumber(queueCounts?.delayed || 0, 0));
+  const paused = Math.max(0, asFiniteNumber(queueCounts?.paused || 0, 0));
+  const active = Math.max(0, asFiniteNumber(queueCounts?.active || 0, 0));
+  const prioritized = Math.max(0, asFiniteNumber(queueCounts?.prioritized || 0, 0));
+  const backlog = waiting + delayed + prioritized + paused;
+  const currentWorkers = Math.max(AUTOSCALER_MIN_WORKERS, Math.floor(asFiniteNumber(currentWorkersInput || AUTOSCALER_MIN_WORKERS, AUTOSCALER_MIN_WORKERS)));
+  const byBacklog = Math.ceil(backlog / AUTOSCALER_TARGET_BACKLOG_PER_WORKER);
+  const byActive = Math.ceil(active / AUTOSCALER_TARGET_ACTIVE_PER_WORKER);
+  let desiredWorkers = Math.max(AUTOSCALER_MIN_WORKERS, byBacklog, byActive);
+  if (backlog === 0 && active === 0) {
+    desiredWorkers = AUTOSCALER_MIN_WORKERS;
+  }
+  desiredWorkers = Math.min(AUTOSCALER_MAX_WORKERS, desiredWorkers);
+  const delta = desiredWorkers - currentWorkers;
+  const decision = delta > 0 ? 'scale_up' : delta < 0 ? 'scale_down' : 'hold';
+  return {
+    queue: {
+      waiting,
+      active,
+      delayed,
+      prioritized,
+      paused,
+      backlog
+    },
+    policy: {
+      min_workers: AUTOSCALER_MIN_WORKERS,
+      max_workers: AUTOSCALER_MAX_WORKERS,
+      target_backlog_per_worker: AUTOSCALER_TARGET_BACKLOG_PER_WORKER,
+      target_active_per_worker: AUTOSCALER_TARGET_ACTIVE_PER_WORKER
+    },
+    current_workers: currentWorkers,
+    desired_workers: desiredWorkers,
+    decision
+  };
+}
+
 function buildWebhookSignature(secret, payloadText) {
   return crypto.createHmac('sha256', String(secret || '')).update(String(payloadText || '')).digest('hex');
 }
@@ -4410,10 +5457,76 @@ app.get('/health', async (req, res) => {
   return res.json({ ok: true, storage: storageMode, redis: 'up' });
 });
 
+app.get('/health/queue', async (req, res) => {
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) {
+      return res.status(503).json(redis.payload);
+    }
+    const rawCounts = await queue.getJobCounts('waiting', 'active', 'delayed', 'paused', 'waiting-children');
+    const counts = {
+      waiting: Math.max(0, Number(rawCounts?.waiting || 0)),
+      active: Math.max(0, Number(rawCounts?.active || 0)),
+      delayed: Math.max(0, Number(rawCounts?.delayed || 0)),
+      paused: Math.max(0, Number(rawCounts?.paused || 0)),
+      prioritized: Math.max(0, Number(rawCounts?.['waiting-children'] || 0))
+    };
+    const currentWorkers = Number(req.query.current_workers || req.query.currentWorkers || req.headers['x-current-workers'] || AUTOSCALER_MIN_WORKERS);
+    const recommendation = buildAutoscalerRecommendation(counts, currentWorkers);
+    return res.json({
+      ok: true,
+      ...recommendation,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+    }
+    logError({ type: 'health_queue_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'HEALTH_QUEUE_FAILED', message: 'Failed to read queue health', requestId: req.requestId });
+  }
+});
+
 app.post('/health/worker/ping', (req, res) => {
   workerHeartbeatAt = Date.now();
   opsCounters.workerPings += 1;
   return res.json({ ok: true, ts: workerHeartbeatAt });
+});
+
+app.get('/internal/autoscaler/recommendation', requireInternalWorkerAuth, async (req, res) => {
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) {
+      return res.status(503).json(redis.payload);
+    }
+    const rawCounts = await queue.getJobCounts('waiting', 'active', 'delayed', 'paused', 'waiting-children');
+    const counts = {
+      waiting: Math.max(0, Number(rawCounts?.waiting || 0)),
+      active: Math.max(0, Number(rawCounts?.active || 0)),
+      delayed: Math.max(0, Number(rawCounts?.delayed || 0)),
+      paused: Math.max(0, Number(rawCounts?.paused || 0)),
+      prioritized: Math.max(0, Number(rawCounts?.['waiting-children'] || 0))
+    };
+    const currentWorkers = Number(req.query.current_workers || req.query.currentWorkers || req.headers['x-current-workers'] || AUTOSCALER_MIN_WORKERS);
+    const recommendation = buildAutoscalerRecommendation(counts, currentWorkers);
+    return res.json({
+      ok: true,
+      recommendation,
+      ts: new Date().toISOString(),
+      requestId: req.requestId
+    });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+    }
+    logError({ type: 'autoscaler_recommendation_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({
+      status: 'error',
+      code: 'AUTOSCALER_RECOMMENDATION_FAILED',
+      message: 'Failed to calculate autoscaler recommendation',
+      requestId: req.requestId
+    });
+  }
 });
 
 app.post('/internal/worker/health-check', requireInternalWorkerAuth, (req, res) => {
@@ -4724,6 +5837,42 @@ app.get('/share/:token', (req, res) => {
     return res.status(410).json({ status: 'error', code: 'EXPIRED', message: 'Share expired', requestId: req.requestId });
   }
   return res.json(item);
+});
+
+function shouldSkipAccountBlockCheck(req) {
+  const pathValue = String(req.path || req.originalUrl || '').trim();
+  if (!pathValue) return true;
+  if (pathValue === '/health') return true;
+  if (pathValue === '/account/billing') return true;
+  if (pathValue.startsWith('/admin/')) return true;
+  if (pathValue.startsWith('/auth/')) return true;
+  return false;
+}
+
+app.use(async (req, res, next) => {
+  const rawUserId = getRequestUserId(req);
+  if (!rawUserId) return next();
+  if (shouldSkipAccountBlockCheck(req)) return next();
+  try {
+    const blockState = await resolveAccountBlockState(rawUserId, req.requestId);
+    if (!blockState?.blocked) return next();
+    return res.status(403).json({
+      status: 'error',
+      code: 'ACCOUNT_BLOCKED',
+      message: 'Account is blocked',
+      reason: blockState.reason || 'account_blocked',
+      blocked_at: blockState.blocked_at || null,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    logError({
+      type: 'account_block_check_failed',
+      requestId: req.requestId,
+      userId: rawUserId,
+      error: error?.message || 'unknown'
+    });
+    return next();
+  }
 });
 
 function ingestEvent(req, res) {
@@ -8113,6 +9262,52 @@ app.post('/account/sessions/logout-all', requireUserAuth, async (req, res) => {
 
 app.get('/account/billing', requireUserAuth, async (req, res) => {
   const rawUserId = String(req.user?.id || '').trim();
+  const blockState = await resolveAccountBlockState(rawUserId, req.requestId);
+  if (isTestModeUserId(rawUserId)) {
+    const nowIso = new Date().toISOString();
+    const planTier = normalizePlanTier(TEST_MODE_PLAN_TIER || 'team', 'team');
+    const planTitle = planTier === 'team' ? 'Unlimited Test Plan' : formatPlanTitle(planTier);
+    return res.json({
+      user_id: rawUserId,
+      plan: {
+        tier: planTier,
+        title: planTitle,
+        status: 'active',
+        renews_at: null,
+        description: 'Local password test mode with full access',
+        source: 'test_mode',
+        promo_only: false
+      },
+      active_benefits: [
+        {
+          id: `test_mode_${rawUserId}`,
+          kind: 'lifetime',
+          scope: 'global',
+          payload: {
+            plan: planTier,
+            lifetime: true,
+            unlimited: true,
+            test_mode: true
+          },
+          starts_at: nowIso,
+          ends_at: null,
+          revoked_at: null,
+          is_active: true
+        }
+      ],
+      promo_history: [],
+      totals: {
+        active_benefits: 1,
+        redemptions: 0
+      },
+      access: {
+        blocked: Boolean(blockState?.blocked),
+        reason: blockState?.reason || null,
+        blocked_at: blockState?.blocked_at || null
+      },
+      test_mode: true
+    });
+  }
   const promoStorage = getPromoStorageStatus();
   if (!promoStorage.ok) {
     if (!ACCOUNT_STORAGE_FALLBACK_ENABLED) {
@@ -8135,7 +9330,12 @@ app.get('/account/billing', requireUserAuth, async (req, res) => {
       active_benefits: [],
       history: [],
       fallback: true,
-      user_id: rawUserId || null
+      user_id: rawUserId || null,
+      access: {
+        blocked: Boolean(blockState?.blocked),
+        reason: blockState?.reason || null,
+        blocked_at: blockState?.blocked_at || null
+      }
     });
   }
 
@@ -8228,6 +9428,11 @@ app.get('/account/billing', requireUserAuth, async (req, res) => {
       totals: {
         active_benefits: activeBenefits.length,
         redemptions: promoHistory.length
+      },
+      access: {
+        blocked: Boolean(blockState?.blocked),
+        reason: blockState?.reason || null,
+        blocked_at: blockState?.blocked_at || null
       }
     });
   } catch (error) {
@@ -8299,6 +9504,7 @@ app.post('/promo/redeem', requireUserAuth, async (req, res) => {
       code,
       idempotencyKey
     });
+    clearCachedAccountBlockState(rawUserId);
     log({
       type: 'promo_redeem_success',
       requestId: req.requestId,
@@ -8662,38 +9868,432 @@ app.post('/account/workspaces/:id/items', requireUserAuth, (req, res) => {
 
 app.post('/account/file-intelligence/analyze', requireUserAuth, (req, res) => {
   try {
-    const body = asObject(req.body || {});
-    const fileName = String(body.file_name || body.name || '').trim();
-    const fileSize = Math.max(0, Number(body.file_size || body.size || 0));
-    const ext = (String(body.ext || path.extname(fileName || '').replace('.', '') || '').trim().toLowerCase());
-    if (!ext) return res.status(400).json({ status: 'error', code: 'MISSING_EXTENSION', message: 'File extension is required', requestId: req.requestId });
-    const map = {
-      pdf: { best: 'docx', reason: 'Better for editing and collaboration' },
-      png: { best: 'jpg', reason: 'Smaller size for web and sharing' },
-      jpg: { best: 'webp', reason: 'Better compression and quality ratio' },
-      mp4: { best: 'mp3', reason: 'Audio-only extraction reduces size' },
-      mov: { best: 'mp4', reason: 'Wider compatibility' },
-      docx: { best: 'pdf', reason: 'Stable layout for delivery' }
-    };
-    const rec = map[ext] || { best: ext, reason: 'Current format is already acceptable' };
-    const estimatedSize = rec.best === ext ? fileSize : Math.max(1, Math.round(fileSize * 0.75));
-    const response = {
+    const analysis = analyzeFileIntelligence({
+      body: req.body,
+      defaultGoal: 'convert'
+    });
+    if (!analysis.file.ext) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_EXTENSION',
+        message: 'File extension is required',
+        requestId: req.requestId
+      });
+    }
+    const bestFormat = analysis.preset.target_format;
+    const tool = analysis.preset.tool || resolveToolByFormats(analysis.file.ext, bestFormat) || null;
+    return res.json({
       ok: true,
       analysis: {
-        ext,
-        best_format: rec.best,
-        recommendation_reason: rec.reason,
-        estimated_output_size: estimatedSize,
-        actions: [
-          `convert_to_${rec.best}`,
-          estimatedSize < fileSize ? 'compress_after_convert' : 'keep_quality'
-        ]
-      }
-    };
-    return res.json(response);
+        ...analysis.file,
+        best_format: bestFormat,
+        recommendation_reason: `Intent ${analysis.intent} matched ${analysis.file.category} profile`,
+        estimated_output_size: analysis.preset.estimated_output_size,
+        estimated_ratio: analysis.preset.estimated_ratio,
+        recommended_tool: tool,
+        recommended_settings: analysis.preset.settings,
+        constraints: analysis.preset.constraints,
+        actions: analysis.actions
+      },
+      requestId: req.requestId
+    });
   } catch (error) {
     logError({ type: 'account_file_intelligence_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'FILE_INTELLIGENCE_FAILED', message: 'Failed to analyze file', requestId: req.requestId });
+  }
+});
+
+app.post('/account/presets/generate', requireUserAuth, (req, res) => {
+  try {
+    const body = asObject(req.body || {});
+    const analysis = analyzeFileIntelligence({
+      body,
+      defaultGoal: String(body.goal || body.intent || 'convert')
+    });
+    if (!analysis.file.ext) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_EXTENSION',
+        message: 'File extension is required',
+        requestId: req.requestId
+      });
+    }
+    return res.json({
+      ok: true,
+      preset: {
+        id: `preset_${analysis.intent}_${analysis.file.category}`,
+        name: `${analysis.intent}:${analysis.file.category}`,
+        intent: analysis.intent,
+        tool: analysis.preset.tool,
+        target_format: analysis.preset.target_format,
+        settings: analysis.preset.settings,
+        constraints: analysis.preset.constraints,
+        rationale: analysis.preset.rationale
+      },
+      file: analysis.file,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    logError({ type: 'account_preset_generate_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'PRESET_GENERATE_FAILED', message: 'Failed to generate preset', requestId: req.requestId });
+  }
+});
+
+app.post('/account/workflow/generate', requireUserAuth, (req, res) => {
+  try {
+    const body = asObject(req.body || {});
+    const prompt = String(body.prompt || body.message || '').trim();
+    const analysis = analyzeFileIntelligence({
+      body,
+      defaultGoal: String(prompt || body.goal || body.intent || 'convert')
+    });
+    if (!analysis.file.ext) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_EXTENSION',
+        message: 'File extension is required',
+        requestId: req.requestId
+      });
+    }
+    const workflow = buildWorkflowFromIntelligence({
+      analysis,
+      prompt,
+      name: String(body.name || body.workflow_name || body.pipeline_name || '').trim(),
+      source: 'workflow_generator'
+    });
+    const shouldSave = body.save === true || body.auto_create_pipeline === true;
+    let pipeline = null;
+    if (shouldSave) {
+      const userId = String(req.user?.id || '').trim();
+      const nowIso = new Date().toISOString();
+      const item = {
+        id: uuidv4(),
+        user_id: userId,
+        workspace_id: clampText(String(body.workspace_id || '').trim(), 128) || null,
+        name: workflow.name,
+        source: workflow.source,
+        prompt: workflow.prompt,
+        intent: workflow.intent,
+        steps: workflow.steps,
+        nodes: workflow.nodes,
+        edges: workflow.edges,
+        enabled: body.enabled !== false,
+        created_at: nowIso,
+        updated_at: nowIso
+      };
+      const store = loadWorkspacePlatformStore();
+      store.pipelines.push(item);
+      saveWorkspacePlatformStore(store);
+      pipeline = {
+        ...item,
+        summary: buildPipelineSummary(item)
+      };
+      appendAuditLog(req, 'pipeline.create.ai', {
+        pipeline_id: item.id,
+        nodes: workflow.nodes.length
+      });
+    }
+    return res.json({
+      ok: true,
+      workflow,
+      pipeline,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    if (String(error?.code || '') === 'PIPELINE_GRAPH_CYCLE') {
+      return res.status(400).json({
+        status: 'error',
+        code: 'PIPELINE_GRAPH_CYCLE',
+        message: 'Workflow graph contains a cycle',
+        requestId: req.requestId
+      });
+    }
+    logError({ type: 'account_workflow_generate_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({ status: 'error', code: 'WORKFLOW_GENERATE_FAILED', message: 'Failed to generate workflow', requestId: req.requestId });
+  }
+});
+
+app.post('/account/assistant/respond', requireUserAuth, async (req, res) => {
+  try {
+    const body = asObject(req.body || {});
+    const analysis = analyzeFileIntelligence({
+      body,
+      defaultGoal: String(body.goal || body.intent || body.prompt || body.message || 'convert')
+    });
+    if (!analysis.file.ext) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'MISSING_EXTENSION',
+        message: 'File extension is required',
+        requestId: req.requestId
+      });
+    }
+    const goal = analysis.intent;
+    const fileName = String(analysis.file.name || body.file_name || body.fileName || 'input.bin').trim() || 'input.bin';
+    const ext = analysis.file.ext;
+    const fileSize = Math.max(0, Number(analysis.file.size_bytes || 0));
+    const requestedTool = String(body.tool || '').trim();
+    const requestedTargetFormat = String(body.target_format || body.targetFormat || '').trim().toLowerCase();
+    const targetFormat = requestedTargetFormat || analysis.preset.target_format || ext || 'pdf';
+    const resolvedTool = requestedTool || analysis.preset.tool || resolveToolByFormats(ext, targetFormat) || '';
+    const normalizedTool = TOOL_IDS.has(resolvedTool) ? resolvedTool : null;
+    const toolMeta = normalizedTool ? TOOL_META[normalizedTool] : null;
+    const recommendedSettings = mergeSettingObjects(analysis.preset.settings, asObject(body.settings));
+    const categoryCost = analysis.file.category === 'video'
+      ? 1.6
+      : analysis.file.category === 'document'
+        ? 0.9
+        : analysis.file.category === 'archive'
+          ? 1.2
+          : 0.7;
+    const estimatedDurationSec = Math.max(3, Math.round((fileSize / (1024 * 1024)) * categoryCost + (goal === 'compress' ? 8 : 4)));
+    const estimatedOutputSize = analysis.preset.estimated_output_size || (fileSize > 0 ? Math.max(1, Math.round(fileSize * 0.9)) : null);
+    const workflow = buildWorkflowFromIntelligence({
+      analysis: {
+        ...analysis,
+        preset: {
+          ...analysis.preset,
+          settings: recommendedSettings,
+          target_format: targetFormat,
+          tool: normalizedTool || analysis.preset.tool
+        }
+      },
+      prompt: String(body.prompt || body.message || '').trim(),
+      name: String(body.workflow_name || body.pipeline_name || '').trim(),
+      source: 'assistant'
+    });
+    const assistantPipeline = workflow.steps.map((step) => ({
+      step: step.action,
+      status: 'planned',
+      tool: step.tool || null
+    }));
+
+    const assistantMessage = normalizedTool
+      ? `Recommended tool: ${normalizedTool}. Target format: ${targetFormat.toUpperCase()}.`
+      : `Could not resolve tool automatically. Choose a conversion pair manually.`;
+
+    const tools = [
+      {
+        name: 'recommend_settings',
+        description: 'Return recommended conversion settings',
+        args: {
+          tool: normalizedTool,
+          goal,
+          target_format: targetFormat,
+          settings: recommendedSettings,
+          rationale: analysis.preset.rationale
+        }
+      },
+      {
+        name: 'estimate_job',
+        description: 'Estimate duration and output size',
+        args: {
+          tool: normalizedTool,
+          estimated_duration_sec: estimatedDurationSec,
+          estimated_output_size: estimatedOutputSize
+        }
+      },
+      {
+        name: 'list_formats',
+        description: 'List supported input formats for resolved tool',
+        args: {
+          tool: normalizedTool,
+          inputs: toolMeta?.inputExts || [],
+          output: normalizedTool ? TOOL_EXT[normalizedTool] || null : null
+        }
+      },
+      {
+        name: 'create_pipeline',
+        description: 'Create reusable workflow pipeline in account',
+        args: {
+          name: workflow.name,
+          nodes: workflow.nodes,
+          edges: workflow.edges
+        }
+      },
+      {
+        name: 'create_job',
+        description: 'Create conversion job with recommended settings',
+        args: {
+          tool: normalizedTool,
+          target_format: targetFormat,
+          settings: recommendedSettings,
+          requires_input_key: true
+        }
+      },
+      {
+        name: 'get_job_status',
+        description: 'Fetch status and progress by job id',
+        args: {
+          endpoint: '/jobs/:id'
+        }
+      },
+      {
+        name: 'explain_error',
+        description: 'Explain conversion failures and suggest fallback strategy',
+        args: {
+          strategy: 'retry_with_alternative_engine',
+          examples: ['re-encode ffmpeg', 'fallback libreoffice', 'fallback ghostscript']
+        }
+      }
+    ];
+
+    let pipeline = null;
+    if (body.auto_create_pipeline === true) {
+      const userId = String(req.user?.id || '').trim();
+      const nowIso = new Date().toISOString();
+      const item = {
+        id: uuidv4(),
+        user_id: userId,
+        workspace_id: clampText(String(body.workspace_id || '').trim(), 128) || null,
+        name: workflow.name,
+        source: 'assistant',
+        prompt: workflow.prompt,
+        intent: workflow.intent,
+        steps: workflow.steps,
+        nodes: workflow.nodes,
+        edges: workflow.edges,
+        enabled: body.enabled !== false,
+        created_at: nowIso,
+        updated_at: nowIso
+      };
+      const store = loadWorkspacePlatformStore();
+      store.pipelines.push(item);
+      saveWorkspacePlatformStore(store);
+      pipeline = {
+        ...item,
+        summary: buildPipelineSummary(item)
+      };
+      appendAuditLog(req, 'pipeline.create.assistant', {
+        pipeline_id: item.id,
+        intent: workflow.intent,
+        nodes: workflow.nodes.length
+      });
+    }
+
+    let job = null;
+    if (body.auto_create_job === true) {
+      if (!normalizedTool) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ASSISTANT_TOOL_UNRESOLVED',
+          message: 'Assistant could not resolve conversion tool',
+          requestId: req.requestId
+        });
+      }
+      const inputKey = String(body.input_key || body.inputKey || '').trim();
+      if (!inputKey || !inputKey.startsWith('inputs/')) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'MISSING_INPUT_KEY',
+          message: 'input_key is required for auto_create_job',
+          requestId: req.requestId
+        });
+      }
+      if (storageMode === 's3') {
+        const head = await headObject(inputKey);
+        if (!head) {
+          return res.status(404).json({
+            status: 'error',
+            code: 'INPUT_NOT_FOUND',
+            message: 'Input not found',
+            requestId: req.requestId
+          });
+        }
+      } else {
+        const diskPath = path.join(localRoot, inputKey);
+        if (!fs.existsSync(diskPath)) {
+          return res.status(404).json({
+            status: 'error',
+            code: 'INPUT_NOT_FOUND',
+            message: 'Input not found',
+            requestId: req.requestId
+          });
+        }
+      }
+
+      const jobId = uuidv4();
+      const safeOriginalName = sanitizeFileName(String(body.original_name || body.originalName || fileName || 'input.bin'));
+      const baseName = path.parse(safeOriginalName).name || 'output';
+      const outputExt = TOOL_EXT[normalizedTool] || targetFormat || 'bin';
+      const outputKey = `outputs/${jobId}/${baseName}.${outputExt}`;
+      const timeout = TOOL_META[normalizedTool]?.timeoutMs || 180000;
+      const requestedInputFormat = String(body.input_format || body.inputFormat || ext || '').trim().toLowerCase();
+      const settingsForJob = {
+        ...recommendedSettings,
+        ...asObject(body.settings)
+      };
+      await withTimeout(queue.add('convert', {
+        jobId,
+        tool: normalizedTool,
+        requestedTool: requestedTool || normalizedTool,
+        fallbackApplied: false,
+        inputKey,
+        outputKey,
+        originalName: safeOriginalName,
+        settings: settingsForJob,
+        inputFormat: requestedInputFormat,
+        inputSize: fileSize || 0,
+        requestId: req.requestId,
+        userId: req.user?.id || null,
+        automationApplied: [{ source: 'assistant', intent: goal, workflow: workflow.name }],
+        pipeline: assistantPipeline,
+        encryption: null
+      }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
+      job = {
+        job_id: jobId,
+        status: 'queued',
+        tool: normalizedTool,
+        output_key: outputKey,
+        pipeline: assistantPipeline
+      };
+    }
+
+    return res.json({
+      ok: true,
+      assistant: {
+        message: assistantMessage,
+        intent: goal,
+        file: analysis.file,
+        recommendation: {
+          tool: normalizedTool,
+          target_format: targetFormat,
+          settings: recommendedSettings,
+          constraints: analysis.preset.constraints,
+          rationale: analysis.preset.rationale
+        },
+        estimates: {
+          duration_sec: estimatedDurationSec,
+          output_size: estimatedOutputSize
+        },
+        actions: analysis.actions,
+        pipeline: assistantPipeline,
+        workflow,
+        tools
+      },
+      pipeline,
+      job,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+    }
+    if (String(error?.code || '') === 'PIPELINE_GRAPH_CYCLE') {
+      return res.status(400).json({
+        status: 'error',
+        code: 'PIPELINE_GRAPH_CYCLE',
+        message: 'Workflow graph contains a cycle',
+        requestId: req.requestId
+      });
+    }
+    logError({ type: 'account_assistant_respond_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
+    return res.status(500).json({
+      status: 'error',
+      code: 'ASSISTANT_RESPONSE_FAILED',
+      message: 'Failed to build assistant response',
+      requestId: req.requestId
+    });
   }
 });
 
@@ -8701,7 +10301,37 @@ app.get('/account/pipelines', requireUserAuth, (req, res) => {
   try {
     const userId = String(req.user?.id || '').trim();
     const store = loadWorkspacePlatformStore();
-    const items = store.pipelines.filter((item) => String(item.user_id || '') === userId);
+    const items = store.pipelines
+      .filter((item) => String(item.user_id || '') === userId)
+      .map((item) => {
+        let compiled = null;
+        try {
+          compiled = compilePipelineDefinition(item, item);
+        } catch (error) {
+          const fallbackNodes = normalizeWorkflowNodes(item.nodes);
+          compiled = {
+            steps: normalizePipelineSteps(item.steps),
+            nodes: fallbackNodes,
+            edges: normalizeWorkflowEdges(item.edges, fallbackNodes)
+          };
+          logError({
+            type: 'account_pipeline_compile_list_failed',
+            pipeline_id: item.id || null,
+            userId,
+            error: error?.message || 'unknown'
+          });
+        }
+        const pipeline = {
+          ...item,
+          steps: compiled.steps,
+          nodes: compiled.nodes,
+          edges: compiled.edges
+        };
+        return {
+          ...pipeline,
+          summary: buildPipelineSummary(pipeline)
+        };
+      });
     return res.json({ ok: true, items });
   } catch (error) {
     logError({ type: 'account_pipelines_list_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
@@ -8715,12 +10345,18 @@ app.post('/account/pipelines', requireUserAuth, (req, res) => {
     const body = asObject(req.body || {});
     const name = clampText(String(body.name || '').trim(), 160);
     if (!name) return res.status(400).json({ status: 'error', code: 'MISSING_NAME', message: 'Pipeline name is required', requestId: req.requestId });
+    const compiled = compilePipelineDefinition(body, null);
     const pipeline = {
       id: uuidv4(),
       user_id: userId,
       workspace_id: clampText(String(body.workspace_id || '').trim(), 128) || null,
       name,
-      steps: normalizePipelineSteps(body.steps),
+      source: clampText(String(body.source || 'manual').trim(), 40) || 'manual',
+      prompt: clampText(String(body.prompt || '').trim(), 500) || null,
+      intent: clampText(String(body.intent || '').trim(), 64) || null,
+      steps: compiled.steps,
+      nodes: compiled.nodes,
+      edges: compiled.edges,
       enabled: body.enabled !== false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -8728,9 +10364,22 @@ app.post('/account/pipelines', requireUserAuth, (req, res) => {
     const store = loadWorkspacePlatformStore();
     store.pipelines.push(pipeline);
     saveWorkspacePlatformStore(store);
-    appendAuditLog(req, 'pipeline.create', { pipeline_id: pipeline.id, steps: pipeline.steps.length });
-    return res.status(201).json({ ok: true, item: pipeline });
+    const summary = buildPipelineSummary(pipeline);
+    appendAuditLog(req, 'pipeline.create', {
+      pipeline_id: pipeline.id,
+      steps: summary.steps_total,
+      nodes: summary.nodes_total
+    });
+    return res.status(201).json({ ok: true, item: { ...pipeline, summary } });
   } catch (error) {
+    if (String(error?.code || '') === 'PIPELINE_GRAPH_CYCLE') {
+      return res.status(400).json({
+        status: 'error',
+        code: 'PIPELINE_GRAPH_CYCLE',
+        message: 'Workflow graph contains a cycle',
+        requestId: req.requestId
+      });
+    }
     logError({ type: 'account_pipeline_create_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'PIPELINE_WRITE_FAILED', message: 'Failed to create pipeline', requestId: req.requestId });
   }
@@ -8745,17 +10394,31 @@ app.patch('/account/pipelines/:id', requireUserAuth, (req, res) => {
     const index = store.pipelines.findIndex((item) => String(item.id || '') === pipelineId && String(item.user_id || '') === userId);
     if (index < 0) return res.status(404).json({ status: 'error', code: 'PIPELINE_NOT_FOUND', message: 'Pipeline not found', requestId: req.requestId });
     const current = store.pipelines[index];
+    const compiled = compilePipelineDefinition(body, current);
     const next = {
       ...current,
       name: body.name !== undefined ? clampText(String(body.name || '').trim(), 160) || current.name : current.name,
-      steps: body.steps !== undefined ? normalizePipelineSteps(body.steps) : current.steps,
+      source: body.source !== undefined ? clampText(String(body.source || '').trim(), 40) || current.source || 'manual' : current.source,
+      prompt: body.prompt !== undefined ? clampText(String(body.prompt || '').trim(), 500) || null : current.prompt || null,
+      intent: body.intent !== undefined ? clampText(String(body.intent || '').trim(), 64) || null : current.intent || null,
+      steps: compiled.steps,
+      nodes: compiled.nodes,
+      edges: compiled.edges,
       enabled: body.enabled !== undefined ? body.enabled !== false : current.enabled,
       updated_at: new Date().toISOString()
     };
     store.pipelines[index] = next;
     saveWorkspacePlatformStore(store);
-    return res.json({ ok: true, item: next });
+    return res.json({ ok: true, item: { ...next, summary: buildPipelineSummary(next) } });
   } catch (error) {
+    if (String(error?.code || '') === 'PIPELINE_GRAPH_CYCLE') {
+      return res.status(400).json({
+        status: 'error',
+        code: 'PIPELINE_GRAPH_CYCLE',
+        message: 'Workflow graph contains a cycle',
+        requestId: req.requestId
+      });
+    }
     logError({ type: 'account_pipeline_update_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'PIPELINE_WRITE_FAILED', message: 'Failed to update pipeline', requestId: req.requestId });
   }
@@ -8787,10 +10450,11 @@ app.post('/account/pipelines/:id/run', requireUserAuth, async (req, res) => {
     const store = loadWorkspacePlatformStore();
     const pipeline = store.pipelines.find((item) => String(item.id || '') === pipelineId && String(item.user_id || '') === userId);
     if (!pipeline) return res.status(404).json({ status: 'error', code: 'PIPELINE_NOT_FOUND', message: 'Pipeline not found', requestId: req.requestId });
-    if (!Array.isArray(pipeline.steps) || !pipeline.steps.length) {
-      return res.status(400).json({ status: 'error', code: 'PIPELINE_EMPTY', message: 'Pipeline has no steps', requestId: req.requestId });
+    const compiled = compilePipelineDefinition(pipeline, pipeline);
+    if (!Array.isArray(compiled.steps) || !compiled.steps.length) {
+      return res.status(400).json({ status: 'error', code: 'PIPELINE_EMPTY', message: 'Pipeline has no executable steps', requestId: req.requestId });
     }
-    const firstConvert = pipeline.steps.find((step) => step.action === 'convert' && step.tool && TOOL_IDS.has(step.tool));
+    const firstConvert = compiled.steps.find((step) => step.action === 'convert' && step.tool && TOOL_IDS.has(step.tool));
     if (!firstConvert) {
       return res.status(400).json({ status: 'error', code: 'PIPELINE_NO_CONVERT_STEP', message: 'Pipeline must include a valid convert step', requestId: req.requestId });
     }
@@ -8827,12 +10491,29 @@ app.post('/account/pipelines/:id/run', requireUserAuth, async (req, res) => {
       inputSize,
       requestId: req.requestId,
       userId,
-      pipelineId
+      pipelineId,
+      pipeline: compiled.steps
     }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
-    return res.json({ ok: true, jobId, tool: finalTool, pipeline_id: pipelineId, steps_total: pipeline.steps.length });
+    return res.json({
+      ok: true,
+      jobId,
+      tool: finalTool,
+      pipeline_id: pipelineId,
+      steps_total: compiled.steps.length,
+      nodes_total: compiled.nodes.length,
+      edges_total: compiled.edges.length
+    });
   } catch (error) {
     if (isQueueUnavailableError(error)) {
       return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+    }
+    if (String(error?.code || '') === 'PIPELINE_GRAPH_CYCLE') {
+      return res.status(400).json({
+        status: 'error',
+        code: 'PIPELINE_GRAPH_CYCLE',
+        message: 'Workflow graph contains a cycle',
+        requestId: req.requestId
+      });
     }
     logError({ type: 'account_pipeline_run_failed', requestId: req.requestId, userId: req.user?.id || null, error: error?.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'PIPELINE_RUN_FAILED', message: 'Failed to run pipeline', requestId: req.requestId });
@@ -9079,10 +10760,14 @@ app.get('/account/platform/capabilities', requireUserAuth, (_req, res) => {
     modules: [
       'file_workspace',
       'pipelines',
+      'workflow_builder',
+      'workflow_generator_ai',
       'file_intelligence',
       'collaboration',
       'bulk_processing',
       'smart_automation',
+      'predictive_processing',
+      'distributed_workers',
       'insights_dashboard',
       'integrations',
       'developer_ecosystem'
@@ -10006,9 +11691,11 @@ app.post('/crypto/session', async (req, res) => {
     if (!redis.ok) {
       return res.status(503).json(redis.payload);
     }
-    const clientId = getClientId(req);
-    const allowed = await rateLimit(`rl:crypto:${clientId}`, 30, 60);
-    if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many requests', requestId: req.requestId });
+    if (!isUnlimitedTestRequest(req)) {
+      const clientId = getClientId(req);
+      const allowed = await rateLimit(`rl:crypto:${clientId}`, 30, 60);
+      if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many requests', requestId: req.requestId });
+    }
 
     const sessionId = uuidv4();
     const kp = nacl.box.keyPair();
@@ -10058,15 +11745,117 @@ app.get('/crypto/worker-pubkey', (req, res) => {
   res.json({ publicKey: pub });
 });
 
+app.post('/uploads/resolve-hash', async (req, res) => {
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) {
+      return res.status(503).json(redis.payload);
+    }
+    const body = asObject(req.body || {});
+    const sha256 = normalizeSha256(body.sha256 || req.headers['x-file-sha256']);
+    if (!sha256) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'INVALID_SHA256',
+        message: 'sha256 is required',
+        requestId: req.requestId
+      });
+    }
+    const inputKey = await resolveInputKeyByHash(sha256);
+    return res.json({
+      ok: true,
+      found: Boolean(inputKey),
+      inputKey: inputKey || null,
+      source: inputKey ? 'hash_cache' : null,
+      requestId: req.requestId
+    });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'redis_unavailable'));
+    }
+    logError({ type: 'upload_hash_resolve_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({
+      status: 'error',
+      code: 'UPLOAD_HASH_RESOLVE_FAILED',
+      message: 'Failed to resolve upload hash',
+      requestId: req.requestId
+    });
+  }
+});
+
+app.post('/uploads/register-hash', async (req, res) => {
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) {
+      return res.status(503).json(redis.payload);
+    }
+    const body = asObject(req.body || {});
+    const sha256 = normalizeSha256(body.sha256 || req.headers['x-file-sha256']);
+    const inputKey = String(body.inputKey || body.input_key || '').trim();
+    if (!sha256) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'INVALID_SHA256',
+        message: 'sha256 is required',
+        requestId: req.requestId
+      });
+    }
+    if (!inputKey || !inputKey.startsWith('inputs/')) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'INVALID_INPUT_KEY',
+        message: 'inputKey is required',
+        requestId: req.requestId
+      });
+    }
+    if (storageMode === 's3') {
+      const head = await headObject(inputKey);
+      if (!head) {
+        return res.status(404).json({
+          status: 'error',
+          code: 'INPUT_NOT_FOUND',
+          message: 'Input not found',
+          requestId: req.requestId
+        });
+      }
+    } else {
+      const diskPath = path.join(localRoot, inputKey);
+      if (!fs.existsSync(diskPath)) {
+        return res.status(404).json({
+          status: 'error',
+          code: 'INPUT_NOT_FOUND',
+          message: 'Input not found',
+          requestId: req.requestId
+        });
+      }
+    }
+    await rememberInputKeyHash(sha256, inputKey);
+    return res.json({ ok: true, sha256, inputKey, requestId: req.requestId });
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'redis_unavailable'));
+    }
+    logError({ type: 'upload_hash_register_failed', requestId: req.requestId, error: error?.message || 'unknown' });
+    return res.status(500).json({
+      status: 'error',
+      code: 'UPLOAD_HASH_REGISTER_FAILED',
+      message: 'Failed to register upload hash',
+      requestId: req.requestId
+    });
+  }
+});
+
 app.post('/uploads/sign', async (req, res) => {
   try {
     const redis = await ensureRedisAvailable(req.requestId);
     if (!redis.ok) {
       return res.status(503).json(redis.payload);
     }
-    const clientId = getClientId(req);
-    const allowed = await rateLimit(`rl:upload:${clientId}`, RATE_LIMIT_UPLOADS_PER_MIN, 60);
-    if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many uploads', requestId: req.requestId });
+    if (!isUnlimitedTestRequest(req)) {
+      const clientId = getClientId(req);
+      const allowed = await rateLimit(`rl:upload:${clientId}`, RATE_LIMIT_UPLOADS_PER_MIN, 60);
+      if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many uploads', requestId: req.requestId });
+    }
 
     if (storageMode !== 's3') {
       return res.status(400).json({ status: 'error', code: 'STORAGE_NOT_S3', message: 'Presigned upload requires S3-compatible storage', requestId: req.requestId });
@@ -10103,9 +11892,11 @@ app.post('/uploads/proxy', express.raw({ type: '*/*', limit: '1100mb' }), async 
     if (!redis.ok) {
       return res.status(503).json(redis.payload);
     }
-    const clientId = getClientId(req);
-    const allowed = await rateLimit(`rl:upload:${clientId}`, RATE_LIMIT_UPLOADS_PER_MIN, 60);
-    if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many uploads', requestId: req.requestId });
+    if (!isUnlimitedTestRequest(req)) {
+      const clientId = getClientId(req);
+      const allowed = await rateLimit(`rl:upload:${clientId}`, RATE_LIMIT_UPLOADS_PER_MIN, 60);
+      if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many uploads', requestId: req.requestId });
+    }
 
     if (storageMode !== 's3') {
       return res.status(400).json({ status: 'error', code: 'STORAGE_NOT_S3', message: 'Proxy upload requires S3-compatible storage', requestId: req.requestId });
@@ -10113,6 +11904,7 @@ app.post('/uploads/proxy', express.raw({ type: '*/*', limit: '1100mb' }), async 
     await ensureBucketAvailable();
 
     const inputKey = String(req.headers['x-input-key'] || '').trim();
+    const providedSha256 = normalizeSha256(req.headers['x-file-sha256']);
     const fileName = String(req.headers['x-file-name'] || '').trim();
     const contentType = String(req.headers['content-type'] || 'application/octet-stream').split(';')[0];
     const declaredSize = Number(req.headers['x-file-size'] || 0);
@@ -10144,13 +11936,229 @@ app.post('/uploads/proxy', express.raw({ type: '*/*', limit: '1100mb' }), async 
       Body: body
     }));
 
-    return res.json({ ok: true, inputKey, requestId: req.requestId });
+    let resolvedSha = providedSha256;
+    if (!resolvedSha && body.length > 0 && body.length <= UPLOAD_HASH_COMPUTE_MAX_BYTES) {
+      try {
+        resolvedSha = crypto.createHash('sha256').update(body).digest('hex');
+      } catch {
+        resolvedSha = '';
+      }
+    }
+    if (resolvedSha) {
+      await rememberInputKeyHash(resolvedSha, inputKey);
+    }
+
+    return res.json({ ok: true, inputKey, sha256: resolvedSha || null, requestId: req.requestId });
   } catch (err) {
     if (isQueueUnavailableError(err)) {
       return res.status(503).json(redisUnavailablePayload(req.requestId, err?.message || 'redis_unavailable'));
     }
     logError({ type: 'upload_proxy_failed', requestId: req.requestId, error: err.message || 'unknown' });
     return res.status(500).json({ status: 'error', code: 'UPLOAD_PROXY_FAILED', message: 'Failed proxy upload', requestId: req.requestId });
+  }
+});
+
+app.post('/auth/test-mode/login', (req, res) => {
+  if (!isTestModeConfigured()) {
+    return res.status(503).json({
+      status: 'error',
+      code: 'TEST_MODE_DISABLED',
+      message: 'Test mode is disabled',
+      requestId: req.requestId
+    });
+  }
+  if (!isTestModeRequestAllowed(req)) {
+    return res.status(403).json({
+      status: 'error',
+      code: 'TEST_MODE_FORBIDDEN',
+      message: 'Test mode is allowed only from localhost',
+      requestId: req.requestId
+    });
+  }
+
+  const body = asObject(req.body);
+  const password = String(body.password || '').trim();
+  if (!password) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'MISSING_PASSWORD',
+      message: 'Missing test mode password',
+      requestId: req.requestId
+    });
+  }
+  if (!timingSafeEqualText(password, TEST_MODE_PASSWORD)) {
+    return res.status(401).json({
+      status: 'error',
+      code: 'TEST_MODE_UNAUTHORIZED',
+      message: 'Invalid test mode password',
+      requestId: req.requestId
+    });
+  }
+
+  const requestedUid = String(body.user_id || body.userId || '').trim();
+  const userId = isTestModeUserId(requestedUid)
+    ? requestedUid
+    : buildTestModeUserId(body.login || body.username || body.email || '');
+  const alias = sanitizeTestModeAlias(body.login || body.username || body.email || userId) || userId;
+  const displayName = (
+    String(body.display_name || body.displayName || `Test ${alias}`)
+      .trim()
+      .slice(0, 80)
+    || `Test ${alias}`
+  );
+  const userEmailAlias = sanitizeTestModeAlias(body.email || alias) || alias;
+  const email = `${userEmailAlias}@test.local`;
+  const planTier = normalizePlanTier(TEST_MODE_PLAN_TIER || 'team', 'team');
+  const planTitle = planTier === 'team' ? 'Unlimited Test Plan' : formatPlanTitle(planTier);
+
+  return res.json({
+    ok: true,
+    user: {
+      uid: userId,
+      name: displayName,
+      email,
+      isAnon: false,
+      is_test_mode: true,
+      provider_data: [
+        {
+          provider_id: 'test_mode',
+          uid: userId,
+          email
+        }
+      ]
+    },
+    plan: {
+      tier: planTier,
+      title: planTitle,
+      status: 'active',
+      description: 'Local password test mode with full access',
+      renews_at: null,
+      source: 'test_mode',
+      promo_only: false
+    }
+  });
+});
+
+app.post('/auth/test-mode/unlock', async (req, res) => {
+  if (!isTestModeConfigured()) {
+    return res.status(503).json({
+      status: 'error',
+      code: 'TEST_MODE_DISABLED',
+      message: 'Test mode is disabled',
+      requestId: req.requestId
+    });
+  }
+  if (!isTestModeRequestAllowed(req)) {
+    return res.status(403).json({
+      status: 'error',
+      code: 'TEST_MODE_FORBIDDEN',
+      message: 'Test mode is allowed only from localhost',
+      requestId: req.requestId
+    });
+  }
+
+  const body = asObject(req.body);
+  const rawUserId = String(body.user_id || body.userId || getRequestUserId(req) || '').trim();
+  if (!isTestModeUserId(rawUserId)) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID_TEST_MODE_USER',
+      message: 'Invalid test mode user id',
+      requestId: req.requestId
+    });
+  }
+
+  const promoStorage = getPromoStorageStatus();
+  if (!promoStorage.ok) {
+    return res.status(promoStorage.statusCode).json({
+      status: 'error',
+      code: promoStorage.code,
+      message: promoStorage.message,
+      requestId: req.requestId
+    });
+  }
+
+  const promoUserId = normalizePromoUserId(rawUserId);
+  if (!promoUserId) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID_USER_ID',
+      message: 'User id is invalid',
+      requestId: req.requestId
+    });
+  }
+
+  try {
+    const activeEntitlementsResult = await promoStorage.pool.query(
+      `
+        SELECT id, kind, scope, payload, starts_at, ends_at, revoked_at
+        FROM user_entitlements
+        WHERE user_id = $1
+          AND kind = 'feature_access'
+          AND revoked_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 100
+      `,
+      [promoUserId]
+    );
+    const nowMs = Date.now();
+    const blockedEntitlementIds = activeEntitlementsResult.rows
+      .map((row) => mapEntitlementRow(row))
+      .filter((item) => isAccountBlockEntitlement(item, nowMs))
+      .map((item) => item.id)
+      .filter(Boolean);
+
+    let revokedCount = 0;
+    if (blockedEntitlementIds.length > 0) {
+      const revokeResult = await promoStorage.pool.query(
+        `
+          UPDATE user_entitlements
+          SET revoked_at = now()
+          WHERE id = ANY($1::uuid[])
+            AND revoked_at IS NULL
+          RETURNING id
+        `,
+        [blockedEntitlementIds]
+      );
+      revokedCount = Number(revokeResult.rowCount || 0);
+    }
+
+    clearCachedAccountBlockState(rawUserId);
+    const blockState = await resolveAccountBlockState(rawUserId, req.requestId);
+    log({
+      type: 'test_mode_unlock_account',
+      requestId: req.requestId,
+      userId: rawUserId,
+      promoUserId,
+      revokedCount,
+      stillBlocked: Boolean(blockState?.blocked)
+    });
+
+    return res.json({
+      ok: true,
+      user_id: rawUserId,
+      promo_user_id: promoUserId,
+      revoked_count: revokedCount,
+      access: {
+        blocked: Boolean(blockState?.blocked),
+        reason: blockState?.reason || null,
+        blocked_at: blockState?.blocked_at || null
+      }
+    });
+  } catch (error) {
+    logError({
+      type: 'test_mode_unlock_failed',
+      requestId: req.requestId,
+      userId: rawUserId,
+      promoUserId,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'TEST_MODE_UNLOCK_FAILED',
+      message: 'Failed to unlock test mode account',
+      requestId: req.requestId
+    });
   }
 });
 
@@ -10423,14 +12431,44 @@ app.post('/jobs', async (req, res) => {
     if (!redis.ok) {
       return res.status(503).json(redis.payload);
     }
-    const clientId = getClientId(req);
-    const allowed = await rateLimit(`rl:jobs:${clientId}`, RATE_LIMIT_JOBS_PER_MIN, 60);
-    if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many jobs', requestId: req.requestId });
+    if (!isUnlimitedTestRequest(req)) {
+      const clientId = getClientId(req);
+      const allowed = await rateLimit(`rl:jobs:${clientId}`, RATE_LIMIT_JOBS_PER_MIN, 60);
+      if (!allowed) return res.status(429).json({ status: 'error', code: 'RATE_LIMIT', message: 'Too many jobs', requestId: req.requestId });
+    }
 
-    const requestedTool = String(req.body.tool || '').trim();
+    const requestBody = asObject(req.body || {});
+    const scopeKey = getJobScopeKey(req);
+    const idempotencyKey = normalizeJobIdempotencyKey(req, requestBody);
+    if (idempotencyKey) {
+      const cached = await readJobIdempotencyResult(scopeKey, idempotencyKey);
+      if (cached?.jobId) {
+        return res.json({
+          ...cached,
+          idempotency_reused: true,
+          requestId: req.requestId
+        });
+      }
+    }
+
+    const requestedTool = String(requestBody.tool || '').trim();
     let tool = requestedTool;
-    const batch = String(req.body.batch || 'false') === 'true';
-    let settings = typeof req.body.settings === 'string' ? JSON.parse(req.body.settings) : (req.body.settings || {});
+    const batch = String(requestBody.batch || 'false') === 'true';
+    let settings = {};
+    if (typeof requestBody.settings === 'string') {
+      try {
+        settings = asObject(JSON.parse(requestBody.settings));
+      } catch {
+        return res.status(400).json({
+          status: 'error',
+          code: 'INVALID_SETTINGS',
+          message: 'settings must be valid JSON object',
+          requestId: req.requestId
+        });
+      }
+    } else {
+      settings = asObject(requestBody.settings);
+    }
     const actorUserId = getRequestUserId(req);
     if (!tool) return res.status(400).json({ status: 'error', code: 'MISSING_TOOL', message: 'Missing tool', requestId: req.requestId });
     if (!TOOL_IDS.has(tool)) return res.status(400).json({ status: 'error', code: 'UNSUPPORTED_TOOL', message: 'Unsupported tool', requestId: req.requestId });
@@ -10449,7 +12487,7 @@ app.post('/jobs', async (req, res) => {
     const jobId = uuidv4();
     const toolMeta = TOOL_META[tool];
     const timeout = toolMeta?.timeoutMs || 180000;
-    const encryption = req.body.encryption || null;
+    const encryption = asObject(requestBody.encryption);
     if (encryption?.enabled) {
       const envelopeCheck = validateEncryptionEnvelope(encryption, { requireKeyWrap: true });
       if (!envelopeCheck.ok) {
@@ -10465,7 +12503,7 @@ app.post('/jobs', async (req, res) => {
 
     if (batch) {
       const inputItems = [];
-      const incomingItems = Array.isArray(req.body.items) ? req.body.items : [];
+      const incomingItems = Array.isArray(requestBody.items) ? requestBody.items : [];
       if (!incomingItems.length) return res.status(400).json({ status: 'error', code: 'MISSING_ITEMS', message: 'Missing items', requestId: req.requestId });
       for (const item of incomingItems) {
         const safeName = sanitizeFileName(item.originalName || 'input');
@@ -10502,14 +12540,44 @@ app.post('/jobs', async (req, res) => {
           inputFormat,
           inputSize,
           encryptedSize,
-          encryption: item.encryption || null
+          encryption: item.encryption || null,
+          checksum: extractChecksumValue(item.checksum || item.inputHash || item.input_hash) || null
         });
+      }
+
+      const batchInputSize = inputItems.reduce((sum, i) => sum + (i.inputSize || 0), 0);
+      const dedupeSignature = buildJobDedupeSignature({
+        tool,
+        settings,
+        checksums: inputItems.map((item) => item.checksum).filter(Boolean),
+        batch: true,
+        inputSize: batchInputSize
+      });
+      if (dedupeSignature) {
+        const dedupeJobId = await readJobDedupeJobId(scopeKey, dedupeSignature);
+        if (dedupeJobId) {
+          const existingJob = await queue.getJob(dedupeJobId);
+          if (existingJob) {
+            const payload = {
+              jobId: dedupeJobId,
+              tool,
+              requested_tool: requestedTool,
+              fallback_applied: availability.fallback_applied === true,
+              dedupe_reused: true,
+              requestId: req.requestId
+            };
+            if (idempotencyKey) {
+              await writeJobIdempotencyResult(scopeKey, idempotencyKey, payload);
+            }
+            return res.json(payload);
+          }
+        }
       }
 
       const automationApplied = applyAutomationRulesForJob({
         userId: actorUserId,
         tool,
-        inputSize: inputItems.reduce((sum, i) => sum + (i.inputSize || 0), 0),
+        inputSize: batchInputSize,
         settings
       });
       tool = automationApplied.tool;
@@ -10525,24 +12593,38 @@ app.post('/jobs', async (req, res) => {
         outputKey: batchOutputKey,
         settings,
         inputFormats: inputItems.map((i) => i.inputFormat).filter(Boolean),
-        inputSize: inputItems.reduce((sum, i) => sum + (i.inputSize || 0), 0),
+        inputSize: batchInputSize,
         requestId: req.requestId,
         userId: actorUserId || null,
         automationApplied: automationApplied.matched_rules,
         encryption
       }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
       log({ type: 'job_created', requestId: req.requestId, jobId, tool, requestedTool, fallbackApplied: availability.fallback_applied === true, batch: true, count: inputItems.length });
-      return res.json({ jobId, tool, requested_tool: requestedTool, fallback_applied: availability.fallback_applied === true, requestId: req.requestId });
+      const payload = {
+        jobId,
+        tool,
+        requested_tool: requestedTool,
+        fallback_applied: availability.fallback_applied === true,
+        requestId: req.requestId
+      };
+      if (dedupeSignature) {
+        await writeJobDedupeJobId(scopeKey, dedupeSignature, jobId);
+      }
+      if (idempotencyKey) {
+        await writeJobIdempotencyResult(scopeKey, idempotencyKey, payload);
+      }
+      return res.json(payload);
     }
 
-    const inputKey = req.body.inputKey;
-    const originalName = req.body.originalName || 'input';
+    const inputKey = requestBody.inputKey;
+    const originalName = requestBody.originalName || 'input';
     const safeName = sanitizeFileName(originalName);
     if (!inputKey) return res.status(400).json({ status: 'error', code: 'MISSING_INPUT_KEY', message: 'Missing input key', requestId: req.requestId });
     if (!String(inputKey).startsWith('inputs/')) return res.status(400).json({ status: 'error', code: 'INVALID_INPUT_KEY', message: 'Invalid input key', requestId: req.requestId });
-    const inputFormat = (req.body.inputFormat || path.extname(safeName).replace('.', '') || '').toLowerCase();
-    const inputSize = Number(req.body.inputSize || 0);
-    const encryptedSize = Number(req.body.encryptedSize || 0);
+    const inputFormat = (requestBody.inputFormat || path.extname(safeName).replace('.', '') || '').toLowerCase();
+    const inputSize = Number(requestBody.inputSize || 0);
+    const encryptedSize = Number(requestBody.encryptedSize || 0);
+    const checksum = extractChecksumValue(requestBody.checksum || requestBody.inputHash || requestBody.input_hash) || null;
     if (!inputSize || inputSize <= 0) return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
     if (inputSize > MAX_FILE_SIZE) return res.status(400).json({ status: 'error', code: 'FILE_TOO_LARGE', message: 'File exceeds size limit', requestId: req.requestId });
     if (toolMeta?.inputExts?.length && !toolMeta.inputExts.includes(inputFormat)) {
@@ -10558,6 +12640,34 @@ app.post('/jobs', async (req, res) => {
       const head = await headObject(inputKey);
       if (!head) return res.status(400).json({ status: 'error', code: 'INPUT_NOT_FOUND', message: 'Input not found', requestId: req.requestId });
       if (encryptedSize && head.size !== encryptedSize) return res.status(400).json({ status: 'error', code: 'SIZE_MISMATCH', message: 'Encrypted size mismatch', requestId: req.requestId });
+    }
+
+    const dedupeSignature = buildJobDedupeSignature({
+      tool,
+      settings,
+      checksums: checksum ? [checksum] : [],
+      batch: false,
+      inputSize
+    });
+    if (dedupeSignature) {
+      const dedupeJobId = await readJobDedupeJobId(scopeKey, dedupeSignature);
+      if (dedupeJobId) {
+        const existingJob = await queue.getJob(dedupeJobId);
+        if (existingJob) {
+          const payload = {
+            jobId: dedupeJobId,
+            tool,
+            requested_tool: requestedTool,
+            fallback_applied: availability.fallback_applied === true,
+            dedupe_reused: true,
+            requestId: req.requestId
+          };
+          if (idempotencyKey) {
+            await writeJobIdempotencyResult(scopeKey, idempotencyKey, payload);
+          }
+          return res.json(payload);
+        }
+      }
     }
 
     const base = path.parse(safeName).name || 'output';
@@ -10584,6 +12694,7 @@ app.post('/jobs', async (req, res) => {
       settings,
       inputFormat,
       inputSize,
+      checksum,
       requestId: req.requestId,
       userId: actorUserId || null,
       automationApplied: automationApplied.matched_rules,
@@ -10591,7 +12702,20 @@ app.post('/jobs', async (req, res) => {
     }, { jobId, timeout }), QUEUE_ADD_TIMEOUT_MS, 'queue_add_timeout');
     log({ type: 'job_created', requestId: req.requestId, jobId, tool, requestedTool, fallbackApplied: availability.fallback_applied === true, batch: false, count: 1, inputSize, inputFormat });
 
-    res.json({ jobId, tool, requested_tool: requestedTool, fallback_applied: availability.fallback_applied === true, requestId: req.requestId });
+    const payload = {
+      jobId,
+      tool,
+      requested_tool: requestedTool,
+      fallback_applied: availability.fallback_applied === true,
+      requestId: req.requestId
+    };
+    if (dedupeSignature) {
+      await writeJobDedupeJobId(scopeKey, dedupeSignature, jobId);
+    }
+    if (idempotencyKey) {
+      await writeJobIdempotencyResult(scopeKey, idempotencyKey, payload);
+    }
+    res.json(payload);
   } catch (err) {
     if (isQueueUnavailableError(err)) {
       return res.status(503).json(redisUnavailablePayload(req.requestId, err?.message || 'queue_unavailable'));
@@ -10639,6 +12763,138 @@ app.get('/jobs/:id', async (req, res) => {
     }
     logError({ type: 'job_fetch_failed', requestId: req.requestId, error: err.message || 'unknown' });
     res.status(500).json({ status: 'error', code: 'JOB_FETCH_FAILED', message: 'Failed to fetch job', requestId: req.requestId });
+  }
+});
+
+app.get('/jobs/:id/events', async (req, res) => {
+  const jobId = String(req.params?.id || '').trim();
+  if (!jobId) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'MISSING_JOB_ID',
+      message: 'Job id is required',
+      requestId: req.requestId
+    });
+  }
+
+  try {
+    const redis = await ensureRedisAvailable(req.requestId);
+    if (!redis.ok) {
+      return res.status(503).json(redis.payload);
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+    let lastFingerprint = '';
+    let closed = false;
+    let interval = null;
+
+    const writeEvent = (eventName, payload) => {
+      if (closed) return;
+      const data = JSON.stringify(asObject(payload));
+      res.write(`event: ${eventName}\n`);
+      res.write(`data: ${data}\n\n`);
+    };
+
+    const closeStream = () => {
+      if (closed) return;
+      closed = true;
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+      try {
+        res.end();
+      } catch {
+        // ignore close errors
+      }
+    };
+
+    const publishSnapshot = async () => {
+      if (closed) return;
+      const job = await queue.getJob(jobId);
+      if (!job) {
+        writeEvent('job', {
+          status: 'not_found',
+          progress: 0,
+          jobId,
+          requestId: req.requestId
+        });
+        closeStream();
+        return;
+      }
+      const status = await job.getState();
+      const progress = Number(job.progress || 0);
+      const outputKey = (job.returnvalue && job.returnvalue.outputKey) || job.data?.outputKey || null;
+      const downloadUrl = status === 'completed' ? buildDownloadUrl(req, outputKey) : null;
+      const errorMessage = status === 'failed' ? (job.failedReason || 'Conversion failed') : null;
+      const payload = {
+        jobId,
+        status,
+        progress,
+        downloadUrl,
+        download_url: downloadUrl,
+        outputMeta: job.returnvalue?.outputMeta || null,
+        error: errorMessage ? { code: 'CONVERSION_FAILED', message: errorMessage } : null,
+        requestId: req.requestId
+      };
+      const fingerprint = JSON.stringify({
+        status: payload.status,
+        progress: payload.progress,
+        downloadUrl: payload.downloadUrl,
+        error: payload.error?.message || null
+      });
+      if (fingerprint !== lastFingerprint) {
+        lastFingerprint = fingerprint;
+        writeEvent('job', payload);
+      }
+      if (status === 'completed' || status === 'failed' || status === 'expired') {
+        closeStream();
+      }
+    };
+
+    req.on('close', closeStream);
+    writeEvent('ready', { ok: true, jobId, requestId: req.requestId });
+    await publishSnapshot();
+    if (!closed) {
+      interval = setInterval(() => {
+        void publishSnapshot().catch((error) => {
+          logError({
+            type: 'job_events_publish_failed',
+            requestId: req.requestId,
+            jobId,
+            error: error?.message || 'unknown'
+          });
+          writeEvent('job', {
+            status: 'error',
+            progress: 0,
+            error: {
+              code: 'JOB_EVENTS_FAILED',
+              message: 'Failed to stream job events'
+            },
+            requestId: req.requestId
+          });
+          closeStream();
+        });
+      }, JOB_EVENTS_POLL_INTERVAL_MS);
+    }
+  } catch (error) {
+    if (!res.headersSent) {
+      if (isQueueUnavailableError(error)) {
+        return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'queue_unavailable'));
+      }
+      return res.status(500).json({
+        status: 'error',
+        code: 'JOB_EVENTS_FAILED',
+        message: 'Failed to stream job events',
+        requestId: req.requestId
+      });
+    }
+    return undefined;
   }
 });
 

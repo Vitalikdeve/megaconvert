@@ -34,6 +34,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+if (typeof window !== 'undefined' && window.location.hostname === '127.0.0.1') {
+  // Google OAuth in this Firebase project is allowed for localhost, not raw loopback IP.
+  const nextUrl = new URL(window.location.href);
+  nextUrl.hostname = 'localhost';
+  window.location.replace(nextUrl.toString());
+}
 
 // --- Languages ---
 const LANGUAGES = [

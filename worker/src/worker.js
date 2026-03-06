@@ -295,6 +295,13 @@ const ENCRYPTION_MAX_TOTAL_CHUNKS = Math.max(1, Number(process.env.ENCRYPTION_MA
 const WORKER_HEARTBEAT_INTERVAL_MS = Math.max(15_000, Number(process.env.WORKER_HEARTBEAT_INTERVAL_MS || 30_000));
 const WORKER_REPORT_BASE = String(process.env.WORKER_REPORT_BASE || API_BASE_URL || '').trim().replace(/\/+$/, '');
 const WORKER_HEALTH_PING_URL = String(process.env.WORKER_HEALTH_PING_URL || (WORKER_REPORT_BASE ? `${WORKER_REPORT_BASE}/health/worker/ping` : '')).trim();
+const WORKER_CONCURRENCY = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 2));
+const WORKER_BATCH_CONCURRENCY = Math.max(1, Math.min(16, Number(process.env.WORKER_BATCH_CONCURRENCY || WORKER_CONCURRENCY)));
+const COMPRESS_VIDEO_DEFAULT_RATIO = Math.max(0.2, Math.min(0.98, Number(process.env.COMPRESS_VIDEO_DEFAULT_RATIO || 0.68)));
+const COMPRESS_VIDEO_MIN_CRF = Math.max(16, Number(process.env.COMPRESS_VIDEO_MIN_CRF || 21));
+const COMPRESS_VIDEO_MAX_CRF = Math.max(COMPRESS_VIDEO_MIN_CRF, Number(process.env.COMPRESS_VIDEO_MAX_CRF || 38));
+const COMPRESS_VIDEO_MAX_PASSES = Math.max(2, Math.min(10, Number(process.env.COMPRESS_VIDEO_MAX_PASSES || 6)));
+const COMPRESS_PDF_DEFAULT_RATIO = Math.max(0.2, Math.min(0.98, Number(process.env.COMPRESS_PDF_DEFAULT_RATIO || 0.72)));
 const formatList = Object.keys(TOOL_META || {});
 const healthState = {
   started_at: new Date().toISOString(),
@@ -660,6 +667,188 @@ function buildAudioArgs(settings = {}) {
   if (settings.channels) post.push('-ac', String(settings.channels));
   if (settings.normalize) post.push('-af', 'loudnorm');
   return { pre, post };
+}
+
+function asPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value;
+}
+
+function clampRatio(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  if (num <= 0) return fallback;
+  return Math.max(0.05, Math.min(0.99, num));
+}
+
+function clampPositiveInt(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.floor(num);
+}
+
+function safeOutputName(name, fallback = 'file.bin') {
+  const raw = String(name || '').trim();
+  if (!raw) return fallback;
+  const cleaned = raw.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^_+/, '');
+  return cleaned || fallback;
+}
+
+function resolveTargetBytes(inputPath, strategy, defaultRatio) {
+  const inputSize = Math.max(1, fs.statSync(inputPath).size);
+  const maxSizeMb = Number(strategy.maxSizeMb || strategy.max_size_mb || 0);
+  if (Number.isFinite(maxSizeMb) && maxSizeMb > 0) {
+    return Math.max(1, Math.round(maxSizeMb * 1024 * 1024));
+  }
+  const ratio = clampRatio(strategy.targetRatio || strategy.target_ratio, defaultRatio);
+  return Math.max(1, Math.round(inputSize * ratio));
+}
+
+async function compressVideoWithAdaptiveCrf({
+  inputPath,
+  workDir,
+  baseName,
+  videoArgs,
+  settings
+}) {
+  const strategy = asPlainObject(settings?.compression || settings?.smartCompression || settings?.smart_compression || settings);
+  const targetBytes = resolveTargetBytes(inputPath, strategy, COMPRESS_VIDEO_DEFAULT_RATIO);
+  const minCrf = Math.max(16, clampPositiveInt(strategy.minCrf || strategy.min_crf, COMPRESS_VIDEO_MIN_CRF));
+  const maxCrf = Math.max(minCrf, clampPositiveInt(strategy.maxCrf || strategy.max_crf, COMPRESS_VIDEO_MAX_CRF));
+  const passesLimit = Math.max(2, Math.min(10, clampPositiveInt(strategy.maxPasses || strategy.max_passes, COMPRESS_VIDEO_MAX_PASSES)));
+  const preset = String(strategy.preset || 'veryfast').trim() || 'veryfast';
+  const audioBitrate = String(strategy.audioBitrate || strategy.audio_bitrate || '128k').trim() || '128k';
+  const outputPath = path.join(workDir, `${baseName}_compressed.mp4`);
+
+  let left = minCrf;
+  let right = maxCrf;
+  let passes = 0;
+  const generated = [];
+  let bestClosest = null;
+  let bestUnderTarget = null;
+
+  while (left <= right && passes < passesLimit) {
+    passes += 1;
+    const crf = Math.floor((left + right) / 2);
+    const attemptPath = path.join(workDir, `${baseName}_compressed_crf_${crf}.mp4`);
+    await exec('ffmpeg', [
+      '-y',
+      '-i', inputPath,
+      ...videoArgs,
+      '-c:v', 'libx264',
+      '-crf', String(crf),
+      '-preset', preset,
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-c:a', 'aac',
+      '-b:a', audioBitrate,
+      attemptPath
+    ]);
+    const size = fs.statSync(attemptPath).size;
+    generated.push(attemptPath);
+
+    const diff = Math.abs(size - targetBytes);
+    if (!bestClosest || diff < bestClosest.diff) {
+      bestClosest = { path: attemptPath, size, crf, diff };
+    }
+    if (size <= targetBytes) {
+      if (!bestUnderTarget || size > bestUnderTarget.size) {
+        bestUnderTarget = { path: attemptPath, size, crf };
+      }
+      right = crf - 1;
+    } else {
+      left = crf + 1;
+    }
+  }
+
+  const chosen = bestUnderTarget || bestClosest;
+  if (!chosen) {
+    throw new Error('VIDEO_COMPRESSION_FAILED_NO_OUTPUT');
+  }
+  fs.copyFileSync(chosen.path, outputPath);
+
+  for (const candidate of generated) {
+    if (candidate === chosen.path) continue;
+    try { fs.rmSync(candidate, { force: true }); } catch {}
+  }
+
+  return {
+    outputPath,
+    strategy: {
+      mode: 'adaptive_video',
+      chosen_crf: chosen.crf,
+      target_bytes: targetBytes,
+      output_bytes: chosen.size,
+      passes
+    }
+  };
+}
+
+async function compressPdfAdaptive({
+  inputPath,
+  workDir,
+  baseName,
+  settings
+}) {
+  const strategy = asPlainObject(settings?.compression || settings?.smartCompression || settings?.smart_compression || settings);
+  const targetBytes = resolveTargetBytes(inputPath, strategy, COMPRESS_PDF_DEFAULT_RATIO);
+  const desiredProfiles = Array.isArray(strategy.pdfProfiles)
+    ? strategy.pdfProfiles
+    : Array.isArray(strategy.pdf_profiles)
+      ? strategy.pdf_profiles
+      : ['/printer', '/ebook', '/screen'];
+  const profiles = desiredProfiles
+    .map((item) => String(item || '').trim())
+    .filter((item) => item.startsWith('/'));
+  const uniqueProfiles = profiles.length ? Array.from(new Set(profiles)) : ['/printer', '/ebook', '/screen'];
+  const candidates = [];
+
+  for (const profile of uniqueProfiles) {
+    const safeProfile = profile.replace(/\//g, '');
+    const attemptPath = path.join(workDir, `${baseName}_compressed_${safeProfile}.pdf`);
+    try {
+      await exec(GS, [
+        '-sDEVICE=pdfwrite',
+        '-dCompatibilityLevel=1.4',
+        `-dPDFSETTINGS=${profile}`,
+        '-dNOPAUSE',
+        '-dQUIET',
+        '-dBATCH',
+        `-sOutputFile=${attemptPath}`,
+        inputPath
+      ]);
+      const size = fs.statSync(attemptPath).size;
+      if (size > 0) {
+        candidates.push({ path: attemptPath, size, profile });
+      }
+    } catch (error) {
+      logError({
+        type: 'compress_pdf_profile_failed',
+        profile,
+        error: normalizeErrorMessage(error)
+      });
+    }
+  }
+
+  if (!candidates.length) {
+    throw new Error('PDF_COMPRESSION_FAILED_NO_OUTPUT');
+  }
+
+  const suitable = candidates.filter((item) => item.size <= targetBytes);
+  const chosen = suitable.length
+    ? suitable.sort((a, b) => b.size - a.size)[0]
+    : candidates.sort((a, b) => a.size - b.size)[0];
+  const outputPath = path.join(workDir, `${baseName}_compressed.pdf`);
+  fs.copyFileSync(chosen.path, outputPath);
+  return {
+    outputPath,
+    strategy: {
+      mode: 'adaptive_pdf',
+      profile: chosen.profile,
+      target_bytes: targetBytes,
+      output_bytes: chosen.size
+    }
+  };
 }
 
 function resolveSofficeOutput(workDir, expectedPath, ext, beforeNames) {
@@ -1152,18 +1341,13 @@ async function convertSingle(tool, inputPath, workDir, settings) {
   }
 
   if (tool === 'compress-pdf') {
-    const outputPath = path.join(workDir, `${baseName}_compressed.pdf`);
-    await exec(GS, [
-      '-sDEVICE=pdfwrite',
-      '-dCompatibilityLevel=1.4',
-      '-dPDFSETTINGS=/ebook',
-      '-dNOPAUSE',
-      '-dQUIET',
-      '-dBATCH',
-      `-sOutputFile=${outputPath}`,
-      inputPath
-    ]);
-    return [outputPath];
+    const adaptive = await compressPdfAdaptive({
+      inputPath,
+      workDir,
+      baseName,
+      settings
+    });
+    return [adaptive.outputPath];
   }
 
   if (tool === 'mp4-mp3' || tool === 'mp3-wav' || tool === 'wav-mp3' || tool === 'm4a-mp3' || tool === 'flac-mp3' || tool === 'ogg-mp3' || tool === 'audio-aac') {
@@ -1180,9 +1364,14 @@ async function convertSingle(tool, inputPath, workDir, settings) {
   }
 
   if (tool === 'compress-video') {
-    const outputPath = path.join(workDir, `${baseName}_compressed.mp4`);
-    await exec('ffmpeg', ['-y', '-i', inputPath, ...videoArgs, '-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast', '-c:a', 'aac', '-b:a', '128k', outputPath]);
-    return [outputPath];
+    const adaptive = await compressVideoWithAdaptiveCrf({
+      inputPath,
+      workDir,
+      baseName,
+      videoArgs,
+      settings
+    });
+    return [adaptive.outputPath];
   }
 
   if (tool === 'mov-mp4' || tool === 'mkv-mp4' || tool === 'avi-mp4') {
@@ -1229,6 +1418,177 @@ async function convertSingle(tool, inputPath, workDir, settings) {
   throw new Error(`No conversion strategy for tool: ${tool}`);
 }
 
+async function attemptAutomaticRecovery({ tool, inputPath, workDir, settings }) {
+  const baseName = path.basename(inputPath, path.extname(inputPath));
+  const imageArgs = buildImageArgs(settings?.image);
+  const videoArgs = buildVideoArgs(settings?.video);
+  const audioArgs = buildAudioArgs(settings?.audio);
+  const sofficeArgs = [
+    '--headless',
+    '--nologo',
+    '--nolockcheck',
+    '--norestore',
+    `-env:UserInstallation=file:///${path.join(workDir, 'lo_profile_recovery').replace(/\\/g, '/')}`
+  ];
+
+  if (tool === 'compress-video') {
+    const outputPath = path.join(workDir, `${baseName}_compressed.mp4`);
+    await exec('ffmpeg', [
+      '-y',
+      '-i', inputPath,
+      ...videoArgs,
+      '-c:v', 'libx264',
+      '-crf', '32',
+      '-preset', 'ultrafast',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '96k',
+      outputPath
+    ]);
+    return { outputs: [outputPath], strategy: 'recovery_ffmpeg_ultrafast' };
+  }
+
+  if (tool === 'compress-pdf') {
+    const outputPath = path.join(workDir, `${baseName}_compressed.pdf`);
+    await exec(GS, [
+      '-sDEVICE=pdfwrite',
+      '-dCompatibilityLevel=1.4',
+      '-dPDFSETTINGS=/screen',
+      '-dNOPAUSE',
+      '-dQUIET',
+      '-dBATCH',
+      `-sOutputFile=${outputPath}`,
+      inputPath
+    ]);
+    return { outputs: [outputPath], strategy: 'recovery_ghostscript_screen' };
+  }
+
+  if (tool === 'pdf-images') {
+    const outputDir = path.join(workDir, 'recovery_pdf_pages');
+    fs.mkdirSync(outputDir, { recursive: true });
+    const pattern = path.join(outputDir, 'page-%03d.png');
+    await exec(GS, ['-dNOPAUSE', '-dBATCH', '-sDEVICE=png16m', '-r200', `-sOutputFile=${pattern}`, inputPath]);
+    const files = fs.readdirSync(outputDir)
+      .filter((name) => /^page-\d+\.png$/i.test(name))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map((name) => path.join(outputDir, name));
+    if (!files.length) {
+      throw new Error('PDF_RECOVERY_RENDER_EMPTY');
+    }
+    return { outputs: files, strategy: 'recovery_ghostscript_rasterize' };
+  }
+
+  if (tool === 'pdf-word') {
+    const txtPath = path.join(workDir, `${baseName}_recovery.txt`);
+    await extractPdfText(inputPath, txtPath, workDir);
+    ensureUtf8Bom(txtPath);
+    const out = await convertViaLibreOffice({
+      inputPath: txtPath,
+      workDir,
+      sofficeArgs,
+      to: 'docx',
+      baseName: `${baseName}_recovery`,
+      inputFilter: 'Text (encoded):UTF8,LF,,,'
+    });
+    return { outputs: [out], strategy: 'recovery_pdf_text_then_docx' };
+  }
+
+  if (tool === 'mov-mp4' || tool === 'mkv-mp4' || tool === 'avi-mp4') {
+    const outputPath = path.join(workDir, `${baseName}.mp4`);
+    await exec('ffmpeg', [
+      '-y',
+      '-fflags', '+genpts',
+      '-i', inputPath,
+      '-map', '0:v:0',
+      '-map', '0:a:0?',
+      ...videoArgs,
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-movflags', '+faststart',
+      outputPath
+    ]);
+    return { outputs: [outputPath], strategy: 'recovery_ffmpeg_genpts' };
+  }
+
+  if (tool === 'video-webm') {
+    const outputPath = path.join(workDir, `${baseName}.webm`);
+    await exec('ffmpeg', [
+      '-y',
+      '-i', inputPath,
+      ...videoArgs,
+      '-c:v', 'libvpx-vp9',
+      '-deadline', 'realtime',
+      '-cpu-used', '6',
+      '-row-mt', '1',
+      '-c:a', 'libopus',
+      outputPath
+    ]);
+    return { outputs: [outputPath], strategy: 'recovery_vp9_realtime' };
+  }
+
+  if (tool === 'svg-png' || tool === 'svg-jpg') {
+    const ext = tool === 'svg-jpg' ? 'jpg' : 'png';
+    const outputPath = path.join(workDir, `${baseName}_recovery.${ext}`);
+    await execMagick([inputPath, ...imageArgs, outputPath]);
+    return { outputs: [outputPath], strategy: 'recovery_magick_rasterize' };
+  }
+
+  if (tool === 'mp4-mp3' || tool === 'mp3-wav' || tool === 'wav-mp3' || tool === 'm4a-mp3' || tool === 'flac-mp3' || tool === 'ogg-mp3' || tool === 'audio-aac') {
+    const ext = tool.split('-')[1];
+    const outputPath = path.join(workDir, `${baseName}.${ext}`);
+    await exec('ffmpeg', ['-y', ...audioArgs.pre, '-i', inputPath, ...audioArgs.post, '-vn', outputPath]);
+    return { outputs: [outputPath], strategy: 'recovery_ffmpeg_audio_extract' };
+  }
+
+  return null;
+}
+
+async function convertWithRecovery({ job, tool, inputPath, workDir, settings }) {
+  try {
+    const outputs = await convertSingle(tool, inputPath, workDir, settings);
+    return {
+      outputs,
+      recovered: false,
+      strategy: 'primary'
+    };
+  } catch (primaryError) {
+    const fallbackError = normalizeErrorMessage(primaryError);
+    try {
+      const recovered = await attemptAutomaticRecovery({
+        tool,
+        inputPath,
+        workDir,
+        settings
+      });
+      if (recovered && Array.isArray(recovered.outputs) && recovered.outputs.length) {
+        log({
+          type: 'conversion_recovered',
+          jobId: job?.id || null,
+          tool,
+          strategy: recovered.strategy || 'fallback',
+          error: fallbackError
+        });
+        return {
+          outputs: recovered.outputs,
+          recovered: true,
+          strategy: recovered.strategy || 'fallback'
+        };
+      }
+    } catch (recoveryError) {
+      logError({
+        type: 'conversion_recovery_failed',
+        jobId: job?.id || null,
+        tool,
+        primary: fallbackError,
+        recovery: normalizeErrorMessage(recoveryError)
+      });
+    }
+    throw primaryError;
+  }
+}
+
 async function zipFiles(outputZip, files) {
   if (ZIP === 'zip') {
     const args = ['-j', outputZip, ...files];
@@ -1269,7 +1629,14 @@ async function handleSingle(job, data) {
     }
 
     assertMagic(tool, inputPath);
-    const outputs = await convertSingle(tool, inputPath, workDir, settings);
+    const conversion = await convertWithRecovery({
+      job,
+      tool,
+      inputPath,
+      workDir,
+      settings
+    });
+    const outputs = conversion.outputs;
 
     let finalPath = outputs[0];
     if (outputs.length > 1) {
@@ -1302,7 +1669,15 @@ async function handleSingle(job, data) {
       fs.copyFileSync(uploadPath, destPath);
     }
     job.updateProgress(100);
-    return { outputKey, outputMeta, validation };
+    return {
+      outputKey,
+      outputMeta,
+      validation,
+      conversion: {
+        recovered: conversion.recovered,
+        strategy: conversion.strategy
+      }
+    };
   } finally {
     try {
       if (Buffer.isBuffer(key)) key.fill(0);
@@ -1326,30 +1701,82 @@ async function handleBatch(job, data) {
       assertEncryptionEnvelope(encryption);
       key = await unwrapKey(encryption);
     }
-    let index = 0;
-    for (const item of items) {
-      index += 1;
-      const inputPath = path.join(workDir, path.basename(item.originalName || `file_${index}`));
-      const encPath = encryption?.enabled ? path.join(workDir, `${path.basename(item.originalName || `file_${index}`)}.enc`) : null;
-      if (storageMode === 's3') {
-        const inputObj = await s3.send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: item.inputKey }));
-        await streamToFile(inputObj.Body, encryption?.enabled ? encPath : inputPath);
-      } else {
-        const srcPath = localPathForKey(item.inputKey);
-        fs.copyFileSync(srcPath, encryption?.enabled ? encPath : inputPath);
+    const totalItems = Array.isArray(items) ? items.length : 0;
+    if (totalItems <= 0) {
+      throw new Error('BATCH_ITEMS_EMPTY');
+    }
+    const parallelism = Math.min(WORKER_BATCH_CONCURRENCY, totalItems);
+    let completed = 0;
+    let recoveredItems = 0;
+    let nextIndex = 0;
+    let fatalError = null;
+
+    const consumeItem = async (item, index) => {
+      const label = String(index + 1).padStart(4, '0');
+      const itemDir = path.join(workDir, `item_${label}`);
+      fs.mkdirSync(itemDir, { recursive: true });
+      const safeInputName = safeOutputName(path.basename(item.originalName || `file_${label}`), `file_${label}`);
+      const inputPath = path.join(itemDir, safeInputName);
+      const encPath = encryption?.enabled ? `${inputPath}.enc` : null;
+      try {
+        if (storageMode === 's3') {
+          const inputObj = await s3.send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: item.inputKey }));
+          await streamToFile(inputObj.Body, encryption?.enabled ? encPath : inputPath);
+        } else {
+          const srcPath = localPathForKey(item.inputKey);
+          fs.copyFileSync(srcPath, encryption?.enabled ? encPath : inputPath);
+        }
+        if (encryption?.enabled) {
+          const meta = item.encryption || encryption;
+          assertEncryptionMeta(meta);
+          await decryptFileGcm(encPath, inputPath, meta, key);
+        }
+
+        assertMagic(tool, inputPath);
+        const conversion = await convertWithRecovery({
+          job,
+          tool,
+          inputPath,
+          workDir: itemDir,
+          settings
+        });
+        const outputs = conversion.outputs;
+        let target = outputs[0];
+        if (outputs.length > 1) {
+          const pagesZip = path.join(itemDir, `${path.parse(safeInputName).name || `file_${label}`}_pages.zip`);
+          await zipFiles(pagesZip, outputs);
+          target = pagesZip;
+        }
+        validateOutputFile({ tool, inputPath, outputPath: target });
+        const outputName = `${label}_${safeOutputName(path.basename(target), `item_${label}.bin`)}`;
+        const dest = path.join(outDir, outputName);
+        fs.copyFileSync(target, dest);
+        if (conversion.recovered) recoveredItems += 1;
+      } finally {
+        try { fs.rmSync(itemDir, { recursive: true, force: true }); } catch {}
       }
-      if (encryption?.enabled) {
-        const meta = item.encryption || encryption;
-        assertEncryptionMeta(meta);
-        await decryptFileGcm(encPath, inputPath, meta, key);
+    };
+
+    const runSlot = async () => {
+      while (true) {
+        if (fatalError) return;
+        const current = nextIndex;
+        if (current >= totalItems) return;
+        nextIndex += 1;
+        try {
+          await consumeItem(items[current], current);
+          completed += 1;
+          job.updateProgress(Math.min(80, Math.round((completed / totalItems) * 70) + 10));
+        } catch (error) {
+          fatalError = error;
+          return;
+        }
       }
-      assertMagic(tool, inputPath);
-      const outputs = await convertSingle(tool, inputPath, workDir, settings);
-      const target = outputs[0];
-      validateOutputFile({ tool, inputPath, outputPath: target });
-      const dest = path.join(outDir, path.basename(target));
-      fs.copyFileSync(target, dest);
-      job.updateProgress(Math.min(80, Math.round((index / items.length) * 70) + 10));
+    };
+
+    await Promise.all(Array.from({ length: parallelism }, () => runSlot()));
+    if (fatalError) {
+      throw fatalError;
     }
 
     const zipPath = path.join(workDir, 'batch.zip');
@@ -1387,7 +1814,15 @@ async function handleBatch(job, data) {
       fs.copyFileSync(uploadPath, destPath);
     }
     job.updateProgress(100);
-    return { outputKey, outputMeta };
+    return {
+      outputKey,
+      outputMeta,
+      batch: {
+        items_total: totalItems,
+        recovered_items: recoveredItems,
+        parallelism
+      }
+    };
   } finally {
     try {
       if (Buffer.isBuffer(key)) key.fill(0);
@@ -1516,7 +1951,7 @@ const worker = new Worker('convert', async (job) => {
   return handleSingle(job, job.data);
 }, {
   connection,
-  concurrency: Number(process.env.WORKER_CONCURRENCY || 2)
+  concurrency: WORKER_CONCURRENCY
 });
 
 async function reportJobValidationResult({ job, success, durationMs, errorMessage = null }) {
@@ -1612,7 +2047,9 @@ log({
   workerId: WORKER_ID,
   version: WORKER_VERSION,
   healthPort: WORKER_HEALTH_PORT,
-  syntheticMatrixSize: SYNTHETIC_MATRIX.length
+  syntheticMatrixSize: SYNTHETIC_MATRIX.length,
+  concurrency: WORKER_CONCURRENCY,
+  batchParallelism: WORKER_BATCH_CONCURRENCY
 });
 
 startWorkerHealthServer();

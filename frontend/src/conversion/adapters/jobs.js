@@ -6,6 +6,9 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const DIRECT_API_FALLBACK = String(import.meta.env.VITE_DIRECT_API_FALLBACK || '')
   .trim()
   .replace(/\/+$/, '');
+const JOB_SSE_DISABLED = ['1', 'true', 'yes', 'on'].includes(
+  String(import.meta.env.VITE_DISABLE_JOB_SSE || '').trim().toLowerCase()
+);
 const RETRYABLE_CREATE_CODES = new Set(['JOB_CREATE_FAILED', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);
 const RETRYABLE_STATUS_CODES = new Set(['JOB_STATUS_FETCH', 'NETWORK_ERROR', 'TIMEOUT', 'QUEUE_UNAVAILABLE']);
 
@@ -71,10 +74,13 @@ const isRetryableStatusError = (error) => {
 };
 
 const fetchCreateJob = async (apiBase, authHeaders, payload, timeoutMs) => {
+  const idempotencyKey = String(payload?.idempotency_key || '').trim();
+  const headers = { 'Content-Type': 'application/json', ...authHeaders };
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   const res = await fetchWithTimeout(`${apiBase}/jobs`, {
     method: 'POST',
     cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', ...authHeaders },
+    headers,
     body: JSON.stringify(payload)
   }, timeoutMs);
   const body = await parseResponseBody(res);
@@ -189,6 +195,122 @@ export const getJob = async (apiBase, authHeaders, jobId, timeoutMs = 15_000) =>
   }
 };
 
+const canUseSse = () => {
+  if (JOB_SSE_DISABLED) return false;
+  return typeof globalThis !== 'undefined'
+    && typeof globalThis.EventSource === 'function';
+};
+
+const parseSsePayload = (raw) => {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return isObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const streamJobViaSse = ({
+  apiBase,
+  jobId,
+  onUpdate,
+  onProgress,
+  onEta,
+  logger,
+  signal,
+  timeoutMs
+}) => new Promise((resolve, reject) => {
+  if (!canUseSse()) {
+    reject(new ConversionError('JOB_STATUS_FETCH', 'SSE is not available in this environment.'));
+    return;
+  }
+
+  const normalizedBase = String(apiBase || '').trim().replace(/\/+$/, '');
+  if (!normalizedBase) {
+    reject(new ConversionError('JOB_STATUS_FETCH', 'API base is not configured for SSE stream.'));
+    return;
+  }
+  const streamUrl = `${normalizedBase}/jobs/${encodeURIComponent(String(jobId || '').trim())}/events`;
+  const source = new EventSource(streamUrl);
+  let settled = false;
+  let timeout = null;
+
+  const cleanup = () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+    try {
+      source.close();
+    } catch {
+      // ignore close errors
+    }
+    if (signal && typeof signal.removeEventListener === 'function') {
+      signal.removeEventListener('abort', onAbort);
+    }
+  };
+
+  const resolveOnce = (value) => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    resolve(value);
+  };
+
+  const rejectOnce = (error) => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    reject(error);
+  };
+
+  const onAbort = () => {
+    rejectOnce(new ConversionError('TIMEOUT', 'Job stream was aborted.'));
+  };
+
+  const onMessage = (event) => {
+    const payload = parseSsePayload(event?.data);
+    if (!payload) return;
+    const status = normalizeStatus(payload.status);
+    const normalized = {
+      ...payload,
+      status,
+      jobId: payload.jobId || payload.job_id || jobId,
+      downloadUrl: payload.downloadUrl || payload.download_url || null
+    };
+    onUpdate?.(normalized);
+    if (normalized.progress !== undefined && normalized.progress !== null) {
+      onProgress?.(Number(normalized.progress || 0));
+    }
+    if (normalized.etaSeconds !== undefined && normalized.etaSeconds !== null) {
+      onEta?.(Number(normalized.etaSeconds));
+    }
+    if (status === 'completed' || status === 'failed' || status === 'expired') {
+      resolveOnce(normalized);
+    }
+  };
+
+  source.onmessage = onMessage;
+  source.addEventListener('job', onMessage);
+  source.onerror = () => {
+    rejectOnce(new ConversionError('JOB_STATUS_FETCH', 'SSE stream failed.'));
+  };
+
+  if (signal && typeof signal.addEventListener === 'function') {
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  timeout = setTimeout(() => {
+    rejectOnce(new ConversionError('TIMEOUT', 'Timed out while waiting for SSE job stream.'));
+  }, Math.max(30_000, Number(timeoutMs || 0)));
+  logger?.info('job_sse_stream_started', { jobId, url: streamUrl });
+});
+
 const normalizeStatus = (status) => {
   if (!status) return 'running';
   const normalized = status.toLowerCase();
@@ -212,6 +334,27 @@ export const pollJob = async ({
   const start = Date.now();
   const pollIntervalMs = limits?.pollIntervalMs || 1200;
   const timeoutMs = limits?.jobTimeoutMs || 300000;
+  if (canUseSse()) {
+    try {
+      const finalFromSse = await streamJobViaSse({
+        apiBase,
+        jobId,
+        onUpdate,
+        onProgress,
+        onEta,
+        logger,
+        signal,
+        timeoutMs
+      });
+      return finalFromSse;
+    } catch (error) {
+      logger?.warn('job_sse_stream_failed_fallback_poll', {
+        jobId,
+        code: error?.code || null,
+        message: error?.message || String(error)
+      });
+    }
+  }
   let transientFailures = 0;
   while (true) {
     if (Date.now() - start > timeoutMs) {
