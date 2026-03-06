@@ -70,8 +70,8 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          timeout: 30m
-          command_timeout: 30m
+          timeout: 60m
+          command_timeout: 60m
           envs: GITHUB_TOKEN,SERVER_APP_DIR
           script: |
             set -euo pipefail
@@ -85,7 +85,7 @@ jobs:
             git pull --ff-only origin main
 
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u vitalikdeve --password-stdin
-            docker system prune -af
+            docker system prune -f
             docker compose pull api worker caddy
             docker compose up -d api worker caddy
 
