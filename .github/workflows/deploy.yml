@@ -6,96 +6,92 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 concurrency:
   group: deploy-main
   cancel-in-progress: true
 
 jobs:
-  deploy-server:
-    name: Deploy API/Worker on VPS
+  build-and-push:
+    name: Build and Push API/Worker Images
     runs-on: ubuntu-latest
-    timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate required secrets
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          missing=0
-          for v in SSH_HOST SSH_USER SSH_PRIVATE_KEY; do
-            if [ -z "${!v:-}" ]; then
-              echo "::error::Missing required secret: $v"
-              missing=1
-            fi
-          done
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: vitalikdeve
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare SSH key
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -lf ~/.ssh/deploy_key >/dev/null
+      - name: Build API image
+        run: docker build -t ghcr.io/vitalikdeve/megaconvert-api:latest -f ./api/Dockerfile ./api
 
+      - name: Push API image
+        run: docker push ghcr.io/vitalikdeve/megaconvert-api:latest
+
+      - name: Build worker image
+        run: docker build -t ghcr.io/vitalikdeve/megaconvert-worker:latest -f ./worker/Dockerfile ./worker
+
+      - name: Push worker image
+        run: docker push ghcr.io/vitalikdeve/megaconvert-worker:latest
+
+  deploy-server:
+    name: Deploy API/Worker on VPS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    timeout-minutes: 20
+
+    steps:
       - name: Deploy containers
+        uses: appleboy/ssh-action@v1.0.3
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SERVER_APP_DIR: ${{ secrets.SERVER_APP_DIR }}
-        run: |
-          set -euo pipefail
-          : "${SSH_PORT:=22}"
-          CLEAN_HOST="${SSH_HOST#https://}"
-          CLEAN_HOST="${CLEAN_HOST#http://}"
-          CLEAN_HOST="${CLEAN_HOST%%/*}"
-          ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o ConnectTimeout=15 \
-            -p "$SSH_PORT" "$SSH_USER@$CLEAN_HOST" \
-            "SERVER_APP_DIR='${SERVER_APP_DIR:-}' bash -se" <<'EOF'
-          set -euo pipefail
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          envs: GITHUB_TOKEN,SERVER_APP_DIR
+          script: |
+            set -euo pipefail
 
-          APP_DIR="${SERVER_APP_DIR:-$HOME/megaconvert}"
-          cd "$APP_DIR"
+            APP_DIR="${SERVER_APP_DIR:-$HOME/megaconvert}"
+            cd "$APP_DIR"
 
-          git fetch origin main
-          git checkout main
-          git pull --ff-only origin main
+            unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
 
-          docker compose up -d --build api worker caddy
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u vitalikdeve --password-stdin
+            docker compose pull api worker caddy
+            docker compose up -d api worker caddy
 
-          for i in {1..30}; do
-            if curl -fsS --max-time 3 http://127.0.0.1:3000/health >/dev/null; then
-              echo "API health check passed"
-              break
-            fi
+            for i in {1..30}; do
+              if curl -fsS --max-time 3 http://127.0.0.1:3000/health >/dev/null; then
+                echo "API health check passed"
+                break
+              fi
 
-            if [ "$i" -eq 30 ]; then
-              echo "API health check failed"
-              docker compose ps
-              docker compose logs --tail=200 api worker caddy
-              exit 1
-            fi
+              if [ "$i" -eq 30 ]; then
+                echo "API health check failed"
+                docker compose ps
+                docker compose logs --tail=200 api worker caddy
+                exit 1
+              fi
 
-            sleep 2
-          done
+              sleep 2
+            done
 
-          docker compose ps
-          EOF
+            docker compose ps
 
   deploy-frontend:
     name: Trigger Vercel Deploy
