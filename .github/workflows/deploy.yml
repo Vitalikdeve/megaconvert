@@ -59,6 +59,8 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          timeout: 30m
+          command_timeout: 30m
           envs: GITHUB_TOKEN,SERVER_APP_DIR
           script: |
             set -euo pipefail
