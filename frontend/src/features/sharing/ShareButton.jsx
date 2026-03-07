@@ -1,53 +1,22 @@
 import React from 'react';
-
-const SHARE_EXPIRY_OPTIONS = [
-  { value: 'one_hour', label: '1h' },
-  { value: 'one_day', label: '24h' },
-  { value: 'seven_days', label: '7d' },
-  { value: 'thirty_days', label: '30d' },
-  { value: 'never', label: 'Never' }
-];
+import { Link2, Loader2 } from 'lucide-react';
 
 export default function ShareButton({
-  onShare,
   onCreateLink,
   disabled = false,
-  expiryPreset = 'seven_days',
-  onExpiryPresetChange
+  busy = false
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2 justify-center">
       <button
         type="button"
-        onClick={onShare}
-        disabled={disabled}
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
+        onClick={() => onCreateLink?.('one_day')}
+        disabled={disabled || busy}
+        className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/60 dark:border-cyan-300/30 bg-cyan-100/80 dark:bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-cyan-800 dark:text-cyan-100 backdrop-blur-xl transition-all duration-300 ease-out hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Share
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <Link2 size={15} />}
+        {busy ? 'Генерируем ссылку...' : 'Поделиться (24 часа)'}
       </button>
-      <button
-        type="button"
-        onClick={() => onCreateLink?.(expiryPreset)}
-        disabled={disabled}
-        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
-      >
-        Public link
-      </button>
-      {typeof onExpiryPresetChange === 'function' && (
-        <select
-          value={expiryPreset}
-          onChange={(event) => onExpiryPresetChange(event.target.value)}
-          disabled={disabled}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 disabled:opacity-60"
-          aria-label="Public link expiration"
-        >
-          {SHARE_EXPIRY_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              Expire {option.label}
-            </option>
-          ))}
-        </select>
-      )}
     </div>
   );
 }

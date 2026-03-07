@@ -658,11 +658,53 @@ function buildVideoArgs(settings = {}) {
   return args;
 }
 
-function buildAudioArgs(settings = {}) {
+function buildMediaTrimArgs(settings = {}) {
   const pre = [];
   const post = [];
-  if (settings.trimStart) pre.push('-ss', String(settings.trimStart));
-  if (settings.trimDuration) pre.push('-t', String(settings.trimDuration));
+  const startCandidates = [settings.startTime, settings.start_time, settings.trimStart];
+  const endCandidates = [settings.endTime, settings.end_time, settings.trimEnd, settings.trim_to];
+  const durationCandidates = [settings.trimDuration, settings.duration];
+
+  const parseNumeric = (values) => {
+    for (const value of values) {
+      const num = Number(value);
+      if (Number.isFinite(num)) return num;
+    }
+    return null;
+  };
+
+  const startRaw = parseNumeric(startCandidates);
+  const endRaw = parseNumeric(endCandidates);
+  const durationRaw = parseNumeric(durationCandidates);
+  const start = startRaw !== null ? Math.max(0, startRaw) : null;
+  const end = endRaw !== null ? Math.max(0, endRaw) : null;
+
+  if (start !== null && start > 0) {
+    pre.push('-ss', String(start));
+  }
+
+  let duration = null;
+  if (end !== null && start !== null && end > start) {
+    duration = end - start;
+  } else if (end !== null && start === null && end > 0) {
+    duration = end;
+  } else if (durationRaw !== null && durationRaw > 0) {
+    duration = durationRaw;
+  }
+
+  if (duration !== null && duration > 0) {
+    post.push('-t', String(duration));
+  }
+
+  return { pre, post };
+}
+
+function buildAudioArgs(settings = {}) {
+  const trim = buildMediaTrimArgs(settings);
+  const pre = [];
+  const post = [];
+  pre.push(...trim.pre);
+  post.push(...trim.post);
   if (settings.bitrate) post.push('-b:a', String(settings.bitrate));
   if (settings.channels) post.push('-ac', String(settings.channels));
   if (settings.normalize) post.push('-af', 'loudnorm');
@@ -709,6 +751,7 @@ async function compressVideoWithAdaptiveCrf({
   workDir,
   baseName,
   videoArgs,
+  videoTrimArgs,
   settings
 }) {
   const strategy = asPlainObject(settings?.compression || settings?.smartCompression || settings?.smart_compression || settings);
@@ -733,7 +776,9 @@ async function compressVideoWithAdaptiveCrf({
     const attemptPath = path.join(workDir, `${baseName}_compressed_crf_${crf}.mp4`);
     await exec('ffmpeg', [
       '-y',
+      ...(videoTrimArgs?.pre || []),
       '-i', inputPath,
+      ...(videoTrimArgs?.post || []),
       ...videoArgs,
       '-c:v', 'libx264',
       '-crf', String(crf),
@@ -1221,6 +1266,7 @@ async function convertSingle(tool, inputPath, workDir, settings) {
   const baseName = path.basename(inputPath, path.extname(inputPath));
   const imageArgs = buildImageArgs(settings?.image);
   const videoArgs = buildVideoArgs(settings?.video);
+  const videoTrimArgs = buildMediaTrimArgs(settings?.video);
   const audioArgs = buildAudioArgs(settings?.audio);
   const sofficeArgs = [
     '--headless',
@@ -1252,7 +1298,8 @@ async function convertSingle(tool, inputPath, workDir, settings) {
       ensureUtf8Bom,
       buildImageArgs,
       buildVideoArgs,
-      buildAudioArgs
+      buildAudioArgs,
+      buildMediaTrimArgs
     }
   });
   if (delegated && delegated.length) {
@@ -1359,7 +1406,7 @@ async function convertSingle(tool, inputPath, workDir, settings) {
 
   if (tool === 'mp4-gif') {
     const outputPath = path.join(workDir, `${baseName}.gif`);
-    await exec('ffmpeg', ['-y', '-i', inputPath, '-vf', 'fps=10,scale=640:-1:flags=lanczos', outputPath]);
+    await exec('ffmpeg', ['-y', ...videoTrimArgs.pre, '-i', inputPath, ...videoTrimArgs.post, '-vf', 'fps=10,scale=640:-1:flags=lanczos', outputPath]);
     return [outputPath];
   }
 
@@ -1369,6 +1416,7 @@ async function convertSingle(tool, inputPath, workDir, settings) {
       workDir,
       baseName,
       videoArgs,
+      videoTrimArgs,
       settings
     });
     return [adaptive.outputPath];
@@ -1376,13 +1424,13 @@ async function convertSingle(tool, inputPath, workDir, settings) {
 
   if (tool === 'mov-mp4' || tool === 'mkv-mp4' || tool === 'avi-mp4') {
     const outputPath = path.join(workDir, `${baseName}.mp4`);
-    await exec('ffmpeg', ['-y', '-i', inputPath, ...videoArgs, '-c:v', 'libx264', '-c:a', 'aac', outputPath]);
+    await exec('ffmpeg', ['-y', ...videoTrimArgs.pre, '-i', inputPath, ...videoTrimArgs.post, ...videoArgs, '-c:v', 'libx264', '-c:a', 'aac', outputPath]);
     return [outputPath];
   }
 
   if (tool === 'video-webm') {
     const outputPath = path.join(workDir, `${baseName}.webm`);
-    await exec('ffmpeg', ['-y', '-i', inputPath, ...videoArgs, '-c:v', 'libvpx-vp9', '-c:a', 'libopus', outputPath]);
+    await exec('ffmpeg', ['-y', ...videoTrimArgs.pre, '-i', inputPath, ...videoTrimArgs.post, ...videoArgs, '-c:v', 'libvpx-vp9', '-c:a', 'libopus', outputPath]);
     return [outputPath];
   }
 
@@ -1422,6 +1470,7 @@ async function attemptAutomaticRecovery({ tool, inputPath, workDir, settings }) 
   const baseName = path.basename(inputPath, path.extname(inputPath));
   const imageArgs = buildImageArgs(settings?.image);
   const videoArgs = buildVideoArgs(settings?.video);
+  const videoTrimArgs = buildMediaTrimArgs(settings?.video);
   const audioArgs = buildAudioArgs(settings?.audio);
   const sofficeArgs = [
     '--headless',
@@ -1435,7 +1484,9 @@ async function attemptAutomaticRecovery({ tool, inputPath, workDir, settings }) 
     const outputPath = path.join(workDir, `${baseName}_compressed.mp4`);
     await exec('ffmpeg', [
       '-y',
+      ...videoTrimArgs.pre,
       '-i', inputPath,
+      ...videoTrimArgs.post,
       ...videoArgs,
       '-c:v', 'libx264',
       '-crf', '32',
@@ -1498,7 +1549,9 @@ async function attemptAutomaticRecovery({ tool, inputPath, workDir, settings }) 
     await exec('ffmpeg', [
       '-y',
       '-fflags', '+genpts',
+      ...videoTrimArgs.pre,
       '-i', inputPath,
+      ...videoTrimArgs.post,
       '-map', '0:v:0',
       '-map', '0:a:0?',
       ...videoArgs,
@@ -1516,7 +1569,9 @@ async function attemptAutomaticRecovery({ tool, inputPath, workDir, settings }) 
     const outputPath = path.join(workDir, `${baseName}.webm`);
     await exec('ffmpeg', [
       '-y',
+      ...videoTrimArgs.pre,
       '-i', inputPath,
+      ...videoTrimArgs.post,
       ...videoArgs,
       '-c:v', 'libvpx-vp9',
       '-deadline', 'realtime',

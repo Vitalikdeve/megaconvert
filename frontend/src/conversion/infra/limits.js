@@ -3,14 +3,14 @@ const MB = 1024 * 1024;
 export const LIMITS = {
   maxFileBytesByCategory: {
     doc: 50 * MB,
-    image: 25 * MB,
-    video: 100 * MB,
+    image: 50 * MB,
+    video: 50 * MB,
     audio: 50 * MB,
-    archive: 250 * MB,
-    data: 25 * MB
+    archive: 50 * MB,
+    data: 50 * MB
   },
-  maxBatchFiles: 50,
-  maxBatchBytes: 250 * MB,
+  maxBatchFiles: 10,
+  maxBatchBytes: 500 * MB,
   checksumMaxBytes: 10 * MB,
   maxFileNameLength: 80,
   uploadTimeoutMs: 120_000,

@@ -2,9 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const archiver = require('archiver');
+const sharp = require('sharp');
 const { Queue } = require('bullmq');
 const IORedis = require('ioredis');
-const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, HeadBucketCommand, CreateBucketCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, HeadBucketCommand, CreateBucketCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
@@ -171,9 +174,18 @@ const s3 = storageMode === 's3' ? new S3Client({
 }) : null;
 
 const localRoot = process.env.LOCAL_STORAGE_DIR || '/data';
-const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+const MAX_FILE_SIZE_MB = Math.max(1, Number(process.env.MAX_FILE_SIZE_MB || 50));
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+const BATCH_WATERMARK_MAX_FILES = Math.min(50, Math.max(1, Number(process.env.BATCH_WATERMARK_MAX_FILES || 50)));
+const BATCH_WATERMARK_TEXT_MAX_LEN = Math.max(8, Number(process.env.BATCH_WATERMARK_TEXT_MAX_LEN || 64));
+const BATCH_WATERMARK_FONT_BASE = Math.max(12, Number(process.env.BATCH_WATERMARK_FONT_BASE || 36));
+const BATCH_WATERMARK_PADDING_BASE = Math.max(8, Number(process.env.BATCH_WATERMARK_PADDING_BASE || 28));
+const BATCH_WATERMARK_TMP_DIR = String(
+  process.env.BATCH_WATERMARK_TMP_DIR || path.join(DATA_ROOT_DIR, 'tmp', 'batch-watermark')
+).trim() || path.join(DATA_ROOT_DIR, 'tmp', 'batch-watermark');
 const RATE_LIMIT_UPLOADS_PER_MIN = Number(process.env.RATE_LIMIT_UPLOADS_PER_MIN || 30);
 const RATE_LIMIT_JOBS_PER_MIN = Number(process.env.RATE_LIMIT_JOBS_PER_MIN || 20);
+const RATE_LIMIT_CONVERSIONS_PER_HOUR = Math.max(1, Number(process.env.RATE_LIMIT_CONVERSIONS_PER_HOUR || 10));
 const JOB_IDEMPOTENCY_KEY_MAX_LEN = Math.max(16, Number(process.env.JOB_IDEMPOTENCY_KEY_MAX_LEN || 128));
 const JOB_IDEMPOTENCY_TTL_SEC = Math.max(60, Number(process.env.JOB_IDEMPOTENCY_TTL_SEC || 24 * 60 * 60));
 const JOB_DEDUPE_TTL_SEC = Math.max(60, Number(process.env.JOB_DEDUPE_TTL_SEC || 30 * 60));
@@ -418,6 +430,7 @@ let redisReady = false;
 let lastRedisError = null;
 let bucketReady = false;
 let analyticsFlushTimer = null;
+let shareCleanupTimer = null;
 let analyticsFlushInFlight = false;
 const analyticsBuffer = [];
 let analyticsFallbackWriteQueue = Promise.resolve();
@@ -458,6 +471,9 @@ const SHARE_EXPIRY_PRESETS = {
   thirty_days: 30 * 24 * 60 * 60,
   never: 0
 };
+const SHARE_TOKEN_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const SHARE_TOKEN_LENGTH = Math.max(6, Number(process.env.SHARE_TOKEN_LENGTH || 8));
+const SHARE_CLEANUP_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.SHARE_CLEANUP_INTERVAL_MS || 10 * 60 * 1000));
 
 const withTimeout = (promise, timeoutMs, timeoutMessage) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
@@ -637,6 +653,227 @@ async function rateLimit(key, limit, windowSec) {
   return count <= limit;
 }
 
+const fileTooLargePayload = (requestId) => ({
+  status: 'error',
+  code: 'FILE_TOO_LARGE',
+  message: `File exceeds ${MAX_FILE_SIZE_MB}MB limit`,
+  requestId
+});
+
+const BATCH_WATERMARK_ALLOWED_POSITIONS = new Set(['center', 'top-left', 'top-right', 'bottom-left', 'bottom-right']);
+const BATCH_WATERMARK_ALLOWED_MIME = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/bmp',
+  'image/tiff',
+  'image/avif'
+]);
+const BATCH_WATERMARK_EXT_TO_FORMAT = {
+  jpg: 'jpeg',
+  jpeg: 'jpeg',
+  png: 'png',
+  webp: 'webp',
+  gif: 'gif',
+  bmp: 'png',
+  tif: 'tiff',
+  tiff: 'tiff',
+  avif: 'avif'
+};
+const BATCH_WATERMARK_EXT_BY_FORMAT = {
+  jpeg: 'jpg',
+  png: 'png',
+  webp: 'webp',
+  gif: 'gif',
+  tiff: 'tiff',
+  avif: 'avif'
+};
+
+const ensureBatchWatermarkTmpDir = async () => {
+  await fs.promises.mkdir(BATCH_WATERMARK_TMP_DIR, { recursive: true });
+};
+
+const stripHexColor = (value) => String(value || '').trim().replace(/^#/, '');
+
+const normalizeWatermarkColor = (value) => {
+  const normalized = stripHexColor(value);
+  if (/^[\da-f]{3}$/i.test(normalized)) {
+    const expanded = normalized.split('').map((ch) => `${ch}${ch}`).join('');
+    return `#${expanded.toLowerCase()}`;
+  }
+  if (/^[\da-f]{6}$/i.test(normalized)) return `#${normalized.toLowerCase()}`;
+  return '#ffffff';
+};
+
+const normalizeWatermarkPosition = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return BATCH_WATERMARK_ALLOWED_POSITIONS.has(normalized) ? normalized : 'center';
+};
+
+const inferImageExtFromName = (name) => {
+  const ext = String(path.extname(String(name || '')).replace('.', '')).trim().toLowerCase();
+  return ext || '';
+};
+
+const resolveWatermarkOutputFormat = (mimeType, originalName) => {
+  const mime = String(mimeType || '').trim().toLowerCase();
+  const byMime = mime.startsWith('image/') ? mime.split('/')[1] : '';
+  const raw = byMime || inferImageExtFromName(originalName);
+  const normalized = BATCH_WATERMARK_EXT_TO_FORMAT[raw] || raw;
+  if (BATCH_WATERMARK_EXT_BY_FORMAT[normalized]) return normalized;
+  return 'png';
+};
+
+const getWatermarkOutputName = (originalName, outputFormat, index = 0) => {
+  const parsed = path.parse(sanitizeFileName(String(originalName || `image-${index + 1}`)));
+  const base = String(parsed.name || `image-${index + 1}`).replace(/[^\w.-]+/g, '_') || `image-${index + 1}`;
+  const ext = BATCH_WATERMARK_EXT_BY_FORMAT[outputFormat] || 'png';
+  return `${base}.${ext}`;
+};
+
+const applySharpOutputFormat = (pipeline, outputFormat) => {
+  if (outputFormat === 'jpeg') return pipeline.jpeg({ quality: 92, mozjpeg: true });
+  if (outputFormat === 'webp') return pipeline.webp({ quality: 90 });
+  if (outputFormat === 'png') return pipeline.png({ compressionLevel: 9 });
+  if (outputFormat === 'tiff') return pipeline.tiff({ quality: 90 });
+  if (outputFormat === 'gif') return pipeline.gif();
+  if (outputFormat === 'avif') return pipeline.avif({ quality: 55 });
+  return pipeline.png({ compressionLevel: 9 });
+};
+
+const escapeSvgText = (value) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const resolveWatermarkPlacement = ({ width, height, padding, position }) => {
+  const safeWidth = Math.max(1, Number(width || 1));
+  const safeHeight = Math.max(1, Number(height || 1));
+  const safePadding = Math.max(6, Number(padding || 6));
+  if (position === 'top-left') return { x: safePadding, y: safePadding, anchor: 'start', baseline: 'hanging' };
+  if (position === 'top-right') return { x: Math.max(safePadding, safeWidth - safePadding), y: safePadding, anchor: 'end', baseline: 'hanging' };
+  if (position === 'bottom-left') return { x: safePadding, y: Math.max(safePadding, safeHeight - safePadding), anchor: 'start', baseline: 'baseline' };
+  if (position === 'bottom-right') return { x: Math.max(safePadding, safeWidth - safePadding), y: Math.max(safePadding, safeHeight - safePadding), anchor: 'end', baseline: 'baseline' };
+  return {
+    x: Math.floor(safeWidth / 2),
+    y: Math.floor(safeHeight / 2),
+    anchor: 'middle',
+    baseline: 'middle'
+  };
+};
+
+const buildTextWatermarkSvg = ({ width, height, text, color, position }) => {
+  const safeWidth = Math.max(1, Number(width || 1));
+  const safeHeight = Math.max(1, Number(height || 1));
+  const baseFont = Math.max(12, Number(BATCH_WATERMARK_FONT_BASE || 36));
+  const fontSize = Math.max(12, Math.round(Math.min(baseFont, Math.min(safeWidth, safeHeight) * 0.085)));
+  const padding = Math.max(8, Math.round(Math.min(BATCH_WATERMARK_PADDING_BASE, Math.min(safeWidth, safeHeight) * 0.06)));
+  const placement = resolveWatermarkPlacement({ width: safeWidth, height: safeHeight, padding, position });
+  const escapedText = escapeSvgText(String(text || '').slice(0, BATCH_WATERMARK_TEXT_MAX_LEN));
+  const safeColor = normalizeWatermarkColor(color);
+  const shadowSize = Math.max(1, Math.round(fontSize * 0.08));
+  return `<svg width="${safeWidth}" height="${safeHeight}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="textShadow" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="${shadowSize}" stdDeviation="${shadowSize}" flood-color="#000000" flood-opacity="0.38"/>
+      </filter>
+    </defs>
+    <text
+      x="${placement.x}"
+      y="${placement.y}"
+      text-anchor="${placement.anchor}"
+      dominant-baseline="${placement.baseline}"
+      font-family="SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+      font-size="${fontSize}"
+      font-weight="600"
+      letter-spacing="0.4"
+      fill="${safeColor}"
+      fill-opacity="0.8"
+      filter="url(#textShadow)"
+      style="paint-order: stroke; stroke: rgba(0,0,0,0.35); stroke-width: ${Math.max(1, Math.round(fontSize * 0.06))}; stroke-linejoin: round;"
+      >
+      <tspan x="${placement.x}" dy="0">${escapedText}</tspan>
+    </text>
+  </svg>`;
+};
+
+const removeUploadedFiles = async (files) => {
+  const list = Array.isArray(files) ? files : [];
+  if (!list.length) return;
+  await Promise.allSettled(list.map(async (file) => {
+    const filePath = String(file?.path || '').trim();
+    if (!filePath) return;
+    try {
+      await fs.promises.unlink(filePath);
+    } catch {
+      // ignore cleanup errors
+    }
+  }));
+};
+
+const batchWatermarkUpload = multer({
+  storage: multer.diskStorage({
+    destination(req, file, cb) {
+      void ensureBatchWatermarkTmpDir()
+        .then(() => cb(null, BATCH_WATERMARK_TMP_DIR))
+        .catch((error) => cb(error));
+    },
+    filename(req, file, cb) {
+      const safeName = sanitizeFileName(String(file?.originalname || 'image'));
+      const token = crypto.randomBytes(6).toString('hex');
+      cb(null, `${Date.now()}-${token}-${safeName}`);
+    }
+  }),
+  limits: {
+    files: BATCH_WATERMARK_MAX_FILES,
+    fileSize: MAX_FILE_SIZE
+  },
+  fileFilter(req, file, cb) {
+    const mime = String(file?.mimetype || '').trim().toLowerCase();
+    const ext = inferImageExtFromName(file?.originalname);
+    if (BATCH_WATERMARK_ALLOWED_MIME.has(mime) || Boolean(BATCH_WATERMARK_EXT_TO_FORMAT[ext])) {
+      return cb(null, true);
+    }
+    return cb(new Error('UNSUPPORTED_IMAGE_FORMAT'));
+  }
+});
+
+const conversionRateLimitMiddleware = async (req, res, next) => {
+  try {
+    if (isUnlimitedTestRequest(req)) return next();
+    const clientId = getClientId(req);
+    const allowed = await rateLimit(`rl:convert_hour:${clientId}`, RATE_LIMIT_CONVERSIONS_PER_HOUR, 60 * 60);
+    if (!allowed) {
+      return res.status(429).json({
+        status: 'error',
+        code: 'RATE_LIMIT_HOURLY',
+        message: `Too many conversion requests. Limit is ${RATE_LIMIT_CONVERSIONS_PER_HOUR} per hour.`,
+        requestId: req.requestId
+      });
+    }
+    return next();
+  } catch (error) {
+    if (isQueueUnavailableError(error)) {
+      return res.status(503).json(redisUnavailablePayload(req.requestId, error?.message || 'redis_unavailable'));
+    }
+    logError({
+      type: 'conversion_rate_limit_failed',
+      requestId: req.requestId,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'RATE_LIMIT_CHECK_FAILED',
+      message: 'Failed to validate rate limit',
+      requestId: req.requestId
+    });
+  }
+};
+
 function getClientId(req) {
   const ip = getRequestIp(req);
   const userId = req.headers['x-user-id'];
@@ -645,6 +882,39 @@ function getClientId(req) {
 
 function getRequestIp(req) {
   return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+}
+
+function normalizeJobProgressPayload(rawProgress) {
+  const toProgressNumber = (value) => {
+    const numeric = Number(value || 0);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.min(100, numeric));
+  };
+
+  if (Array.isArray(rawProgress)) {
+    const itemProgress = rawProgress;
+    const values = itemProgress
+      .map((entry) => {
+        if (typeof entry === 'number') return toProgressNumber(entry);
+        if (entry && typeof entry === 'object') {
+          return toProgressNumber(entry.progress || entry.pct || entry.value || 0);
+        }
+        return 0;
+      })
+      .filter((value) => Number.isFinite(value));
+    const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+    return { progress: toProgressNumber(average), itemProgress };
+  }
+
+  if (rawProgress && typeof rawProgress === 'object') {
+    const progress = toProgressNumber(rawProgress.progress || rawProgress.overall || rawProgress.percent || 0);
+    const itemProgress = Array.isArray(rawProgress.items)
+      ? rawProgress.items
+      : (Array.isArray(rawProgress.itemProgress) ? rawProgress.itemProgress : null);
+    return { progress, itemProgress };
+  }
+
+  return { progress: toProgressNumber(rawProgress), itemProgress: null };
 }
 
 function timingSafeEqualText(left, right) {
@@ -2656,6 +2926,201 @@ function saveShareLinksStore(next) {
   writeJsonAtomic(SHARE_LINKS_FILE, normalized);
   shareLinksStore = normalized;
   return normalized;
+}
+
+function generateShortShareToken(existing = {}) {
+  const occupied = asObject(existing);
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const bytes = crypto.randomBytes(SHARE_TOKEN_LENGTH);
+    let token = '';
+    for (let i = 0; i < bytes.length; i += 1) {
+      token += SHARE_TOKEN_ALPHABET[bytes[i] % SHARE_TOKEN_ALPHABET.length];
+    }
+    if (!occupied[token]) return token;
+  }
+  const fallback = crypto.randomBytes(8).toString('hex').slice(0, SHARE_TOKEN_LENGTH);
+  return occupied[fallback] ? `${fallback}${Date.now().toString(36).slice(-2)}` : fallback;
+}
+
+function extractStorageKeyFromShareUrl(rawUrl) {
+  const raw = String(rawUrl || '').trim();
+  if (!raw) return '';
+  const parseWithBase = (value, base) => {
+    try {
+      return new URL(value, base);
+    } catch {
+      return null;
+    }
+  };
+  const parsed = parseWithBase(raw, 'http://localhost');
+  if (!parsed) return '';
+  const pathname = String(parsed.pathname || '').trim();
+  const prefixes = ['/api/files/', '/files/'];
+  for (const prefix of prefixes) {
+    if (!pathname.startsWith(prefix)) continue;
+    const encoded = pathname.slice(prefix.length);
+    const decoded = encoded
+      .split('/')
+      .filter(Boolean)
+      .map((part) => safeDecodeURIComponent(part))
+      .join('/');
+    return normalizeStorageKey(decoded);
+  }
+  return '';
+}
+
+function resolveShareStorageKey(item) {
+  const payload = asObject(item);
+  const explicit = normalizeStorageKey(payload.storage_key || payload.storageKey || '');
+  if (explicit) return explicit;
+  return extractStorageKeyFromShareUrl(payload.url || payload.file_url || '');
+}
+
+function buildExpiredShareTombstone(token, sourceItem, nowMs = Date.now()) {
+  const item = asObject(sourceItem);
+  return {
+    id: String(token || item.id || '').trim() || String(token || ''),
+    status: 'expired',
+    code: 'SHARE_LINK_EXPIRED',
+    message: 'Срок действия ссылки истек',
+    created_at: Number(item.created_at || 0) || nowMs,
+    expires_at: Number(item.expires_at || 0) || nowMs,
+    expired_at: nowMs
+  };
+}
+
+function hasActiveShareForStorageKey(shares, storageKey, nowMs = Date.now()) {
+  const normalizedKey = normalizeStorageKey(storageKey);
+  if (!normalizedKey) return false;
+  return Object.values(asObject(shares)).some((rawItem) => {
+    const item = asObject(rawItem);
+    if (resolveShareStorageKey(item) !== normalizedKey) return false;
+    const expiresAt = Number(item.expires_at || 0);
+    return !expiresAt || expiresAt > nowMs;
+  });
+}
+
+function pruneEmptyDirectories(startDir, stopDir) {
+  const safeStopDir = path.resolve(stopDir);
+  let current = path.resolve(startDir);
+  while (current.startsWith(safeStopDir) && current !== safeStopDir) {
+    try {
+      const entries = fs.readdirSync(current);
+      if (entries.length > 0) return;
+      fs.rmdirSync(current);
+      current = path.dirname(current);
+    } catch {
+      return;
+    }
+  }
+}
+
+async function deleteStoredObject(storageKey) {
+  const key = normalizeStorageKey(storageKey);
+  if (!key) return false;
+  if (storageMode === 's3') {
+    try {
+      await ensureBucketAvailable();
+      await s3.send(new DeleteObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: key
+      }));
+      return true;
+    } catch (error) {
+      const code = String(error?.name || error?.Code || '').trim();
+      if (code === 'NoSuchKey' || code === 'NotFound') return false;
+      throw error;
+    }
+  }
+  const diskPath = path.join(localRoot, key);
+  if (!fs.existsSync(diskPath)) return false;
+  fs.unlinkSync(diskPath);
+  pruneEmptyDirectories(path.dirname(diskPath), localRoot);
+  return true;
+}
+
+async function hasStoredObject(storageKey) {
+  const key = normalizeStorageKey(storageKey);
+  if (!key) return false;
+  if (storageMode === 's3') {
+    try {
+      await headObject(key);
+      return true;
+    } catch (error) {
+      const code = String(error?.name || error?.Code || '').trim();
+      if (code === 'NoSuchKey' || code === 'NotFound' || code === 'NoSuchBucket') return false;
+      throw error;
+    }
+  }
+  const diskPath = path.join(localRoot, key);
+  return fs.existsSync(diskPath);
+}
+
+async function purgeExpiredShareLinks(reason = 'manual') {
+  const current = asObject(loadShareLinksStore());
+  const now = Date.now();
+  const next = { ...current };
+  const expiredEntries = [];
+
+  for (const [token, rawItem] of Object.entries(current)) {
+    const item = asObject(rawItem);
+    if (String(item.status || '').trim().toLowerCase() === 'expired') continue;
+    const expiresAt = Number(item.expires_at || 0);
+    if (!expiresAt || expiresAt > now) continue;
+    expiredEntries.push([token, item]);
+    next[token] = buildExpiredShareTombstone(token, item, now);
+  }
+
+  if (!expiredEntries.length) return { removed: 0, deletedFiles: 0 };
+
+  const deletedKeys = new Set();
+  let deletedFiles = 0;
+  for (const [, item] of expiredEntries) {
+    const storageKey = resolveShareStorageKey(item);
+    if (!storageKey || deletedKeys.has(storageKey)) continue;
+    if (hasActiveShareForStorageKey(next, storageKey, now)) continue;
+    try {
+      const deleted = await deleteStoredObject(storageKey);
+      if (deleted) deletedFiles += 1;
+      deletedKeys.add(storageKey);
+    } catch (error) {
+      logError({
+        type: 'share_expired_file_delete_failed',
+        reason,
+        storageKey,
+        error: error?.message || 'unknown'
+      });
+    }
+  }
+
+  saveShareLinksStore(next);
+  log({
+    type: 'share_links_expired_purged',
+    reason,
+    removed: expiredEntries.length,
+    deletedFiles
+  });
+  return { removed: expiredEntries.length, deletedFiles };
+}
+
+function startShareCleanupLoop() {
+  if (SERVERLESS_RUNTIME) return;
+  if (shareCleanupTimer) return;
+  shareCleanupTimer = setInterval(() => {
+    void purgeExpiredShareLinks('interval').catch((error) => {
+      logError({
+        type: 'share_cleanup_failed',
+        error: error?.message || 'unknown'
+      });
+    });
+  }, SHARE_CLEANUP_INTERVAL_MS);
+  if (typeof shareCleanupTimer.unref === 'function') shareCleanupTimer.unref();
+  void purgeExpiredShareLinks('startup').catch((error) => {
+    logError({
+      type: 'share_cleanup_startup_failed',
+      error: error?.message || 'unknown'
+    });
+  });
 }
 
 function loadAuditLogsStore() {
@@ -5943,12 +6408,172 @@ app.get('/metrics/ops', (_req, res) => {
 });
 
 app.get('/share-expiry-presets', (_req, res) => {
-  return res.json({ ok: true, presets: SHARE_EXPIRY_PRESETS, default: 'seven_days' });
+  return res.json({ ok: true, presets: SHARE_EXPIRY_PRESETS, default: 'one_day' });
 });
 
 app.get('/share/expiry-presets', (_req, res) => {
-  return res.json({ ok: true, presets: SHARE_EXPIRY_PRESETS, default: 'seven_days' });
+  return res.json({ ok: true, presets: SHARE_EXPIRY_PRESETS, default: 'one_day' });
 });
+
+app.post(
+  '/tools/batch-watermark',
+  conversionRateLimitMiddleware,
+  (req, res, next) => {
+    batchWatermarkUpload.array('files', BATCH_WATERMARK_MAX_FILES)(req, res, (error) => {
+      if (!error) return next();
+      if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json(fileTooLargePayload(req.requestId));
+        }
+        if (error.code === 'LIMIT_FILE_COUNT') {
+          return res.status(400).json({
+            status: 'error',
+            code: 'TOO_MANY_FILES',
+            message: `Maximum ${BATCH_WATERMARK_MAX_FILES} files are allowed per request`,
+            requestId: req.requestId
+          });
+        }
+      }
+      if (String(error?.message || '') === 'UNSUPPORTED_IMAGE_FORMAT') {
+        return res.status(400).json({
+          status: 'error',
+          code: 'UNSUPPORTED_IMAGE_FORMAT',
+          message: 'Only image files are supported for batch watermark',
+          requestId: req.requestId
+        });
+      }
+      return next(error);
+    });
+  },
+  async (req, res, next) => {
+    const uploadedFiles = Array.isArray(req.files) ? req.files : [];
+    try {
+      if (!uploadedFiles.length) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'MISSING_FILES',
+          message: 'Upload at least one image file',
+          requestId: req.requestId
+        });
+      }
+
+      const watermarkText = String(req.body?.watermarkText || req.body?.text || '').trim();
+      if (!watermarkText) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'MISSING_WATERMARK_TEXT',
+          message: 'Watermark text is required',
+          requestId: req.requestId
+        });
+      }
+      const normalizedText = watermarkText.slice(0, BATCH_WATERMARK_TEXT_MAX_LEN);
+      const watermarkColor = normalizeWatermarkColor(req.body?.watermarkColor);
+      const watermarkPosition = normalizeWatermarkPosition(req.body?.watermarkPosition);
+
+      const jobs = [];
+      for (let index = 0; index < uploadedFiles.length; index += 1) {
+        const file = uploadedFiles[index];
+        const outputFormat = resolveWatermarkOutputFormat(file?.mimetype, file?.originalname);
+        const metadata = await sharp(file.path, { failOnError: true }).metadata();
+        if (!metadata?.width || !metadata?.height) {
+          return res.status(400).json({
+            status: 'error',
+            code: 'INVALID_IMAGE',
+            message: `Failed to process image: ${String(file?.originalname || `file-${index + 1}`)}`,
+            requestId: req.requestId
+          });
+        }
+        jobs.push({
+          file,
+          width: metadata.width,
+          height: metadata.height,
+          outputFormat,
+          outputName: getWatermarkOutputName(file?.originalname, outputFormat, index)
+        });
+      }
+
+      const archiveName = `megaconvert-watermark-${Date.now()}.zip`;
+      res.status(200);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      const archiveDonePromise = new Promise((resolve, reject) => {
+        archive.on('error', reject);
+        res.on('finish', resolve);
+        res.on('close', resolve);
+      });
+
+      archive.on('warning', (warning) => {
+        if (String(warning?.code || '') !== 'ENOENT') {
+          logError({
+            type: 'batch_watermark_archive_warning',
+            requestId: req.requestId,
+            warning: warning?.message || 'unknown'
+          });
+        }
+      });
+
+      res.on('close', () => {
+        if (!res.writableEnded) {
+          try {
+            archive.abort();
+          } catch {
+            // ignore abort failures
+          }
+        }
+      });
+
+      archive.pipe(res);
+
+      for (const job of jobs) {
+        const overlaySvg = buildTextWatermarkSvg({
+          width: job.width,
+          height: job.height,
+          text: normalizedText,
+          color: watermarkColor,
+          position: watermarkPosition
+        });
+        const transformer = applySharpOutputFormat(
+          sharp(job.file.path, { failOnError: true })
+            .rotate()
+            .composite([{ input: Buffer.from(overlaySvg), blend: 'over' }]),
+          job.outputFormat
+        );
+        archive.append(transformer, { name: job.outputName });
+      }
+
+      archive.finalize();
+      await archiveDonePromise;
+
+      log({
+        type: 'batch_watermark_completed',
+        requestId: req.requestId,
+        count: jobs.length,
+        position: watermarkPosition
+      });
+      return undefined;
+    } catch (error) {
+      if (!res.headersSent) {
+        return res.status(500).json({
+          status: 'error',
+          code: 'BATCH_WATERMARK_FAILED',
+          message: 'Failed to process batch watermark request',
+          requestId: req.requestId
+        });
+      }
+      logError({
+        type: 'batch_watermark_stream_failed',
+        requestId: req.requestId,
+        error: error?.message || 'unknown'
+      });
+      return next(error);
+    } finally {
+      await removeUploadedFiles(uploadedFiles);
+    }
+  }
+);
 
 app.post('/flags/evaluate', (req, res) => {
   const payload = asObject(req.body || {});
@@ -5985,10 +6610,12 @@ app.post('/share', (req, res) => {
     : (presetSeconds !== null ? presetSeconds : SHARE_EXPIRY_PRESETS.seven_days);
   const token = crypto.randomBytes(9).toString('hex');
   const now = Date.now();
+  const storageKey = resolveShareStorageKey({ url: fileUrl });
   const item = {
     id: token,
     file_id: payload.file_id ? String(payload.file_id) : null,
     url: fileUrl,
+    storage_key: storageKey || null,
     expires_preset: preset || (ttlSeconds === 0 ? 'never' : 'custom'),
     expires_in: ttlSeconds,
     expires_at: ttlSeconds > 0 ? now + (ttlSeconds * 1000) : null,
@@ -5999,18 +6626,112 @@ app.post('/share', (req, res) => {
   return res.json({ token, url: item.url, expires_in: item.expires_in, expires_at: item.expires_at });
 });
 
-app.get('/share/:token', (req, res) => {
+app.post('/share/24h', async (req, res) => {
+  const payload = asObject(req.body || {});
+  const fileUrl = String(payload.file_url || '').trim();
+  if (!fileUrl) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID',
+      message: 'file_url is required',
+      requestId: req.requestId
+    });
+  }
+
+  const storageKey = resolveShareStorageKey({ url: fileUrl });
+  if (!storageKey || !storageKey.startsWith('outputs/')) {
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID_FILE_URL',
+      message: 'Share link must reference a converted output file',
+      requestId: req.requestId
+    });
+  }
+
+  try {
+    const exists = await hasStoredObject(storageKey);
+    if (!exists) {
+      return res.status(404).json({
+        status: 'error',
+        code: 'FILE_NOT_FOUND',
+        message: 'File not found',
+        requestId: req.requestId
+      });
+    }
+  } catch (error) {
+    logError({
+      type: 'share_file_check_failed',
+      requestId: req.requestId,
+      storageKey,
+      error: error?.message || 'unknown'
+    });
+    return res.status(500).json({
+      status: 'error',
+      code: 'SHARE_CREATE_FAILED',
+      message: 'Failed to create share link',
+      requestId: req.requestId
+    });
+  }
+
+  const shares = asObject(loadShareLinksStore());
+  const token = generateShortShareToken(shares);
+  const now = Date.now();
+  const ttlSeconds = SHARE_EXPIRY_PRESETS.one_day;
+  const item = {
+    id: token,
+    file_id: payload.file_id ? String(payload.file_id) : null,
+    url: fileUrl,
+    storage_key: storageKey,
+    expires_preset: 'one_day',
+    expires_in: ttlSeconds,
+    expires_at: now + (ttlSeconds * 1000),
+    created_at: now
+  };
+  shares[token] = item;
+  saveShareLinksStore(shares);
+  const base = getRequestBaseUrl(req);
+  const shareUrl = base ? `${base}/s/${token}` : `/s/${token}`;
+  return res.status(201).json({
+    ok: true,
+    token,
+    share_url: shareUrl,
+    expires_in: item.expires_in,
+    expires_at: item.expires_at
+  });
+});
+
+app.get('/share/:token', async (req, res) => {
   const token = String(req.params?.token || '').trim();
   const shares = loadShareLinksStore();
   const item = asObject(shares[token]);
   if (!token || !item.id) {
     return res.status(404).json({ status: 'error', code: 'NOT_FOUND', message: 'Share not found', requestId: req.requestId });
   }
+  if (String(item.status || '').trim().toLowerCase() === 'expired') {
+    return res.status(404).json({
+      status: 'error',
+      code: 'SHARE_LINK_EXPIRED',
+      message: 'Срок действия ссылки истек',
+      requestId: req.requestId
+    });
+  }
   if (item.expires_at && Date.now() > Number(item.expires_at)) {
-    const next = { ...shares };
-    delete next[token];
-    saveShareLinksStore(next);
-    return res.status(410).json({ status: 'error', code: 'EXPIRED', message: 'Share expired', requestId: req.requestId });
+    try {
+      await purgeExpiredShareLinks('share_access');
+    } catch (error) {
+      logError({
+        type: 'share_expire_purge_failed',
+        requestId: req.requestId,
+        token,
+        error: error?.message || 'unknown'
+      });
+    }
+    return res.status(404).json({
+      status: 'error',
+      code: 'SHARE_LINK_EXPIRED',
+      message: 'Срок действия ссылки истек',
+      requestId: req.requestId
+    });
   }
   return res.json(item);
 });
@@ -10751,8 +11472,11 @@ app.post('/account/pipelines/:id/run', requireUserAuth, async (req, res) => {
     if (!inputKey || !inputKey.startsWith('inputs/')) {
       return res.status(400).json({ status: 'error', code: 'MISSING_INPUT_KEY', message: 'Valid inputKey is required', requestId: req.requestId });
     }
-    if (!inputSize || inputSize <= 0 || inputSize > MAX_FILE_SIZE) {
+    if (!inputSize || inputSize <= 0) {
       return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid inputSize', requestId: req.requestId });
+    }
+    if (inputSize > MAX_FILE_SIZE) {
+      return res.status(413).json(fileTooLargePayload(req.requestId));
     }
     const jobId = uuidv4();
     const tool = firstConvert.tool;
@@ -12150,7 +12874,7 @@ app.post('/uploads/sign', async (req, res) => {
     const { filename, contentType, size } = req.body || {};
     if (!filename) return res.status(400).json({ status: 'error', code: 'MISSING_FILENAME', message: 'Missing filename', requestId: req.requestId });
     if (!size || Number(size) <= 0) return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
-    if (Number(size) > MAX_FILE_SIZE) return res.status(400).json({ status: 'error', code: 'FILE_TOO_LARGE', message: 'File exceeds size limit', requestId: req.requestId });
+    if (Number(size) > MAX_FILE_SIZE) return res.status(413).json(fileTooLargePayload(req.requestId));
 
     const safeName = sanitizeFileName(filename);
     const key = `inputs/${uuidv4()}/${safeName}`;
@@ -12172,7 +12896,7 @@ app.post('/uploads/sign', async (req, res) => {
   }
 });
 
-app.post('/uploads/proxy', express.raw({ type: '*/*', limit: '1100mb' }), async (req, res) => {
+app.post('/uploads/proxy', express.raw({ type: '*/*', limit: `${MAX_FILE_SIZE_MB}mb` }), async (req, res) => {
   try {
     const redis = await ensureRedisAvailable(req.requestId);
     if (!redis.ok) {
@@ -12209,7 +12933,7 @@ app.post('/uploads/proxy', express.raw({ type: '*/*', limit: '1100mb' }), async 
       return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
     }
     if (body.length > MAX_FILE_SIZE) {
-      return res.status(400).json({ status: 'error', code: 'FILE_TOO_LARGE', message: 'File exceeds size limit', requestId: req.requestId });
+      return res.status(413).json(fileTooLargePayload(req.requestId));
     }
     if (declaredSize > 0 && declaredSize !== body.length) {
       return res.status(400).json({ status: 'error', code: 'SIZE_MISMATCH', message: 'Uploaded size mismatch', requestId: req.requestId });
@@ -12530,7 +13254,7 @@ app.post('/api/uploads/sign', async (req, res) => {
   }
 });
 
-app.post('/api/convert', async (req, res) => {
+app.post('/api/convert', conversionRateLimitMiddleware, async (req, res) => {
   try {
     const redis = await ensureRedisAvailable(req.requestId);
     if (!redis.ok) return res.status(503).json(redis.payload);
@@ -12563,8 +13287,11 @@ app.post('/api/convert', async (req, res) => {
       }
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      if (!buffer.length || buffer.length > MAX_FILE_SIZE) {
+      if (!buffer.length) {
         return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
+      }
+      if (buffer.length > MAX_FILE_SIZE) {
+        return res.status(413).json(fileTooLargePayload(req.requestId));
       }
       const ext = inferExtFromUrl(fileUrl) || 'bin';
       if (!tool) {
@@ -12607,8 +13334,11 @@ app.post('/api/convert', async (req, res) => {
       return res.status(400).json({ status: 'error', code: 'INVALID_FORMAT', message: 'Unsupported input format', requestId: req.requestId });
     }
     const size = Number(inputSize || 0);
-    if (!size || size <= 0 || size > MAX_FILE_SIZE) {
+    if (!size || size <= 0) {
       return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
+    }
+    if (size > MAX_FILE_SIZE) {
+      return res.status(413).json(fileTooLargePayload(req.requestId));
     }
 
     const jobId = uuidv4();
@@ -12662,7 +13392,8 @@ app.get('/api/jobs/:id', async (req, res) => {
       return res.status(404).json({ status: 'error', code: 'JOB_NOT_FOUND', message: 'Job not found', requestId: req.requestId });
     }
     const state = await job.getState();
-    const progress = job.progress || 0;
+    const progressPayload = normalizeJobProgressPayload(job.progress);
+    const progress = progressPayload.progress;
     let downloadUrl = null;
     if (state === 'completed') {
       const outputKey = (job.returnvalue && job.returnvalue.outputKey) || job.data.outputKey;
@@ -12697,6 +13428,8 @@ app.get('/api/jobs/:id', async (req, res) => {
       job_id: req.params.id,
       status: state,
       progress,
+      itemProgress: progressPayload.itemProgress,
+      item_progress: progressPayload.itemProgress,
       downloadUrl,
       download_url: downloadUrl,
       error: errorMessage,
@@ -12711,7 +13444,7 @@ app.get('/api/jobs/:id', async (req, res) => {
   }
 });
 
-app.post('/jobs', async (req, res) => {
+app.post('/jobs', conversionRateLimitMiddleware, async (req, res) => {
   try {
     const redis = await ensureRedisAvailable(req.requestId);
     if (!redis.ok) {
@@ -12804,7 +13537,7 @@ app.post('/jobs', async (req, res) => {
         const inputSize = Number(item.inputSize || 0);
         const encryptedSize = Number(item.encryptedSize || 0);
         if (!inputSize || inputSize <= 0) return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
-        if (inputSize > MAX_FILE_SIZE) return res.status(400).json({ status: 'error', code: 'FILE_TOO_LARGE', message: 'File exceeds size limit', requestId: req.requestId });
+        if (inputSize > MAX_FILE_SIZE) return res.status(413).json(fileTooLargePayload(req.requestId));
         if (toolMeta?.inputExts?.length && !toolMeta.inputExts.includes(inputFormat)) {
           return res.status(400).json({ status: 'error', code: 'INVALID_FORMAT', message: 'Unsupported input format', requestId: req.requestId });
         }
@@ -12912,7 +13645,7 @@ app.post('/jobs', async (req, res) => {
     const encryptedSize = Number(requestBody.encryptedSize || 0);
     const checksum = extractChecksumValue(requestBody.checksum || requestBody.inputHash || requestBody.input_hash) || null;
     if (!inputSize || inputSize <= 0) return res.status(400).json({ status: 'error', code: 'INVALID_SIZE', message: 'Invalid file size', requestId: req.requestId });
-    if (inputSize > MAX_FILE_SIZE) return res.status(400).json({ status: 'error', code: 'FILE_TOO_LARGE', message: 'File exceeds size limit', requestId: req.requestId });
+    if (inputSize > MAX_FILE_SIZE) return res.status(413).json(fileTooLargePayload(req.requestId));
     if (toolMeta?.inputExts?.length && !toolMeta.inputExts.includes(inputFormat)) {
       return res.status(400).json({ status: 'error', code: 'INVALID_FORMAT', message: 'Unsupported input format', requestId: req.requestId });
     }
@@ -13042,7 +13775,14 @@ app.get('/jobs/:id', async (req, res) => {
     }
 
     const outputMeta = job.returnvalue && job.returnvalue.outputMeta ? job.returnvalue.outputMeta : null;
-    res.json({ status: state, progress, downloadUrl, outputMeta, error });
+    res.json({
+      status: state,
+      progress,
+      itemProgress: progressPayload.itemProgress,
+      downloadUrl,
+      outputMeta,
+      error
+    });
   } catch (err) {
     if (isQueueUnavailableError(err)) {
       return res.status(503).json(redisUnavailablePayload(req.requestId, err?.message || 'queue_unavailable'));
@@ -13114,7 +13854,8 @@ app.get('/jobs/:id/events', async (req, res) => {
         return;
       }
       const status = await job.getState();
-      const progress = Number(job.progress || 0);
+      const progressPayload = normalizeJobProgressPayload(job.progress);
+      const progress = progressPayload.progress;
       const outputKey = (job.returnvalue && job.returnvalue.outputKey) || job.data?.outputKey || null;
       const downloadUrl = status === 'completed' ? buildDownloadUrl(req, outputKey) : null;
       const errorMessage = status === 'failed' ? (job.failedReason || 'Conversion failed') : null;
@@ -13122,6 +13863,7 @@ app.get('/jobs/:id/events', async (req, res) => {
         jobId,
         status,
         progress,
+        itemProgress: progressPayload.itemProgress,
         downloadUrl,
         download_url: downloadUrl,
         outputMeta: job.returnvalue?.outputMeta || null,
@@ -13131,6 +13873,7 @@ app.get('/jobs/:id/events', async (req, res) => {
       const fingerprint = JSON.stringify({
         status: payload.status,
         progress: payload.progress,
+        itemProgress: payload.itemProgress || null,
         downloadUrl: payload.downloadUrl,
         error: payload.error?.message || null
       });
@@ -13185,13 +13928,36 @@ app.get('/jobs/:id/events', async (req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const tooLarge = err?.type === 'entity.too.large'
+    || Number(err?.status) === 413
+    || Number(err?.statusCode) === 413
+    || String(err?.code || '') === 'LIMIT_FILE_SIZE';
+  if (tooLarge) {
+    return res.status(413).json(fileTooLargePayload(req.requestId));
+  }
+  if (err?.type === 'entity.parse.failed') {
+    return res.status(400).json({
+      status: 'error',
+      code: 'INVALID_JSON',
+      message: 'Invalid JSON payload',
+      requestId: req.requestId
+    });
+  }
+  if (String(err?.message || '') === 'Not allowed by CORS') {
+    return res.status(403).json({
+      status: 'error',
+      code: 'CORS_BLOCKED',
+      message: 'Origin is not allowed',
+      requestId: req.requestId
+    });
+  }
   logError({
     type: 'unhandled_http_error',
     requestId: req.requestId || null,
     path: req.path || null,
     error: err?.message || 'unknown'
   });
-  if (res.headersSent) return next(err);
   return res.status(500).json({
     status: 'error',
     code: 'INTERNAL_ERROR',
@@ -13201,6 +13967,7 @@ app.use((err, req, res, next) => {
 });
 
 startAnalyticsFlushLoop();
+startShareCleanupLoop();
 if (ANALYTICS_ENABLED && !CLICKHOUSE_URL && !canUseAnalyticsFallback()) {
   logError({ type: 'analytics_disabled_no_clickhouse_url' });
 }
@@ -13248,6 +14015,10 @@ const shutdown = async (signal) => {
     if (analyticsFlushTimer) {
       clearInterval(analyticsFlushTimer);
       analyticsFlushTimer = null;
+    }
+    if (shareCleanupTimer) {
+      clearInterval(shareCleanupTimer);
+      shareCleanupTimer = null;
     }
     await flushAnalyticsBuffer('shutdown');
     await Promise.allSettled([

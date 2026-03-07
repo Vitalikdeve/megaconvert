@@ -1,0 +1,80 @@
+.admin-overview.text-slate-900,
+.admin-overview .text-slate-900 {
+  color: #0f172a !important;
+}
+
+.admin-overview .text-slate-700 {
+  color: #334155 !important;
+}
+
+.admin-overview .text-slate-600 {
+  color: #475569 !important;
+}
+
+.admin-overview .text-slate-500 {
+  color: #64748b !important;
+}
+
+.admin-overview .text-emerald-600 {
+  color: #059669 !important;
+}
+
+.admin-overview .bg-slate-50 {
+  background-color: #f8fafc !important;
+}
+
+.admin-overview .bg-slate-100 {
+  background-color: #f1f5f9 !important;
+}
+
+.admin-overview .bg-white\/80 {
+  background-color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.admin-overview .bg-white\/90 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.admin-overview .border-white\/40 {
+  border-color: rgba(255, 255, 255, 0.48) !important;
+}
+
+.admin-overview .border-white\/60 {
+  border-color: rgba(255, 255, 255, 0.68) !important;
+}
+
+.admin-overview .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #f1f5f9 !important;
+}
+
+.admin-overview-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 1rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #475569;
+  transition: background-color 180ms ease, color 180ms ease, transform 160ms ease;
+}
+
+.admin-overview-nav-item:hover {
+  background: rgba(241, 245, 249, 0.9);
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.admin-overview-nav-item.is-active {
+  background: rgba(239, 246, 255, 0.95);
+  color: #2563eb;
+}
+
+@media (max-width: 1024px) {
+  .admin-overview {
+    background-image:
+      radial-gradient(circle at 8% 0%, rgba(59, 130, 246, 0.12), transparent 48%),
+      radial-gradient(circle at 100% 10%, rgba(147, 197, 253, 0.15), transparent 38%);
+  }
+}

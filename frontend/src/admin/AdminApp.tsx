@@ -3,7 +3,7 @@ import { AdminAuthProvider } from './auth/AdminAuthProvider';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminLayout } from './components/AdminLayout';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
+import { AdminOverviewPage } from './pages/AdminOverviewPage';
 import { PostsPage } from './pages/PostsPage';
 import { SearchInsightsPage } from './pages/SearchInsightsPage';
 import { PromoCodesPage } from './pages/PromoCodesPage';
@@ -64,7 +64,7 @@ const AdminContent = ({ subPath, navigate }) => {
   const { adminUser } = useAdminAuth();
   const role = getRole(adminUser?.role);
   const getPage = () => {
-    if (subPath === '/' || subPath === '') return { module: 'dashboard', node: <DashboardPage /> };
+    if (subPath === '/dashboard') return { module: 'dashboard', node: <AdminOverviewPage navigate={navigate} /> };
     if (subPath === '/posts' || subPath.startsWith('/posts/')) return { module: 'content', node: <PostsPage /> };
     if (subPath === '/promo-codes' || subPath.startsWith('/promo-codes/')) return { module: 'billing', node: <PromoCodesPage /> };
     if (subPath === '/promo' || subPath.startsWith('/promo/')) return { module: 'billing', node: <PromoMetricsPage /> };
@@ -98,6 +98,7 @@ const AdminContent = ({ subPath, navigate }) => {
 export default function AdminApp({ path, navigate, apiBase, lang, t }) {
   const subPath = normalizeSubPath(path);
   const isLogin = subPath === '/login';
+  const isOverview = subPath === '/' || subPath === '';
 
   if (isLogin) {
     return (
@@ -113,9 +114,13 @@ export default function AdminApp({ path, navigate, apiBase, lang, t }) {
     <AdminI18nProvider lang={lang} t={t}>
       <AdminAuthProvider apiBase={apiBase}>
         <ProtectedRoute navigate={navigate}>
-          <AdminLayout path={path} navigate={navigate}>
-            <AdminContent subPath={subPath} navigate={navigate} />
-          </AdminLayout>
+          {isOverview ? (
+            <AdminOverviewPage navigate={navigate} />
+          ) : (
+            <AdminLayout path={path} navigate={navigate}>
+              <AdminContent subPath={subPath} navigate={navigate} />
+            </AdminLayout>
+          )}
         </ProtectedRoute>
       </AdminAuthProvider>
     </AdminI18nProvider>

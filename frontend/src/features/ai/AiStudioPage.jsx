@@ -17,6 +17,7 @@ const formatFileSizeMb = (size) => `${(Math.max(0, Number(size || 0)) / (1024 * 
 
 export default function AiStudioPage({
   file = null,
+  files = [],
   isDragOver = false,
   onDragEnter,
   onDragLeave,
@@ -38,8 +39,14 @@ export default function AiStudioPage({
   downloadUrl = '',
   conversionError = '',
   onDownload,
-  onReset
+  onReset,
+  canQuickLook = false,
+  onQuickLook,
+  batchStackNode = null
 }) {
+  const selectedFiles = Array.isArray(files) && files.length ? files : (file ? [file] : []);
+  const primaryFile = selectedFiles[0] || null;
+  const hasBatch = selectedFiles.length > 1;
   const stageMessage = STAGE_MESSAGES[stage] || STAGE_MESSAGES.idle;
   const safeProgress = Math.max(6, Math.min(100, Math.round(Number(progress || 0))));
   const isBusy = stage !== 'idle' || status === 'processing';
@@ -69,7 +76,7 @@ export default function AiStudioPage({
           onDragOver={onDragOver}
           onDrop={onDrop}
         >
-          {!file ? (
+          {!primaryFile ? (
             <div className="ai-studio-dropzone-empty">
               <div className="ai-studio-dropzone-title">Перетащите файл в эту область</div>
               <div className="ai-studio-dropzone-subtitle">или загрузите его вручную</div>
@@ -79,9 +86,19 @@ export default function AiStudioPage({
             </div>
           ) : (
             <div className="ai-studio-dropzone-file">
-              <div className="ai-studio-file-label">Файл готов к AI-обработке</div>
-              <div className="ai-studio-file-name">{file.name}</div>
-              <div className="ai-studio-file-size">{formatFileSizeMb(file.size)}</div>
+              <div className="ai-studio-file-label">{hasBatch ? 'Пакет готов к AI-обработке' : 'Файл готов к AI-обработке'}</div>
+              <div className="ai-studio-file-name">{hasBatch ? `${selectedFiles.length} файлов выбрано` : primaryFile.name}</div>
+              <div className="ai-studio-file-size">
+                {hasBatch
+                  ? `${formatFileSizeMb(selectedFiles.reduce((sum, item) => sum + Number(item?.size || 0), 0))} суммарно`
+                  : formatFileSizeMb(primaryFile.size)}
+              </div>
+              {hasBatch && (
+                <div className="mt-2 text-xs text-slate-400">
+                  {selectedFiles.slice(0, 3).map((item) => item.name).join(' · ')}
+                  {selectedFiles.length > 3 ? ' · ...' : ''}
+                </div>
+              )}
               <div className="ai-studio-file-actions">
                 <button type="button" onClick={onBrowseClick} className="ai-studio-ghost-btn">
                   Заменить файл
@@ -93,6 +110,8 @@ export default function AiStudioPage({
             </div>
           )}
         </div>
+
+        {batchStackNode}
 
         {(status === 'processing' || stage !== 'idle') && (
           <div className="ai-studio-progress-card">
@@ -113,6 +132,11 @@ export default function AiStudioPage({
               <button type="button" onClick={onDownload} className="ai-studio-primary-btn">
                 Скачать
               </button>
+              {canQuickLook && (
+                <button type="button" onClick={onQuickLook} className="ai-studio-ghost-btn">
+                  Quick Look
+                </button>
+              )}
               <button type="button" onClick={onReset} className="ai-studio-ghost-btn">
                 Новый запрос
               </button>

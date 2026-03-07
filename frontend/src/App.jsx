@@ -4,7 +4,7 @@ import {
   CheckCircle2, Zap, ShieldCheck, Globe2, ServerCog,
   Upload, Download, Settings, Search, Cloud, Layers,
   Image as ImageIcon, FileText, Music, Video,
-  ChevronDown, Box, Mail, Github, Lock, X
+  ChevronDown, Box, Mail, Github, Lock, X, Eye, Moon, Sun, UserCircle2
 } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
@@ -44,9 +44,19 @@ import {
 import ShareButton from './features/sharing/ShareButton.jsx';
 import HistoryList from './features/history/HistoryList.jsx';
 import BatchUploader from './features/batch/BatchUploader.jsx';
+import DynamicBatchStack from './features/batch/DynamicBatchStack.jsx';
 import NextActions from './features/recommendations/NextActions.jsx';
 import AiStudioPage from './features/ai/AiStudioPage.jsx';
+import WorkspaceV3Page from './features/v3/WorkspaceV3Page.jsx';
+import LocalMediaConverterTool from './features/tools/LocalMediaConverterTool.jsx';
+import OcrRecognitionTool from './features/tools/OcrRecognitionTool.jsx';
+import PdfEditorTool from './features/tools/PdfEditorTool.jsx';
+import ImageCompressorTool from './features/tools/ImageCompressorTool.jsx';
+import BatchWatermarkTool from './features/tools/BatchWatermarkTool.jsx';
 import { getSmartTips } from './features/tips/TipsEngine.js';
+import QuickLookModal from './features/preview/QuickLookModal.jsx';
+import GlassToast from './components/GlassToast.jsx';
+import { useTheme } from './theme/ThemeProvider.jsx';
 import AdminApp from './admin/AdminApp.tsx';
 
 // --- Firebase ---
@@ -188,15 +198,74 @@ const getPreviewType = (ext) => {
   if (!ext) return 'other';
   if (ext === 'pdf') return 'pdf';
   if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) return 'image';
+  if (['txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'log'].includes(ext)) return 'text';
   if (['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'rtf'].includes(ext)) return 'doc';
   return 'other';
 };
 
+const isPreviewableType = (type) => ['pdf', 'image', 'doc', 'text'].includes(type);
+
 const getDeviceBatchLimit = () => {
-  if (typeof navigator === 'undefined') return MAX_BATCH_FILES_DEFAULT;
-  const memory = Number(navigator.deviceMemory || 4);
-  if (memory <= 2) return 5;
   return MAX_BATCH_FILES_DEFAULT;
+};
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value || 0)));
+
+const clampProgress = (value) => Math.max(0, Math.min(100, Number(value || 0)));
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const formatTimelineTime = (value) => {
+  const total = Math.max(0, Math.floor(Number(value || 0)));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
+const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
+  try {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('blob_to_data_url_failed'));
+    reader.readAsDataURL(blob);
+  } catch (error) {
+    reject(error);
+  }
+});
+
+const dataUrlToBlob = (dataUrl) => {
+  const raw = String(dataUrl || '');
+  const commaIndex = raw.indexOf(',');
+  if (commaIndex === -1) return null;
+  const header = raw.slice(0, commaIndex);
+  const payload = raw.slice(commaIndex + 1);
+  const mimeMatch = header.match(/^data:([^;]+);base64$/i);
+  if (!mimeMatch) return null;
+  const mime = String(mimeMatch[1] || 'application/octet-stream');
+  const binary = atob(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+};
+
+const deriveEmailSessionPassword = (emailValue) => {
+  const input = String(emailValue || '').trim().toLowerCase();
+  if (!input) return '';
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return `MCv2!${Math.abs(hash).toString(16)}@email`;
 };
 
 const SHARE_STORAGE_KEY = 'mc_share_links';
@@ -208,21 +277,6 @@ const readShareLinks = () => {
   } catch {
     return {};
   }
-};
-
-const writeShareLinks = (value) => {
-  try {
-    localStorage.setItem(SHARE_STORAGE_KEY, JSON.stringify(value));
-  } catch {
-    // ignore
-  }
-};
-
-const createShareToken = () => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-  }
-  return Math.random().toString(36).slice(2, 14);
 };
 
 const getFileExt = (value) => {
@@ -844,7 +898,7 @@ const mapPublicPostToBlogPost = (post) => {
 };
 
 const GlassCard = ({ children, className = '' }) => (
-  <div className={`glass-card mc-surface rounded-3xl shadow-[0_30px_80px_rgba(15,23,42,0.08)] p-6 md:p-8 text-slate-100 ${className}`}>
+  <div className={`glass-card mc-surface rounded-3xl shadow-[0_30px_80px_rgba(15,23,42,0.08)] p-6 md:p-8 text-slate-900 dark:text-slate-100 ${className}`}>
     {children}
   </div>
 );
@@ -889,11 +943,11 @@ const Badge = ({ children, color = "blue", variant = "light" }) => (
 );
 
 const Page = ({ title, subtitle, actions, children }) => (
-  <div className="pt-28 pb-20 px-4 text-slate-100 page-enter">
+  <div className="pt-28 pb-20 px-4 text-slate-900 dark:text-slate-100 page-enter">
     <div className="max-w-6xl mx-auto">
       <div className="mb-12">
         <h1 className="text-4xl md:text-5xl font-semibold font-display tracking-tight">{title}</h1>
-        {subtitle && <p className="text-slate-400 text-lg mt-4 max-w-2xl">{subtitle}</p>}
+        {subtitle && <p className="text-slate-500 dark:text-slate-400 text-lg mt-4 max-w-2xl">{subtitle}</p>}
         {actions && <div className="mt-6 flex flex-wrap gap-3">{actions}</div>}
       </div>
       {children}
@@ -903,7 +957,7 @@ const Page = ({ title, subtitle, actions, children }) => (
 
 
 const PageCard = ({ children, className = "" }) => (
-  <div className={`panel-card mc-card p-6 text-slate-100 ${className}`}>{children}</div>
+  <div className={`panel-card mc-card p-6 text-slate-900 dark:text-slate-100 ${className}`}>{children}</div>
 );
 
 const LegalSectionCard = ({ title, children }) => (
@@ -976,6 +1030,7 @@ const ToolCard = ({ tool, onOpen, labels, onHover, onLeave }) => (
 const SharePage = ({ token, apiBase, lang, onNavigate }) => {
   const [shareRemote, setShareRemote] = useState(null);
   const [shareFetchDone, setShareFetchDone] = useState(false);
+  const [shareError, setShareError] = useState(null);
   const storedLocal = token ? readShareLinks()[token] : null;
 
   useEffect(() => {
@@ -983,13 +1038,38 @@ const SharePage = ({ token, apiBase, lang, onNavigate }) => {
     if (storedLocal) return;
     let active = true;
     fetch(`${apiBase}/share/${encodeURIComponent(token)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((payload) => {
+      .then(async (res) => {
+        if (res.ok) {
+          const payload = await res.json();
+          return { ok: true, payload };
+        }
+        let details = null;
+        try {
+          details = await res.json();
+        } catch {
+          details = null;
+        }
+        return {
+          ok: false,
+          error: {
+            status: res.status,
+            code: String(details?.code || '').trim(),
+            message: String(details?.message || '').trim()
+          }
+        };
+      })
+      .then((result) => {
         if (!active) return;
-        setShareRemote(payload);
+        if (result?.ok) {
+          setShareRemote(result.payload);
+          setShareError(null);
+          return;
+        }
+        setShareError(result?.error || { status: 500, code: 'FETCH_FAILED', message: '' });
       })
       .catch(() => {
-        // ignore
+        if (!active) return;
+        setShareError({ status: 500, code: 'FETCH_FAILED', message: '' });
       })
       .finally(() => {
         if (!active) return;
@@ -1010,10 +1090,16 @@ const SharePage = ({ token, apiBase, lang, onNavigate }) => {
     );
   }
   if (!stored) {
+    const isExpired = shareError?.code === 'SHARE_LINK_EXPIRED';
     return (
-      <Page title="Ссылка недействительна" subtitle="Похоже, ссылка истекла или была удалена.">
-        <PageCard>
-          <div className="text-sm text-slate-600">Попросите владельца создать новую публичную ссылку.</div>
+      <Page
+        title={isExpired ? 'Срок действия ссылки истек' : 'Ссылка недействительна'}
+        subtitle={isExpired ? 'Эта ссылка была активна 24 часа и автоматически удалена из системы.' : 'Похоже, ссылка была удалена или не существует.'}
+      >
+        <PageCard className={isExpired ? 'border border-red-200/60 bg-red-50/60 dark:bg-red-500/10 dark:border-red-400/20' : ''}>
+          <div className={`text-sm ${isExpired ? 'text-red-700 dark:text-red-200' : 'text-slate-600'}`}>
+            {isExpired ? 'Срок действия ссылки истек. Для безопасности файл удален с сервера.' : 'Попросите владельца создать новую публичную ссылку.'}
+          </div>
           <div className="mt-4">
             <Button onClick={() => onNavigate('/')}>На главную</Button>
           </div>
@@ -1138,6 +1224,7 @@ const LEGACY_SLUG_TO_TOOL_ID = {
 export default function App() {
   const [lang, setLang] = useState(defaultLang);
   const t = useMemo(() => ({ ...translations.en, ...(translations[lang] || {}) }), [lang]);
+  const { resolvedTheme, toggleTheme } = useTheme();
   const locale = useMemo(() => LANG_TO_LOCALE[lang] || LANG_TO_LOCALE.en, [lang]);
   const defaultUserName = t.userDefaultName;
   const processorDefs = useMemo(() => listProcessors(), []);
@@ -1199,6 +1286,7 @@ export default function App() {
 
   const navItems = useMemo(() => ([
     { label: t.navTools, to: '/tools' },
+    { label: 'Workspace 3.0', to: '/workspace' },
     { label: t.navAiAssistant || 'AI', to: '/ai' },
     { label: 'Guides', to: '/guides' },
     { label: t.navDevelopers || 'Developers', to: '/developers' },
@@ -1317,7 +1405,7 @@ export default function App() {
   const [_assistantNotice, setAssistantNotice] = useState('');
   const [_assistantExecutionLog, setAssistantExecutionLog] = useState([]);
   const [shareLink, setShareLink] = useState('');
-  const [shareExpiryPreset, setShareExpiryPreset] = useState('seven_days');
+  const [isShareLinkCreating, setIsShareLinkCreating] = useState(false);
   const [privacyDeleteAfter, setPrivacyDeleteAfter] = useState(false);
   const assistantTimerRef = useRef(null);
   const [recentJobs, setRecentJobs] = useState(() => {
@@ -1353,14 +1441,15 @@ export default function App() {
   const [downloadFileName, setDownloadFileName] = useState('');
   const [batchMode, setBatchMode] = useState(false);
   const [settings, setSettings] = useState({
-    image: { quality: 90, resize: "", crop: "", dpi: "" },
-    video: { resolution: "1080p", fps: "", bitrate: "", codec: "h264" },
-    audio: { bitrate: "192k", normalize: false, trimStart: "", trimDuration: "", channels: "" },
+    image: { quality: 90, resize: "", crop: "", dpi: "", stripExif: false },
+    video: { resolution: "1080p", fps: "", bitrate: "", codec: "h264", trimStart: "", trimEnd: "", startTime: "", endTime: "" },
+    audio: { bitrate: "192k", normalize: false, trimStart: "", trimDuration: "", trimEnd: "", startTime: "", endTime: "", channels: "" },
     privacy: { deleteAfter: false }
   });
+  const [mediaDurationSec, setMediaDurationSec] = useState(null);
+  const [mediaDurationLoading, setMediaDurationLoading] = useState(false);
 
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState('register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -1369,6 +1458,14 @@ export default function App() {
   const [testModeUnlockError, setTestModeUnlockError] = useState('');
   const encryptionContextRef = useRef(new Map());
   const [lastJobId, setLastJobId] = useState(null);
+  const [batchLiveItems, setBatchLiveItems] = useState([]);
+  const [toast, setToast] = useState(null);
+  const [quickLookOpen, setQuickLookOpen] = useState(false);
+  const [quickLookLoading, setQuickLookLoading] = useState(false);
+  const [quickLookError, setQuickLookError] = useState('');
+  const [quickLookType, setQuickLookType] = useState('other');
+  const [quickLookText, setQuickLookText] = useState('');
+  const toastTimerRef = useRef(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -1378,6 +1475,7 @@ export default function App() {
   const [pendingOpenToolId, setPendingOpenToolId] = useState(null);
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [remoteBlogPosts, setRemoteBlogPosts] = useState([]);
   const [remoteBlogLoading, setRemoteBlogLoading] = useState(false);
   const [remoteBlogError, setRemoteBlogError] = useState('');
@@ -1644,6 +1742,7 @@ export default function App() {
   const CLIENT_ENCRYPTION_ENABLED = String(import.meta.env.VITE_CLIENT_ENCRYPTION || '1') === '1';
   const fileInputRef = useRef(null);
   const langMenuRef = useRef(null);
+  const userMenuRef = useRef(null);
   const jobStartRef = useRef(null);
   const trackedToolOpenPathRef = useRef('');
   const currentYear = new Date().getFullYear();
@@ -1764,6 +1863,231 @@ export default function App() {
     if (!fileInputRef.current) return;
     fileInputRef.current.click();
   };
+
+  useEffect(() => {
+    const toolType = String(currentTool?.type || '').trim().toLowerCase();
+    const requiresTimeline = toolType === 'audio' || toolType === 'video';
+    if (!requiresTimeline || !file) {
+      setMediaDurationSec(null);
+      setMediaDurationLoading(false);
+      return;
+    }
+
+    let active = true;
+    const objectUrl = URL.createObjectURL(file);
+    const mediaElement = document.createElement(String(file.type || '').toLowerCase().startsWith('video/') ? 'video' : 'audio');
+    mediaElement.preload = 'metadata';
+    setMediaDurationLoading(true);
+
+    mediaElement.onloadedmetadata = () => {
+      if (!active) return;
+      const durationRaw = Number(mediaElement.duration || 0);
+      const duration = Number.isFinite(durationRaw) && durationRaw > 0 ? Math.ceil(durationRaw) : 0;
+      setMediaDurationSec(duration || null);
+      setMediaDurationLoading(false);
+      if (!duration) return;
+
+      setSettings((prev) => {
+        const bucketKey = toolType === 'video' ? 'video' : 'audio';
+        const currentBucket = { ...(prev[bucketKey] || {}) };
+        const currentStart = clamp(toFiniteNumber(currentBucket.trimStart, 0), 0, duration);
+        let currentEnd = toFiniteNumber(currentBucket.trimEnd, duration);
+        if (!Number.isFinite(currentEnd) || currentEnd <= 0) currentEnd = duration;
+        currentEnd = clamp(currentEnd, currentStart, duration);
+        currentBucket.trimStart = String(currentStart);
+        currentBucket.trimEnd = String(currentEnd);
+        currentBucket.startTime = String(currentStart);
+        currentBucket.endTime = String(currentEnd);
+        if (bucketKey === 'audio') {
+          currentBucket.trimDuration = String(Math.max(0, currentEnd - currentStart));
+        }
+        return { ...prev, [bucketKey]: currentBucket };
+      });
+    };
+    mediaElement.onerror = () => {
+      if (!active) return;
+      setMediaDurationSec(null);
+      setMediaDurationLoading(false);
+    };
+    mediaElement.src = objectUrl;
+
+    return () => {
+      active = false;
+      try {
+        mediaElement.src = '';
+      } catch {
+        // ignore
+      }
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [currentTool?.type, file]);
+
+  const trimTimelineState = useMemo(() => {
+    const toolType = String(currentTool?.type || '').trim().toLowerCase();
+    const isMediaTool = toolType === 'audio' || toolType === 'video';
+    const duration = Math.max(1, Number(mediaDurationSec || 0));
+    if (!isMediaTool || !mediaDurationSec) {
+      return {
+        enabled: false,
+        max: 1,
+        start: 0,
+        end: 1,
+        startLabel: '00:00',
+        endLabel: '00:01',
+        durationLabel: '00:01'
+      };
+    }
+    const bucket = toolType === 'video' ? settings.video : settings.audio;
+    const start = clamp(toFiniteNumber(bucket?.trimStart, 0), 0, duration);
+    const end = clamp(toFiniteNumber(bucket?.trimEnd, duration), start, duration);
+    return {
+      enabled: true,
+      max: duration,
+      start,
+      end,
+      startLabel: formatTimelineTime(start),
+      endLabel: formatTimelineTime(end),
+      durationLabel: formatTimelineTime(Math.max(0, end - start))
+    };
+  }, [currentTool?.type, mediaDurationSec, settings.audio, settings.video]);
+
+  const updateTrimTimeline = useCallback((kind, rawValue) => {
+    const toolType = String(currentTool?.type || '').trim().toLowerCase();
+    if (toolType !== 'audio' && toolType !== 'video') return;
+    const max = Math.max(1, Number(mediaDurationSec || trimTimelineState.max || 1));
+    const bucketKey = toolType === 'video' ? 'video' : 'audio';
+    const nextValue = clamp(Math.round(Number(rawValue || 0)), 0, max);
+    setSettings((prev) => {
+      const bucket = { ...(prev[bucketKey] || {}) };
+      let start = clamp(toFiniteNumber(bucket.trimStart, 0), 0, max);
+      let end = clamp(toFiniteNumber(bucket.trimEnd, max), 0, max);
+      if (kind === 'start') {
+        start = Math.min(nextValue, end);
+      } else {
+        end = Math.max(nextValue, start);
+      }
+      bucket.trimStart = String(start);
+      bucket.trimEnd = String(end);
+      bucket.startTime = String(start);
+      bucket.endTime = String(end);
+      if (bucketKey === 'audio') {
+        bucket.trimDuration = String(Math.max(0, end - start));
+      }
+      return { ...prev, [bucketKey]: bucket };
+    });
+  }, [currentTool?.type, mediaDurationSec, trimTimelineState.max]);
+
+  const showToast = useCallback((message, type = 'info', ttlMs = 4800) => {
+    const safeMessage = String(message || '').trim();
+    if (!safeMessage) return;
+    setToast({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, message: safeMessage, type });
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, Math.max(1800, Number(ttlMs || 0)));
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+  }, []);
+
+  const buildBatchLiveItems = useCallback((list) => {
+    const source = Array.from(list || []);
+    return source.map((item, index) => ({
+      id: `${item.name}-${item.size}-${item.lastModified || 0}-${index}`,
+      name: item.name,
+      size: Number(item.size || 0),
+      progress: 0,
+      status: 'queued'
+    }));
+  }, []);
+
+  const updateBatchLiveByOverallProgress = useCallback((items, overallValue, currentStatus = 'processing') => {
+    const source = Array.isArray(items) ? items : [];
+    const count = source.length;
+    if (!count) return [];
+    const total = clampProgress(overallValue);
+    return source.map((item, index) => {
+      const start = (index / count) * 100;
+      const end = ((index + 1) / count) * 100;
+      const local = ((total - start) / Math.max(1, end - start)) * 100;
+      const progress = clampProgress(local);
+      const status = currentStatus === 'done'
+        ? 'done'
+        : currentStatus === 'error'
+          ? 'error'
+          : progress >= 100
+            ? 'done'
+            : progress > 0
+              ? 'processing'
+              : 'queued';
+      return {
+        ...item,
+        progress,
+        status
+      };
+    });
+  }, []);
+
+  const updateBatchLiveBySsePayload = useCallback((items, jobPayload) => {
+    const source = Array.isArray(items) ? items : [];
+    if (!source.length) return source;
+    const raw = Array.isArray(jobPayload?.itemProgress)
+      ? jobPayload.itemProgress
+      : (Array.isArray(jobPayload?.item_progress)
+        ? jobPayload.item_progress
+        : (Array.isArray(jobPayload?.items) ? jobPayload.items : null));
+    if (!Array.isArray(raw) || !raw.length) return source;
+    return source.map((item, index) => {
+      const row = raw[index];
+      const normalizedValue = typeof row === 'number'
+        ? row
+        : Number(row?.progress || row?.pct || row?.value || 0);
+      const statusToken = String(row?.status || '').trim().toLowerCase();
+      const progress = clampProgress(normalizedValue);
+      const status = statusToken === 'done' || statusToken === 'completed'
+        ? 'done'
+        : statusToken === 'error' || statusToken === 'failed'
+          ? 'error'
+          : progress > 0
+            ? 'processing'
+            : item.status;
+      return {
+        ...item,
+        progress,
+        status
+      };
+    });
+  }, []);
+
+  const resolveQuickLookConfig = useCallback(() => {
+    const ext = getExtensionFromValue(downloadFileName || downloadUrl);
+    const type = getPreviewType(ext);
+    if (!isPreviewableType(type)) {
+      return { canOpen: false, type: 'other', previewUrl: '' };
+    }
+    if (!downloadUrl) {
+      return { canOpen: false, type, previewUrl: '' };
+    }
+    if (type === 'doc') {
+      if (isLocalDownloadUrl(downloadUrl)) {
+        return { canOpen: false, type, previewUrl: '' };
+      }
+      const viewer = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(downloadUrl || '')}`;
+      return { canOpen: true, type, previewUrl: viewer };
+    }
+    return { canOpen: true, type, previewUrl: downloadUrl || '' };
+  }, [downloadFileName, downloadUrl]);
+
+  const quickLookConfig = useMemo(() => resolveQuickLookConfig(), [resolveQuickLookConfig]);
+  const canOpenQuickLook = quickLookConfig.canOpen;
 
   const clearAssistantTimer = useCallback(() => {
     if (assistantTimerRef.current) {
@@ -1978,15 +2302,30 @@ export default function App() {
     const selectedRaw = Array.from(list || []);
     const limit = getDeviceBatchLimit();
     const selected = selectedRaw.slice(0, limit);
+    const hasOverflow = selectedRaw.length > limit;
+    const hasMultiple = selected.length > 1;
     emitSystemEvent('files_selected', {
       count: selected.length,
-      limited: selectedRaw.length > limit
+      limited: hasOverflow
     });
-    if (selectedRaw.length > limit) {
+    if (hasOverflow) {
       setAssistantNotice(`Лимит для устройства: ${limit} файлов за раз.`);
+      showToast(`Можно выбрать до ${limit} файлов за один раз.`, 'error');
+    }
+    if (hasMultiple && !batchMode) {
+      setBatchMode(true);
+      showToast('Пакетный режим активирован автоматически.', 'info', 2600);
+    }
+    if (path === '/ai' || path === '/ai/') {
+      setBatchMode(hasMultiple);
     }
     setFiles(selected);
     setFile(selected[0] || null);
+    setBatchLiveItems(buildBatchLiveItems(selected));
+    setQuickLookOpen(false);
+    setQuickLookError('');
+    setQuickLookText('');
+    setQuickLookType('other');
     setAiAssistantError('');
     setAiAssistantStage('idle');
     setAiAssistantIntent(null);
@@ -2324,7 +2663,24 @@ export default function App() {
     if (path === '/settings/billing') setAccountSection('billing');
     setIsMobileMenuOpen(false);
     setIsLangMenuOpen(false);
+    setIsUserMenuOpen(false);
   }, [path, track]);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      const targetNode = event.target;
+      if (langMenuRef.current && !langMenuRef.current.contains(targetNode)) {
+        setIsLangMenuOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(targetNode)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, []);
 
   useEffect(() => {
     const onPopState = () => setPath(window.location.pathname);
@@ -3998,9 +4354,29 @@ export default function App() {
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     setAuthError('');
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      setAuthError('Введите email.');
+      return;
+    }
+    const derivedPassword = deriveEmailSessionPassword(normalizedEmail);
+    if (!derivedPassword) {
+      setAuthError('Не удалось подготовить вход по email.');
+      return;
+    }
     try {
-      if (authMode === 'login') await signInWithEmailAndPassword(auth, email, password);
-      else await createUserWithEmailAndPassword(auth, email, password);
+      try {
+        await signInWithEmailAndPassword(auth, normalizedEmail, derivedPassword);
+      } catch (loginError) {
+        const loginCode = String(loginError?.code || '').toLowerCase();
+        const canCreate = loginCode === 'auth/user-not-found'
+          || loginCode === 'auth/invalid-credential'
+          || loginCode === 'auth/wrong-password';
+        if (!canCreate) throw loginError;
+        await createUserWithEmailAndPassword(auth, normalizedEmail, derivedPassword);
+      }
+      setEmail(normalizedEmail);
+      setPassword(derivedPassword);
       setShowAuthModal(false);
     } catch (e) {
       setAuthError(e.message);
@@ -4151,6 +4527,7 @@ export default function App() {
   const reset = useCallback(() => {
     setFile(null);
     setFiles([]);
+    setBatchLiveItems([]);
     setStatus('idle');
     setProgress(0);
     setPipelineStage(null);
@@ -4179,8 +4556,16 @@ export default function App() {
     setAiAssistantStage('idle');
     setAiAssistantError('');
     setAiAssistantIntent(null);
+    setQuickLookOpen(false);
+    setQuickLookLoading(false);
+    setQuickLookError('');
+    setQuickLookType('other');
+    setQuickLookText('');
     setShareHint('');
     setShareLink('');
+    setIsShareLinkCreating(false);
+    setMediaDurationSec(null);
+    setMediaDurationLoading(false);
     setPrivacyDeleteAfter(false);
     setAssistantExecutionLog([]);
     clearAssistantTimer();
@@ -4417,7 +4802,21 @@ export default function App() {
     setEtaSeconds(null);
     appendAssistantLog('Pipeline: старт обработки');
 
-    const uploadFiles = batchMode ? files : (file ? [file] : []);
+    const selectedFiles = Array.isArray(files) && files.length
+      ? files
+      : (file ? [file] : []);
+    const isBatchRun = batchMode || selectedFiles.length > 1;
+    const uploadFiles = isBatchRun ? selectedFiles : (selectedFiles[0] ? [selectedFiles[0]] : []);
+    const initialBatchItems = buildBatchLiveItems(uploadFiles);
+    if (uploadFiles.length > 1) {
+      setBatchLiveItems(updateBatchLiveByOverallProgress(initialBatchItems, 5, 'processing'));
+    } else {
+      setBatchLiveItems(initialBatchItems);
+    }
+    setQuickLookOpen(false);
+    setQuickLookError('');
+    setQuickLookText('');
+    setQuickLookType('other');
     const authHeaders = buildAuthHeaders();
     let encryptionKey = null;
     let createdJobId = null;
@@ -4441,14 +4840,42 @@ export default function App() {
     };
 
     jobStartRef.current = Date.now();
-    track('job_start', { tool: targetToolId, batch: batchMode, count: uploadFiles.length });
+    track('job_start', { tool: targetToolId, batch: isBatchRun, count: uploadFiles.length });
 
     try {
+      const settingsForRun = (() => {
+        const next = {
+          ...settings,
+          image: { ...(settings.image || {}) },
+          video: { ...(settings.video || {}) },
+          audio: { ...(settings.audio || {}) },
+          privacy: { ...(settings.privacy || {}) }
+        };
+        const mediaType = String(currentTool?.type || '').trim().toLowerCase();
+        if (mediaType === 'audio' || mediaType === 'video') {
+          const bucketKey = mediaType === 'video' ? 'video' : 'audio';
+          const bucket = { ...(next[bucketKey] || {}) };
+          const duration = Math.max(1, Number(mediaDurationSec || 0));
+          const start = clamp(toFiniteNumber(bucket.trimStart, 0), 0, duration || 0);
+          const fallbackEnd = duration || Math.max(start, toFiniteNumber(bucket.trimEnd, 0));
+          const end = clamp(toFiniteNumber(bucket.trimEnd, fallbackEnd), start, fallbackEnd || start);
+          bucket.trimStart = String(start);
+          bucket.trimEnd = String(end);
+          bucket.startTime = String(start);
+          bucket.endTime = String(end);
+          if (bucketKey === 'audio') {
+            bucket.trimDuration = String(Math.max(0, end - start));
+          }
+          next[bucketKey] = bucket;
+        }
+        return next;
+      })();
+
       const result = await runConversion({
         toolId: targetToolId,
         files: uploadFiles,
-        batchMode,
-        settings,
+        batchMode: isBatchRun,
+        settings: settingsForRun,
         apiBase: API_BASE,
         authHeaders,
         encryptionEnabled: CLIENT_ENCRYPTION_ENABLED,
@@ -4459,7 +4886,20 @@ export default function App() {
             appendAssistantLog(`Pipeline: ${stage.label}`);
             void emitJobEvent(stage.name || stage.label, progress);
           },
-          onProgress: (value) => setProgress((prev) => Math.min(100, Math.max(prev, value || 0))),
+          onProgress: (value) => {
+            const nextValue = clampProgress(value);
+            setProgress((prev) => {
+              const next = Math.min(100, Math.max(prev, nextValue || 0));
+              if (uploadFiles.length > 1) {
+                setBatchLiveItems((items) => updateBatchLiveByOverallProgress(
+                  items.length ? items : initialBatchItems,
+                  next,
+                  'processing'
+                ));
+              }
+              return next;
+            });
+          },
           onEta: (value) => setEtaSeconds(value),
           onStatus: () => {},
           onJobCreated: ({ jobId, encryption }) => {
@@ -4476,6 +4916,23 @@ export default function App() {
             appendAssistantLog(`Job status: ${job.status}`);
             if (job.outputMeta && encryptionKey) {
               encryptionContextRef.current.set(createdJobId, { key: encryptionKey, meta: job.outputMeta });
+            }
+            if (uploadFiles.length > 1) {
+              setBatchLiveItems((items) => {
+                const seeded = items.length ? items : initialBatchItems;
+                const withSse = updateBatchLiveBySsePayload(seeded, job);
+                const state = String(job?.status || '').trim().toLowerCase();
+                if (state === 'completed') {
+                  return updateBatchLiveByOverallProgress(withSse, 100, 'done');
+                }
+                if (state === 'failed' || state === 'expired') {
+                  return updateBatchLiveByOverallProgress(withSse, clampProgress(job?.progress || progress), 'error');
+                }
+                if (job?.progress !== undefined && job?.progress !== null) {
+                  return updateBatchLiveByOverallProgress(withSse, clampProgress(job.progress), 'processing');
+                }
+                return withSse;
+              });
             }
           },
           onComplete: () => {}
@@ -4499,6 +4956,13 @@ export default function App() {
       );
       setStatus('done');
       setProgress(100);
+      if (uploadFiles.length > 1) {
+        setBatchLiveItems((items) => updateBatchLiveByOverallProgress(
+          items.length ? items : initialBatchItems,
+          100,
+          'done'
+        ));
+      }
       setPipelineStage(stageLabels.cleanup);
       setEtaSeconds(null);
       appendAssistantLog('Pipeline: завершено успешно');
@@ -4522,6 +4986,13 @@ export default function App() {
           );
           setStatus('done');
           setProgress(100);
+          if (uploadFiles.length > 1) {
+            setBatchLiveItems((items) => updateBatchLiveByOverallProgress(
+              items.length ? items : initialBatchItems,
+              100,
+              'done'
+            ));
+          }
           setPipelineStage(stageLabels.cleanup);
           setEtaSeconds(null);
           appendAssistantLog('Pipeline: восстановлено после сети, успешно завершено');
@@ -4546,6 +5017,8 @@ export default function App() {
         JOB_CREATE_FAILED: t.errorStartJob,
         JOB_STATUS_FETCH: t.errorFetchStatus,
         QUEUE_UNAVAILABLE: null,
+        RATE_LIMIT: 'Слишком много запросов. Попробуйте позже.',
+        RATE_LIMIT_HOURLY: 'Достигнут лимит: максимум 10 конвертаций в час.',
         NETWORK_ERROR: t.errorFetchStatus,
         VERIFY_FAILED: t.errorVerificationFailed,
         CONVERSION_FAILED: t.errorConversionFailed,
@@ -4553,6 +5026,13 @@ export default function App() {
         TIMEOUT: t.errorTimeout
       };
       setStatus('error');
+      if (uploadFiles.length > 1) {
+        setBatchLiveItems((items) => updateBatchLiveByOverallProgress(
+          items.length ? items : initialBatchItems,
+          clampProgress(progress || 0),
+          'error'
+        ));
+      }
       setPipelineStage(null);
       setEtaSeconds(null);
       appendAssistantLog(`Pipeline: ошибка (${errorObj?.code || 'unknown'})`);
@@ -4563,6 +5043,13 @@ export default function App() {
           ? queueUnavailableMessage
         : (errorMessages[errorObj?.code] || errorObj?.message || t.errorConversionFailedRetry);
       setErrorInfo(userMessage);
+      if (errorObj?.code === 'FILE_TOO_LARGE') {
+        showToast('Файл превышает лимит 50 MB. Загрузите более легкий файл.', 'error', 6200);
+      } else if (errorObj?.code === 'RATE_LIMIT' || errorObj?.code === 'RATE_LIMIT_HOURLY') {
+        showToast('Достигнут лимит конвертаций. Попробуйте позже.', 'error', 6200);
+      } else if (errorObj?.code === 'BATCH_LIMIT') {
+        showToast('Пакет превышает допустимые лимиты.', 'error', 6200);
+      }
       track('job_complete', { tool: targetToolId, jobId: createdJobId, success: false, error: errorObj?.code || errorObj?.message });
       return { ok: false, code: errorObj?.code || 'CONVERSION_FAILED', message: userMessage, toolId: targetToolId };
     }
@@ -4609,11 +5096,12 @@ export default function App() {
 
   const handleAiAssistantSubmit = async () => {
     const promptText = String(aiAssistantPrompt || '').trim();
+    const selectedAiFile = files[0] || file || null;
     if (!promptText) {
       setAiAssistantError('Введите запрос для ассистента.');
       return;
     }
-    if (!file) {
+    if (!selectedAiFile) {
       setAiAssistantError('Сначала загрузите файл.');
       return;
     }
@@ -4644,7 +5132,7 @@ export default function App() {
         appendAssistantLog(`AI: провайдер недоступен (${String(providerError?.message || 'network_error')}), применяем fallback-роутинг`);
       }
 
-      const route = resolveAiIntentRoute(parsedIntent, file, promptText);
+      const route = resolveAiIntentRoute(parsedIntent, selectedAiFile, promptText);
       if (!route?.toolId) {
         throw new Error('Не удалось определить поддерживаемую пару форматов. Уточните запрос.');
       }
@@ -4683,7 +5171,53 @@ export default function App() {
     handleProcess();
   };
 
-  const download = () => {
+  const stripImageMetadata = useCallback(async (inputBlob, fileNameHint) => {
+    const blob = inputBlob instanceof Blob ? inputBlob : null;
+    if (!blob) return inputBlob;
+    const ext = getExtensionFromValue(fileNameHint || '');
+    const mime = String(blob.type || '').toLowerCase();
+    const isJpeg = ext === 'jpg' || ext === 'jpeg' || mime.includes('jpeg');
+    if (isJpeg) {
+      try {
+        const piexifModule = await import('piexifjs');
+        const piexif = piexifModule?.default || piexifModule;
+        if (typeof piexif?.remove === 'function') {
+          const dataUrl = await blobToDataUrl(blob);
+          const cleanedDataUrl = piexif.remove(dataUrl);
+          const cleanedBlob = dataUrlToBlob(cleanedDataUrl);
+          if (cleanedBlob) {
+            return new Blob([await cleanedBlob.arrayBuffer()], { type: 'image/jpeg' });
+          }
+        }
+      } catch {
+        // fallback to canvas path below
+      }
+    }
+
+    try {
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas_ctx_unavailable');
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      const targetType = mime.startsWith('image/') ? mime : 'image/png';
+      const reEncoded = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (nextBlob) => (nextBlob ? resolve(nextBlob) : reject(new Error('canvas_to_blob_failed'))),
+          targetType,
+          isJpeg ? 0.95 : undefined
+        );
+      });
+      return reEncoded instanceof Blob ? reEncoded : blob;
+    } catch {
+      return blob;
+    }
+  }, []);
+
+  const download = async () => {
     if (!downloadUrl) return;
     const context = lastJobId ? encryptionContextRef.current.get(lastJobId) : null;
     const fileName = (() => {
@@ -4705,111 +5239,136 @@ export default function App() {
         return `converted_${Date.now()}`;
       }
     })();
-    if (!context || !context.meta) {
+
+    const isImageOutput = getPreviewType(getExtensionFromValue(fileName || downloadUrl)) === 'image';
+    const shouldStripExif = Boolean(settings?.image?.stripExif) && isImageOutput;
+    if ((!context || !context.meta) && !shouldStripExif) {
       const a = document.createElement('a');
       a.href = downloadUrl;
       a.download = fileName;
       a.click();
       return;
     }
-    fetch(downloadUrl)
-      .then((r) => r.arrayBuffer())
-      .then((buf) => decryptFileGcm(buf, context.meta, context.key))
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName.replace(/\.enc$/, '');
-        a.click();
-        URL.revokeObjectURL(url);
-      })
-      .catch(() => {
-        setErrorInfo(t.errorDecryptionFailed);
-      });
-  };
-  const handleShare = async () => {
-    const localOutput = isLocalDownloadUrl(downloadUrl);
-    const link = localOutput ? window.location.href : (downloadUrl || window.location.href);
-    setShareHint('');
+
     try {
-      if (navigator.share) {
-        await navigator.share({ title: 'MegaConvert', url: link });
-        setShareHint(localOutput ? 'Ссылка на страницу отправлена. Локальный файл сначала скачайте.' : 'Ссылка отправлена.');
-        return;
+      let blob = null;
+      if (context && context.meta) {
+        const encryptedResponse = await fetch(downloadUrl);
+        const encryptedBuffer = await encryptedResponse.arrayBuffer();
+        blob = await decryptFileGcm(encryptedBuffer, context.meta, context.key);
+      } else {
+        const response = await fetch(downloadUrl);
+        if (!response.ok) throw new Error(`download_failed_${response.status}`);
+        blob = await response.blob();
       }
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(link);
-        setShareHint(localOutput ? 'Скопирована ссылка на страницу. Локальный файл сначала скачайте.' : 'Ссылка скопирована.');
-        return;
+
+      if (shouldStripExif) {
+        blob = await stripImageMetadata(blob, fileName);
       }
-      setShareHint('Скопируйте ссылку вручную.');
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName.replace(/\.enc$/, '');
+      a.click();
+      URL.revokeObjectURL(url);
     } catch {
-      setShareHint('Не удалось поделиться.');
+      setErrorInfo(t.errorDecryptionFailed);
     }
   };
 
-  const handleCreateShareLink = async (requestedPreset) => {
+  const openQuickLook = useCallback(async () => {
+    if (!quickLookConfig.canOpen || !quickLookConfig.previewUrl) {
+      showToast('Предпросмотр недоступен для этого формата.', 'info');
+      return;
+    }
+    setQuickLookOpen(true);
+    setQuickLookType(quickLookConfig.type || 'other');
+    setQuickLookError('');
+    setQuickLookText('');
+    if (quickLookConfig.type !== 'text') {
+      setQuickLookLoading(false);
+      return;
+    }
+
+    setQuickLookLoading(true);
+    try {
+      const context = lastJobId ? encryptionContextRef.current.get(lastJobId) : null;
+      if (context?.meta && context?.key) {
+        const encryptedResponse = await fetch(quickLookConfig.previewUrl);
+        if (!encryptedResponse.ok) {
+          throw new Error(`preview_fetch_failed_${encryptedResponse.status}`);
+        }
+        const encryptedBuffer = await encryptedResponse.arrayBuffer();
+        const decryptedBlob = await decryptFileGcm(encryptedBuffer, context.meta, context.key);
+        const textValue = await decryptedBlob.text();
+        setQuickLookText(textValue.slice(0, 250000));
+      } else {
+        const textResponse = await fetch(quickLookConfig.previewUrl);
+        if (!textResponse.ok) {
+          throw new Error(`preview_fetch_failed_${textResponse.status}`);
+        }
+        const textValue = await textResponse.text();
+        setQuickLookText(textValue.slice(0, 250000));
+      }
+    } catch {
+      setQuickLookError('Не удалось загрузить предпросмотр файла.');
+    } finally {
+      setQuickLookLoading(false);
+    }
+  }, [lastJobId, quickLookConfig, showToast]);
+  const handleCreateShareLink = async () => {
     if (!downloadUrl) return;
     if (isLocalDownloadUrl(downloadUrl)) {
       setShareHint('Локальный результат нельзя опубликовать ссылкой. Скачайте файл или включите серверный режим.');
       return;
     }
-    const normalizedPreset = String(requestedPreset || shareExpiryPreset || 'seven_days').trim().toLowerCase();
-    const presetLabel = {
-      one_hour: '1 час',
-      one_day: '24 часа',
-      seven_days: '7 дней',
-      thirty_days: '30 дней',
-      never: 'без срока'
-    }[normalizedPreset] || normalizedPreset;
-    const ext = getExtensionFromValue(downloadFileName || downloadUrl);
-    const fallback = async () => {
-      const token = createShareToken();
-      const next = {
-        ...readShareLinks(),
-        [token]: {
-          url: downloadUrl,
-          ext,
-          expiresPreset: normalizedPreset,
-          createdAt: Date.now()
-        }
-      };
-      writeShareLinks(next);
-      const link = `${window.location.origin}/s/${token}`;
-      setShareLink(link);
-      return link;
-    };
-    let link = '';
+    setShareHint('');
+    setShareLink('');
+    setIsShareLinkCreating(true);
     try {
-      const res = await fetch(`${API_BASE}/share`, {
+      const res = await fetch(`${API_BASE}/share/24h`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          file_url: downloadUrl,
-          expires_preset: normalizedPreset
+          file_url: downloadUrl
         })
       });
-      if (res.ok) {
-        const payload = await res.json();
-        link = `${window.location.origin}/s/${payload.token}`;
-        setShareLink(link);
-      } else {
-        link = await fallback();
+      if (!res.ok) {
+        let details = null;
+        try {
+          details = await res.json();
+        } catch {
+          details = null;
+        }
+        throw new Error(String(details?.message || `share_create_failed_${res.status}`));
       }
-    } catch {
-      link = await fallback();
-    }
-    try {
+      const payload = await res.json();
+      const token = String(payload?.token || '').trim();
+      const link = String(payload?.share_url || (token ? `${window.location.origin}/s/${token}` : '')).trim();
+      if (!link) {
+        throw new Error('share_link_missing');
+      }
+      setShareLink(link);
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(link);
-        setShareHint(`Публичная ссылка скопирована (${presetLabel}).`);
+        setShareHint('Публичная ссылка на 24 часа скопирована в буфер.');
+      } else {
+        setShareHint('Публичная ссылка на 24 часа создана.');
       }
     } catch {
-      // ignore
+      setShareHint('Не удалось создать ссылку. Попробуйте снова.');
+    } finally {
+      setIsShareLinkCreating(false);
     }
   };
   const isHome = path === '/' || path === '';
   const isTools = path === '/tools';
+  const isLocalConverterTool = path === '/tools/local-converter' || path === '/tools/local-converter/';
+  const isOcrTool = path === '/tools/ocr' || path === '/tools/ocr/';
+  const isPdfEditorTool = path === '/tools/pdf-editor' || path === '/tools/pdf-editor/';
+  const isImageCompressorTool = path === '/tools/image-compressor' || path === '/tools/image-compressor/';
+  const isBatchWatermarkTool = path === '/tools/batch-watermark' || path === '/tools/batch-watermark/';
   const isApi = path === '/api' || path === '/docs';
   const isPricing = path === '/pricing';
   const isSecurity = path === '/security';
@@ -4854,6 +5413,7 @@ export default function App() {
   const isSecurityWhitepaper = path === '/security-whitepaper';
   const isContact = path === '/contact';
   const isAdmin = path === '/admin' || path.startsWith('/admin/');
+  const isWorkspaceV3 = path === '/workspace' || path.startsWith('/workspace/');
   const isAiPage = path === '/ai' || path === '/ai/';
   const isConvertRoot = path === '/convert' || path === '/convert/';
   const directConversionSlug = decodeURIComponent(path.replace(/^\/+|\/+$/g, ''));
@@ -4864,7 +5424,7 @@ export default function App() {
   );
   const isConvert = (path.startsWith('/convert/') && !isConvertRoot) || isDirectConversionRoute;
   const isShare = path.startsWith('/s/');
-  const isNotFound = !isHome && !isTools && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isAdmin && !isAiPage && !isConvert && !isConvertRoot && !isShare;
+  const isNotFound = !isHome && !isTools && !isLocalConverterTool && !isOcrTool && !isPdfEditorTool && !isImageCompressorTool && !isBatchWatermarkTool && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isAdmin && !isWorkspaceV3 && !isAiPage && !isConvert && !isConvertRoot && !isShare;
   const showMobileUploadBar = (isHome || isConvert || isConvertRoot) && !showAuthModal && !showTwofaModal;
   const saveDataMode = typeof navigator !== 'undefined' && navigator.connection?.saveData;
 
@@ -4925,9 +5485,19 @@ export default function App() {
       title = `${currentGuidePost.title} | MegaConvert Guides`;
       description = currentGuidePost.excerpt || defaultDescription;
       canonicalPath = `/guides/${currentGuidePost.slug}`;
+    } else if (isWorkspaceV3) {
+      title = 'Workspace 3.0 | MegaConvert';
+      description = 'Client-first workspace for local media conversion, OCR, PDF editing, and privacy tools.';
+      canonicalPath = path;
     } else {
       const seoPageMap = {
         '/ai': ['AI Assistant | MegaConvert', 'Upload a file and describe the result you want in natural language.'],
+        '/workspace': ['Workspace 3.0 | MegaConvert', 'Client-first modules for media, PDF, tools, and AI workflows.'],
+        '/tools/local-converter': ['Локальная конвертация медиа | MegaConvert', 'Конвертируйте аудио и видео локально в браузере через FFmpeg WebAssembly без загрузки на сервер.'],
+        '/tools/ocr': ['OCR распознавание текста | MegaConvert', 'Извлекайте текст из сканов и изображений прямо в браузере через Tesseract.js.'],
+        '/tools/pdf-editor': ['PDF Editor | MegaConvert', 'Редактируйте порядок страниц, удаляйте лишнее и собирайте новый PDF прямо в браузере.'],
+        '/tools/image-compressor': ['Image Compressor | MegaConvert', 'Интерактивно сжимайте изображения в браузере и сравнивайте качество на split-экране До/После.'],
+        '/tools/batch-watermark': ['Batch Watermark | MegaConvert', 'Массовая обработка изображений: текстовый watermark, позиция и цвет с экспортом в ZIP архив.'],
         '/security': ['File Conversion Security | MegaConvert', 'Security architecture and data protection for conversion workflows.'],
         '/privacy': ['Privacy Policy | MegaConvert', 'How MegaConvert handles data, storage, and retention.'],
         '/about': ['About MegaConvert', 'Learn about MegaConvert and the platform mission.'],
@@ -4963,7 +5533,7 @@ export default function App() {
       operatingSystem: 'Web',
       description
     });
-  }, [conversionFromSlug, currentGuidePost, isConvert, isGuides, isGuidesArticle, path]);
+  }, [conversionFromSlug, currentGuidePost, isConvert, isGuides, isGuidesArticle, isWorkspaceV3, path]);
 
   useEffect(() => {
     const activePost = isBlogArticle ? currentBlogPost : (isGuidesArticle ? currentGuidePost : null);
@@ -5123,7 +5693,11 @@ export default function App() {
                   <div className="text-left">
                     <div className="text-xs uppercase tracking-widest text-slate-500">{t.labelSelected}</div>
                     <div className="text-lg font-semibold mt-2">{batchMode ? `${files.length} files` : file.name}</div>
-                    <div className="text-sm text-slate-500 mt-1">{(file.size / (1024 * 1024)).toFixed(2)} MB</div>
+                    <div className="text-sm text-slate-500 mt-1">
+                      {(batchMode && files.length > 1
+                        ? (files.reduce((sum, item) => sum + Number(item?.size || 0), 0) / (1024 * 1024))
+                        : (Number(file?.size || 0) / (1024 * 1024))).toFixed(2)} MB
+                    </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button variant="secondary" onClick={openFilePicker}>{t.btnReplaceFile}</Button>
                       <Button variant="outline" onClick={reset}>{t.btnClear}</Button>
@@ -5170,6 +5744,15 @@ export default function App() {
               </div>
               <div className="mt-3 text-sm text-slate-500">{pipelineStage || t.processing}</div>
               {etaSeconds !== null && <div className="mt-2 text-xs text-slate-500">{t.labelEtaPrefix} {etaSeconds}{t.labelSecondsShort}</div>}
+              {files.length > 1 && (
+                <div className="mt-5 text-left">
+                  <DynamicBatchStack
+                    items={batchLiveItems.length ? batchLiveItems : buildBatchLiveItems(files)}
+                    overallProgress={progress}
+                    status={status}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -5182,6 +5765,11 @@ export default function App() {
               <div className="text-sm text-slate-500 mb-6">{t.labelFileReady}</div>
               <div className="flex flex-wrap gap-3 justify-center">
                 <Button variant="secondary" onClick={reset}>{t.back}</Button>
+                {canOpenQuickLook && (
+                  <Button variant="outline" onClick={() => void openQuickLook()}>
+                    <Eye size={16} /> Quick Look
+                  </Button>
+                )}
                 <Button variant="primary" onClick={download}>{t.download}</Button>
               </div>
             </div>
@@ -5259,7 +5847,9 @@ export default function App() {
                       {batchMode ? `${files.length} files` : file.name}
                     </div>
                     <div className="text-sm text-slate-500 mt-1">
-                      {(file.size / (1024 * 1024)).toFixed(2)} MB
+                      {(batchMode && files.length > 1
+                        ? (files.reduce((sum, item) => sum + Number(item?.size || 0), 0) / (1024 * 1024))
+                        : (Number(file?.size || 0) / (1024 * 1024))).toFixed(2)} MB
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button variant="secondary" onClick={openFilePicker}>{t.btnReplaceFile}</Button>
@@ -5289,29 +5879,12 @@ export default function App() {
                 <BatchUploader files={files} onFilesSelected={handleFilesSelected} />
               )}
 
-              {batchMode && files.length > 1 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs uppercase tracking-widest text-slate-500">Batch очередь</div>
-                    <Badge color="slate" variant="dark">{files.length} файлов</Badge>
-                  </div>
-                  <div className="mt-3 space-y-2 text-sm">
-                    {files.map((item, idx) => (
-                      <div key={`${item.name}-${idx}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                        <span className="text-slate-700">{item.name}</span>
-                        <span className="text-xs text-slate-500">
-                          {status === 'processing' ? 'В обработке' : (status === 'done' ? 'Готово' : (status === 'error' ? 'Ошибка' : 'Ожидает'))}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4">
-                    <div className="text-xs uppercase tracking-widest text-slate-500">Общий прогресс</div>
-                    <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all" style={{ width: `${progress}%` }}></div>
-                    </div>
-                  </div>
-                </div>
+              {(batchMode || files.length > 1) && files.length > 1 && (
+                <DynamicBatchStack
+                  items={batchLiveItems.length ? batchLiveItems : buildBatchLiveItems(files)}
+                  overallProgress={progress}
+                  status={status}
+                />
               )}
 
               {smartSuggestion && smartSuggestion !== activeTab && (
@@ -5382,6 +5955,24 @@ export default function App() {
                         <span className="text-xs uppercase tracking-widest text-slate-500">{t.labelCrop}</span>
                         <input type="text" value={settings.image.crop} onChange={e => setSettings(s => ({ ...s, image: { ...s.image, crop: e.target.value } }))} className="border rounded-lg px-3 py-2" placeholder="800x800+0+0" />
                       </label>
+                      <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <label className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">Очистить EXIF (Privacy Mode)</div>
+                            <div className="text-xs text-slate-500">Удаляет геолокацию и данные камеры перед скачиванием</div>
+                          </div>
+                          <span className="relative inline-flex h-7 w-12 shrink-0">
+                            <input
+                              type="checkbox"
+                              className="peer sr-only"
+                              checked={Boolean(settings.image.stripExif)}
+                              onChange={(e) => setSettings((s) => ({ ...s, image: { ...s.image, stripExif: e.target.checked } }))}
+                            />
+                            <span className="absolute inset-0 rounded-full bg-slate-300 transition-all duration-300 peer-checked:bg-cyan-500" />
+                            <span className="absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all duration-300 peer-checked:translate-x-5" />
+                          </span>
+                        </label>
+                      </div>
                     </div>
                   )}
 
@@ -5412,6 +6003,52 @@ export default function App() {
                           <option value="av1">AV1</option>
                         </select>
                       </label>
+                      <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <div className="text-xs uppercase tracking-widest text-slate-500">Таймлайн обрезки</div>
+                        <div className="mt-1 text-sm text-slate-700">
+                          Start: <span className="font-semibold">{trimTimelineState.startLabel}</span>
+                          {' '}· End: <span className="font-semibold">{trimTimelineState.endLabel}</span>
+                          {' '}· Длительность: <span className="font-semibold">{trimTimelineState.durationLabel}</span>
+                        </div>
+                        <div className="mt-3 h-2 rounded-full bg-slate-200 relative overflow-hidden">
+                          <div
+                            className="absolute top-0 h-full rounded-full bg-cyan-500/80"
+                            style={{
+                              left: `${(trimTimelineState.start / Math.max(1, trimTimelineState.max)) * 100}%`,
+                              width: `${Math.max(0, ((trimTimelineState.end - trimTimelineState.start) / Math.max(1, trimTimelineState.max)) * 100)}%`
+                            }}
+                          />
+                        </div>
+                        <label className="mt-3 block">
+                          <div className="text-xs text-slate-500 mb-1">Start Time</div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={trimTimelineState.max}
+                            step={1}
+                            value={trimTimelineState.start}
+                            disabled={!trimTimelineState.enabled || mediaDurationLoading}
+                            onChange={(e) => updateTrimTimeline('start', e.target.value)}
+                            className="w-full accent-cyan-600 disabled:opacity-50"
+                          />
+                        </label>
+                        <label className="mt-2 block">
+                          <div className="text-xs text-slate-500 mb-1">End Time</div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={trimTimelineState.max}
+                            step={1}
+                            value={trimTimelineState.end}
+                            disabled={!trimTimelineState.enabled || mediaDurationLoading}
+                            onChange={(e) => updateTrimTimeline('end', e.target.value)}
+                            className="w-full accent-cyan-600 disabled:opacity-50"
+                          />
+                        </label>
+                        {mediaDurationLoading && (
+                          <div className="mt-2 text-xs text-slate-500">Определяем длительность медиа...</div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -5425,18 +6062,56 @@ export default function App() {
                         <span className="text-xs uppercase tracking-widest text-slate-500">{t.labelChannels}</span>
                         <input type="number" value={settings.audio.channels} onChange={e => setSettings(s => ({ ...s, audio: { ...s.audio, channels: e.target.value } }))} className="border rounded-lg px-3 py-2" />
                       </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs uppercase tracking-widest text-slate-500">{t.labelTrimStart}</span>
-                        <input type="number" value={settings.audio.trimStart} onChange={e => setSettings(s => ({ ...s, audio: { ...s.audio, trimStart: e.target.value } }))} className="border rounded-lg px-3 py-2" />
-                      </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-xs uppercase tracking-widest text-slate-500">{t.labelTrimDuration}</span>
-                        <input type="number" value={settings.audio.trimDuration} onChange={e => setSettings(s => ({ ...s, audio: { ...s.audio, trimDuration: e.target.value } }))} className="border rounded-lg px-3 py-2" />
-                      </label>
                       <label className="flex items-center gap-2 sm:col-span-2">
                         <input type="checkbox" checked={settings.audio.normalize} onChange={e => setSettings(s => ({ ...s, audio: { ...s.audio, normalize: e.target.checked } }))} />
                         <span>{t.labelNormalizeAudio}</span>
                       </label>
+                      <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <div className="text-xs uppercase tracking-widest text-slate-500">Таймлайн обрезки</div>
+                        <div className="mt-1 text-sm text-slate-700">
+                          Start: <span className="font-semibold">{trimTimelineState.startLabel}</span>
+                          {' '}· End: <span className="font-semibold">{trimTimelineState.endLabel}</span>
+                          {' '}· Длительность: <span className="font-semibold">{trimTimelineState.durationLabel}</span>
+                        </div>
+                        <div className="mt-3 h-2 rounded-full bg-slate-200 relative overflow-hidden">
+                          <div
+                            className="absolute top-0 h-full rounded-full bg-cyan-500/80"
+                            style={{
+                              left: `${(trimTimelineState.start / Math.max(1, trimTimelineState.max)) * 100}%`,
+                              width: `${Math.max(0, ((trimTimelineState.end - trimTimelineState.start) / Math.max(1, trimTimelineState.max)) * 100)}%`
+                            }}
+                          />
+                        </div>
+                        <label className="mt-3 block">
+                          <div className="text-xs text-slate-500 mb-1">Start Time</div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={trimTimelineState.max}
+                            step={1}
+                            value={trimTimelineState.start}
+                            disabled={!trimTimelineState.enabled || mediaDurationLoading}
+                            onChange={(e) => updateTrimTimeline('start', e.target.value)}
+                            className="w-full accent-cyan-600 disabled:opacity-50"
+                          />
+                        </label>
+                        <label className="mt-2 block">
+                          <div className="text-xs text-slate-500 mb-1">End Time</div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={trimTimelineState.max}
+                            step={1}
+                            value={trimTimelineState.end}
+                            disabled={!trimTimelineState.enabled || mediaDurationLoading}
+                            onChange={(e) => updateTrimTimeline('end', e.target.value)}
+                            className="w-full accent-cyan-600 disabled:opacity-50"
+                          />
+                        </label>
+                        {mediaDurationLoading && (
+                          <div className="mt-2 text-xs text-slate-500">Определяем длительность медиа...</div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -5510,6 +6185,15 @@ export default function App() {
                 <div className="skeleton h-3 w-full"></div>
                 <div className="skeleton h-3 w-5/6 mx-auto"></div>
               </div>
+              {files.length > 1 && (
+                <div className="mt-6 text-left">
+                  <DynamicBatchStack
+                    items={batchLiveItems.length ? batchLiveItems : buildBatchLiveItems(files)}
+                    overallProgress={progress}
+                    status={status}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -5524,18 +6208,22 @@ export default function App() {
                 <Button variant="secondary" onClick={reset}>Повторить</Button>
                 {featureFlags.public_share_links && (
                   <ShareButton
-                    onShare={handleShare}
                     onCreateLink={handleCreateShareLink}
-                    expiryPreset={shareExpiryPreset}
-                    onExpiryPresetChange={setShareExpiryPreset}
+                    busy={isShareLinkCreating}
+                    disabled={isShareLinkCreating || !downloadUrl}
                   />
+                )}
+                {canOpenQuickLook && (
+                  <Button variant="outline" onClick={() => void openQuickLook()}>
+                    <Eye size={16} /> Quick Look
+                  </Button>
                 )}
                 <Button variant="primary" onClick={download}>{t.download}</Button>
               </div>
               {shareHint && <div className="mt-3 text-xs text-slate-500">{shareHint}</div>}
               {shareLink && (
                 <div className="mt-2 text-xs text-slate-500">
-                  Публичная ссылка: {shareLink}
+                  Публичная ссылка (24 часа): {shareLink}
                 </div>
               )}
               {!saveDataMode && featureFlags.instant_preview && (
@@ -5609,6 +6297,66 @@ export default function App() {
       <Page title={t.pageToolsTitle} subtitle={t.pageToolsSubtitle}>
         <div className="grid lg:grid-cols-[1.6fr_0.8fr] gap-6">
           <div>
+            <div className="mc-card rounded-2xl border border-white/40 dark:border-white/10 p-4 mb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">New in MegaConvert 3.0</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Локальная конвертация медиа (WASM)</div>
+                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Конвертируйте аудио и видео локально в браузере, без загрузки файла на сервер.</div>
+                </div>
+                <Button onClick={() => navigate('/tools/local-converter')}>
+                  Открыть
+                </Button>
+              </div>
+            </div>
+            <div className="mc-card rounded-2xl border border-white/40 dark:border-white/10 p-4 mb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">AI Tool</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Умный OCR (распознавание текста)</div>
+                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Извлекайте текст из фото и сканов локально в браузере с выбором языка.</div>
+                </div>
+                <Button onClick={() => navigate('/tools/ocr')}>
+                  Открыть
+                </Button>
+              </div>
+            </div>
+            <div className="mc-card rounded-2xl border border-white/40 dark:border-white/10 p-4 mb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">PDF Tool</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Визуальный PDF-редактор</div>
+                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Склейка, удаление и перестановка страниц PDF локально в браузере.</div>
+                </div>
+                <Button onClick={() => navigate('/tools/pdf-editor')}>
+                  Открыть
+                </Button>
+              </div>
+            </div>
+            <div className="mc-card rounded-2xl border border-white/40 dark:border-white/10 p-4 mb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Image Tool</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Интерактивное сжатие изображений</div>
+                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">Слайдер качества и живое сравнение До/После прямо на картинке.</div>
+                </div>
+                <Button onClick={() => navigate('/tools/image-compressor')}>
+                  Открыть
+                </Button>
+              </div>
+            </div>
+            <div className="mc-card rounded-2xl border border-white/40 dark:border-white/10 p-4 mb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Batch Tool</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Пакетный Watermark</div>
+                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">До 50 изображений, настройка текста/цвета/позиции и скачивание готового ZIP.</div>
+                </div>
+                <Button onClick={() => navigate('/tools/batch-watermark')}>
+                  Открыть
+                </Button>
+              </div>
+            </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-4 text-slate-900">
               <div className="flex items-center gap-2">
                 <Search size={16} className="text-slate-400" />
@@ -5828,6 +6576,11 @@ export default function App() {
                       <div className="text-xs uppercase tracking-widest text-slate-500">Действия</div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {status === 'done' && <Button variant="secondary" onClick={download}>{t.download}</Button>}
+                        {status === 'done' && canOpenQuickLook && (
+                          <Button variant="outline" onClick={() => void openQuickLook()}>
+                            <Eye size={14} /> Quick Look
+                          </Button>
+                        )}
                         {status === 'error' && <Button variant="secondary" onClick={handleProcess}>{t.btnRetry}</Button>}
                         <Button variant="outline" onClick={reset}>{t.btnClear}</Button>
                       </div>
@@ -7835,9 +8588,85 @@ console.log(job.status, job.downloadUrl)`}
     <SharePage key={shareToken} token={shareToken} apiBase={API_BASE} lang={lang} onNavigate={navigate} />
   );
 
+  const renderLocalConverterToolPage = () => (
+    <Page
+      title="Локальная конвертация медиа"
+      subtitle="FFmpeg WebAssembly в браузере: без отправки файлов на сервер"
+      actions={(
+        <>
+          <Button variant="secondary" onClick={() => navigate('/tools')}>{t.btnBrowseTools}</Button>
+          <Button onClick={() => navigate('/workspace/local-convert')}>Workspace 3.0</Button>
+        </>
+      )}
+    >
+      <LocalMediaConverterTool onCloudFallback={() => navigate('/convert')} />
+    </Page>
+  );
+
+  const renderOcrToolPage = () => (
+    <Page
+      title="OCR распознавание текста"
+      subtitle="Tesseract.js в браузере: извлечение текста без отправки файлов на сервер"
+      actions={(
+        <>
+          <Button variant="secondary" onClick={() => navigate('/tools')}>{t.btnBrowseTools}</Button>
+          <Button onClick={() => navigate('/ai')}>AI</Button>
+        </>
+      )}
+    >
+      <OcrRecognitionTool />
+    </Page>
+  );
+
+  const renderPdfEditorToolPage = () => (
+    <Page
+      title="Визуальный PDF-редактор"
+      subtitle="pdf-lib в браузере: удаляйте страницы, меняйте порядок и сохраняйте новый PDF локально"
+      actions={(
+        <>
+          <Button variant="secondary" onClick={() => navigate('/tools')}>{t.btnBrowseTools}</Button>
+          <Button onClick={() => navigate('/workspace/pdf-editor')}>Workspace 3.0</Button>
+        </>
+      )}
+    >
+      <PdfEditorTool />
+    </Page>
+  );
+
+  const renderImageCompressorToolPage = () => (
+    <Page
+      title="Интерактивное сжатие изображений"
+      subtitle="browser-image-compression в браузере: управляйте качеством и сравнивайте До/После"
+      actions={(
+        <>
+          <Button variant="secondary" onClick={() => navigate('/tools')}>{t.btnBrowseTools}</Button>
+          <Button onClick={() => navigate('/workspace/image-optimizer')}>Workspace 3.0</Button>
+        </>
+      )}
+    >
+      <ImageCompressorTool />
+    </Page>
+  );
+
+  const renderBatchWatermarkToolPage = () => (
+    <Page
+      title="Пакетный watermark"
+      subtitle="Массовая обработка изображений на сервере: текст, цвет, позиция и ZIP-архив"
+      actions={(
+        <>
+          <Button variant="secondary" onClick={() => navigate('/tools')}>{t.btnBrowseTools}</Button>
+          <Button onClick={() => navigate('/workspace/watermark-batch')}>Workspace 3.0</Button>
+        </>
+      )}
+    >
+      <BatchWatermarkTool apiBase={API_BASE} />
+    </Page>
+  );
+
   const renderAiPage = () => (
     <AiStudioPage
       file={file}
+      files={files}
       isDragOver={isDragOver}
       onDragEnter={() => setIsDragOver(true)}
       onDragLeave={() => setIsDragOver(false)}
@@ -7864,7 +8693,7 @@ console.log(job.status, job.downloadUrl)`}
         setAiAssistantPrompt(value);
         if (aiAssistantError) setAiAssistantError('');
       }}
-      disabled={aiAssistantStage !== 'idle' || !file || !String(aiAssistantPrompt || '').trim()}
+      disabled={aiAssistantStage !== 'idle' || !(files[0] || file) || !String(aiAssistantPrompt || '').trim()}
       stage={aiAssistantStage}
       intent={aiAssistantIntent}
       error={aiAssistantError}
@@ -7872,10 +8701,23 @@ console.log(job.status, job.downloadUrl)`}
       progress={progress}
       pipelineStage={pipelineStage}
       downloadUrl={downloadUrl}
-      conversionError={errorInfo?.message || ''}
+      conversionError={typeof errorInfo === 'string' ? errorInfo : (errorInfo?.message || '')}
       onDownload={download}
       onReset={reset}
+      canQuickLook={canOpenQuickLook}
+      onQuickLook={() => void openQuickLook()}
+      batchStackNode={files.length > 1 ? (
+        <DynamicBatchStack
+          items={batchLiveItems.length ? batchLiveItems : buildBatchLiveItems(files)}
+          overallProgress={progress}
+          status={status}
+        />
+      ) : null}
     />
+  );
+
+  const renderWorkspaceV3Page = () => (
+    <WorkspaceV3Page path={path} navigate={navigate} />
   );
 
   const renderNotFoundPage = () => (
@@ -8166,35 +9008,49 @@ console.log(job.status, job.downloadUrl)`}
     );
   }
   return (
-    <div className="site-shell min-h-screen bg-slate-950 text-slate-100 font-sans">
+    <div className="site-shell min-h-screen bg-slate-50 text-slate-900 dark:bg-[#09090b] dark:text-slate-100 font-sans transition-all duration-300 ease-out">
       <nav className="top-nav top-nav--minimal fixed w-full z-50">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="nav-pill nav-pill--minimal mt-4 bg-slate-950/60 backdrop-blur-xl border border-white/10 rounded-2xl h-16 px-4 flex items-center justify-between shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
-            <div className="flex items-center gap-2 font-semibold text-lg cursor-pointer" onClick={() => navigate('/') }>
-              <span className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center border border-white/10"><Zap size={16} /></span>
+          <div className="nav-pill nav-pill--minimal mt-4 rounded-2xl h-16 px-4 flex items-center justify-between border border-white/40 dark:border-white/10 bg-white/70 dark:bg-[#09090b]/70 backdrop-blur-2xl shadow-[0_10px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.35)] transition-all duration-300 ease-out">
+            <div className="flex items-center gap-2 font-semibold text-lg cursor-pointer text-slate-900 dark:text-slate-100" onClick={() => navigate('/')}>
+              <span className="w-9 h-9 rounded-xl bg-slate-900 text-white dark:bg-white/10 dark:text-white flex items-center justify-center border border-slate-200 dark:border-white/10"><Zap size={16} /></span>
               MegaConvert
             </div>
-            <div className="hidden lg:flex items-center gap-4 text-slate-300">
+            <div className="hidden lg:flex items-center gap-4 text-slate-600 dark:text-slate-300">
               {navItems.map((item) => (
                 <button
                   key={item.to}
                   onClick={() => navigate(item.to)}
-                  className="font-medium hover:text-white"
+                  className={`font-medium transition-all duration-300 ease-out hover:text-slate-900 dark:hover:text-white ${
+                    path === item.to
+                    || (item.to === '/workspace' && path.startsWith('/workspace/'))
+                    || (item.to === '/tools' && path.startsWith('/tools/'))
+                      ? 'text-slate-900 dark:text-white'
+                      : ''
+                  }`}
                   data-testid={`nav-${item.to.replace(/\//g, '') || 'home'}`}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="h-10 w-10 rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-all duration-300 ease-out hover:scale-[1.03]"
+                aria-label={resolvedTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              >
+                {resolvedTheme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
               <div className="relative hidden lg:block" ref={langMenuRef}>
-                <button onClick={() => setIsLangMenuOpen(!isLangMenuOpen)} className="flex items-center gap-1 font-medium text-slate-300 hover:text-white">
-                  {LANGUAGES.find(l => l.code === lang)?.flag} <ChevronDown size={14} />
+                <button onClick={() => setIsLangMenuOpen(!isLangMenuOpen)} className="h-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]">
+                  {LANGUAGES.find((l) => l.code === lang)?.flag} <ChevronDown size={14} />
                 </button>
                 {isLangMenuOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-40 bg-slate-900 shadow-xl rounded-xl border border-white/10 py-2">
-                    {LANGUAGES.map(l => (
-                      <button key={l.code} onClick={() => changeLanguage(l.code)} className="w-full text-left px-4 py-2 hover:bg-white/5 flex gap-2 text-slate-200">
+                  <div className="absolute top-full right-0 mt-2 w-44 bg-white/90 dark:bg-slate-900/95 shadow-xl rounded-2xl border border-slate-200 dark:border-white/10 py-2 backdrop-blur-2xl">
+                    {LANGUAGES.map((l) => (
+                      <button key={l.code} onClick={() => changeLanguage(l.code)} className="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-white/5 flex gap-2 text-slate-700 dark:text-slate-200 text-sm">
                         {l.flag} {l.name}
                       </button>
                     ))}
@@ -8204,41 +9060,78 @@ console.log(job.status, job.downloadUrl)`}
               {!user ? (
                 <Button onClick={() => navigate('/login')}>{t.navLogin}</Button>
               ) : (
-                <div className="flex items-center gap-3">
-                  <button onClick={() => navigate('/account')} className="font-medium text-slate-200 hover:text-white">
-                    {t.navAccount}
+                <div className="relative hidden lg:block" ref={userMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsUserMenuOpen((value) => !value)}
+                    className="h-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white/85 dark:bg-white/5 text-slate-700 dark:text-slate-200 flex items-center gap-2 transition-all duration-300 ease-out hover:scale-[1.02] max-w-[220px]"
+                  >
+                    <UserCircle2 size={17} className="shrink-0" />
+                    <span className="truncate text-sm">{String(user?.name || user?.email || t.navAccount || 'Account')}</span>
+                    <ChevronDown size={14} className="shrink-0" />
                   </button>
-                  <button onClick={() => { void logoutCurrentUser(); }} className="p-2 hover:bg-white/10 rounded-full" aria-label="Logout"><X size={20} /></button>
+                  {isUserMenuOpen && (
+                    <div className="absolute top-full right-0 mt-2 w-52 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-900/95 backdrop-blur-2xl shadow-xl p-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          navigate('/account');
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/5 transition-all duration-300 ease-out"
+                      >
+                        {t.navAccount}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          void logoutCurrentUser();
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl text-sm text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-300 ease-out"
+                      >
+                        Выйти
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
-              <button className="lg:hidden px-3 py-2 rounded-lg border border-white/10 text-sm font-semibold text-slate-200" onClick={() => setIsMobileMenuOpen((v) => !v)}>
+              <button className="lg:hidden px-3 py-2 rounded-lg border border-slate-200 dark:border-white/10 text-sm font-semibold text-slate-700 dark:text-slate-200" onClick={() => setIsMobileMenuOpen((v) => !v)}>
                 {t.navMenu}
               </button>
             </div>
           </div>
 
           {isMobileMenuOpen && (
-            <div className="mobile-drawer lg:hidden mt-3 bg-slate-950 rounded-2xl border border-white/10 p-4 shadow-lg text-slate-200">
+            <div className="mobile-drawer lg:hidden mt-3 rounded-2xl border border-slate-200 dark:border-white/10 p-4 shadow-lg text-slate-700 dark:text-slate-200 bg-white/90 dark:bg-[#09090b]/95 backdrop-blur-2xl">
               <div className="grid gap-2">
                 {navItems.map((item) => (
                   <button
                     key={item.to}
                     onClick={() => navigate(item.to)}
-                    className="text-left px-3 py-2 rounded-lg hover:bg-white/5 font-medium"
+                    className="text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 font-medium transition-all duration-300 ease-out"
                     data-testid={`mobile-nav-${item.to.replace(/\//g, '') || 'home'}`}
                   >
                     {item.label}
                   </button>
                 ))}
                 {user && (
-                  <button onClick={() => navigate('/account')} className="text-left px-3 py-2 rounded-lg hover:bg-white/5 font-medium">{t.navAccount}</button>
+                  <button onClick={() => navigate('/account')} className="text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 font-medium">{t.navAccount}</button>
+                )}
+                {!user && (
+                  <button onClick={() => navigate('/login')} className="text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 font-medium">{t.navLogin}</button>
+                )}
+                {user && (
+                  <button onClick={() => { void logoutCurrentUser(); }} className="text-left px-3 py-2 rounded-lg text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 font-medium">
+                    Выйти
+                  </button>
                 )}
               </div>
-              <div className="mt-4 border-t border-white/10 pt-4">
-                <div className="text-xs uppercase tracking-widest text-slate-400">{t.navLanguage}</div>
+              <div className="mt-4 border-t border-slate-200 dark:border-white/10 pt-4">
+                <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t.navLanguage}</div>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {LANGUAGES.map((item) => (
-                    <button key={item.code} onClick={() => changeLanguage(item.code)} className="px-3 py-1.5 rounded-full border border-white/10 text-xs font-semibold">
+                    <button key={item.code} onClick={() => changeLanguage(item.code)} className="px-3 py-1.5 rounded-full border border-slate-200 dark:border-white/10 text-xs font-semibold bg-white/90 dark:bg-white/5">
                       {item.flag} {item.name}
                     </button>
                   ))}
@@ -8258,7 +9151,7 @@ console.log(job.status, job.downloadUrl)`}
         }}
         className="hidden"
         accept={isAiPage ? '*/*' : currentTool.accept}
-        multiple={isAiPage ? false : batchMode}
+        multiple
       />
 
       <main>
@@ -8276,6 +9169,18 @@ console.log(job.status, job.downloadUrl)`}
           ) : (
             renderConvertPage()
           )
+        ) : isWorkspaceV3 ? (
+          renderWorkspaceV3Page()
+        ) : isLocalConverterTool ? (
+          renderLocalConverterToolPage()
+        ) : isOcrTool ? (
+          renderOcrToolPage()
+        ) : isPdfEditorTool ? (
+          renderPdfEditorToolPage()
+        ) : isImageCompressorTool ? (
+          renderImageCompressorToolPage()
+        ) : isBatchWatermarkTool ? (
+          renderBatchWatermarkToolPage()
         ) : isAiPage ? (
           renderAiPage()
         ) : isConvertRoot || isTools ? (
@@ -8360,46 +9265,37 @@ console.log(job.status, job.downloadUrl)`}
         </div>
       )}
       {showAuthModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl relative">
-            <button onClick={() => setShowAuthModal(false)} className="absolute top-4 right-4 text-slate-400"><X /></button>
-            <h3 className="text-2xl font-bold text-center mb-6">{authMode === 'login' ? t.loginTitle : t.registerTitle}</h3>
-            <div className="space-y-3">
-              <button onClick={() => handleLogin('google')} className="w-full py-2.5 border rounded-xl flex justify-center items-center gap-2 hover:bg-slate-50 font-medium">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/35 backdrop-blur-2xl transition-all duration-300 ease-out">
+          <div className="relative w-full max-w-md rounded-3xl border border-white/40 dark:border-white/10 bg-white/80 dark:bg-[#0f1117]/80 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,0.14)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.45)] p-7 md:p-8 transition-all duration-300 ease-out">
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 text-slate-500 dark:text-slate-400 h-9 w-9 rounded-xl border border-slate-200 dark:border-white/10 bg-white/85 dark:bg-white/5 flex items-center justify-center transition-all duration-300 ease-out hover:scale-[1.03]"
+            >
+              <X size={16} />
+            </button>
+            <div className="text-center">
+              <h3 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Вход в MegaConvert</h3>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Продолжите в пару кликов</p>
+            </div>
+            <div className="mt-6 space-y-3">
+              <button onClick={() => handleLogin('google')} className="w-full py-2.5 border border-slate-200 dark:border-white/10 rounded-2xl flex justify-center items-center gap-2 bg-white/90 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-white/10 transition-all duration-300 ease-out font-medium">
                 {t.authGoogle}
               </button>
-              <button onClick={() => handleLogin('github')} className="w-full py-2.5 bg-[#24292e] text-white rounded-xl flex justify-center items-center gap-2 hover:bg-[#2b3137]">
-                <Github size={20} /> {t.authGithub}
-              </button>
-              <div className="text-center text-xs text-slate-400 my-2">{t.authOr}</div>
-
-              <form onSubmit={handleEmailAuth} className="space-y-3">
-                <div className="relative">
-                  <Mail size={18} className="absolute left-3 top-3 text-slate-400" />
-                  <input type="email" placeholder={t.authEmailPlaceholder} required className="w-full pl-10 pr-4 py-2 border rounded-xl" value={email} onChange={e => setEmail(e.target.value)} />
-                </div>
-                <div className="relative">
-                  <Lock size={18} className="absolute left-3 top-3 text-slate-400" />
-                  <input type="password" placeholder={t.authPasswordPlaceholder} required className="w-full pl-10 pr-4 py-2 border rounded-xl" value={password} onChange={e => setPassword(e.target.value)} />
-                </div>
-                {authError && <p className="text-xs text-red-500 text-center">{authError}</p>}
-                <Button type="submit" className="w-full justify-center">{t.authEmail}</Button>
-              </form>
-              <button
-                type="button"
-                onClick={handleTestModeLogin}
-                disabled={testModeLoading}
-                className="w-full py-2.5 border border-amber-300 text-amber-700 rounded-xl hover:bg-amber-50 disabled:opacity-60"
-              >
-                {testModeLoading ? 'Signing in test mode...' : 'Login by test password'}
-              </button>
-              <button onClick={handleGuest} className="w-full text-sm text-slate-500 hover:text-slate-800">{t.authGuest}</button>
-            </div>
-            <div className="mt-4 pt-4 border-t text-center">
-              <button onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="text-sm text-blue-600 font-medium">
-                {authMode === 'login' ? t.authSwitchRegister : t.authSwitchLogin}
+              <button onClick={() => handleLogin('github')} className="w-full py-2.5 rounded-2xl flex justify-center items-center gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white/10 dark:hover:bg-white/15 border border-slate-900 dark:border-white/10 transition-all duration-300 ease-out">
+                <Github size={18} /> {t.authGithub}
               </button>
             </div>
+            <div className="my-5 text-center text-xs uppercase tracking-[0.22em] text-slate-400">{t.authOr}</div>
+            <form onSubmit={handleEmailAuth} className="space-y-3">
+              <div className="relative">
+                <Mail size={18} className="absolute left-3 top-3 text-slate-400" />
+                <input type="email" placeholder={t.authEmailPlaceholder} required className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white/90 dark:bg-white/5 text-slate-800 dark:text-slate-100" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
+              {authError && <p className="text-xs text-red-600 dark:text-red-300 text-center">{authError}</p>}
+              <Button type="submit" className="w-full justify-center">
+                Продолжить по Email
+              </Button>
+            </form>
           </div>
         </div>
       )}
@@ -8427,6 +9323,32 @@ console.log(job.status, job.downloadUrl)`}
           </div>
         </div>
       )}
+
+      <QuickLookModal
+        open={quickLookOpen}
+        title={downloadFileName || file?.name || 'Результат конвертации'}
+        type={quickLookType || quickLookConfig.type}
+        previewUrl={quickLookConfig.previewUrl}
+        textContent={quickLookText}
+        loading={quickLookLoading}
+        error={quickLookError}
+        onClose={() => {
+          setQuickLookOpen(false);
+          setQuickLookLoading(false);
+          setQuickLookError('');
+        }}
+      />
+
+      <GlassToast
+        toast={toast}
+        onClose={() => {
+          setToast(null);
+          if (toastTimerRef.current) {
+            window.clearTimeout(toastTimerRef.current);
+            toastTimerRef.current = null;
+          }
+        }}
+      />
 
       {!isAiPage && (
         <footer className="bg-slate-900 text-slate-300 py-14 mt-auto">

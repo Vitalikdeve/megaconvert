@@ -690,13 +690,14 @@ const convertMediaTool = async (helpers, {
   baseName,
   outputExt,
   videoArgs,
+  videoTrimArgs,
   audioArgs
 }) => {
   if (tool === 'mp4-jpg-frames' || tool === 'mp4-png-frames') {
     const frameExt = tool === 'mp4-jpg-frames' ? 'jpg' : 'png';
     const frameDir = path.join(workDir, 'frames');
     fs.mkdirSync(frameDir, { recursive: true });
-    await helpers.exec('ffmpeg', ['-y', '-i', inputPath, path.join(frameDir, `frame-%05d.${frameExt}`)]);
+    await helpers.exec('ffmpeg', ['-y', ...(videoTrimArgs?.pre || []), '-i', inputPath, ...(videoTrimArgs?.post || []), path.join(frameDir, `frame-%05d.${frameExt}`)]);
     const zipPath = path.join(workDir, `${baseName}_${frameExt}_frames.zip`);
     await helpers.exec('7z', ['a', '-tzip', zipPath, '.'], { cwd: frameDir });
     return [zipPath];
@@ -706,9 +707,9 @@ const convertMediaTool = async (helpers, {
     const streamDir = path.join(workDir, tool === 'mp4-hls' ? 'hls' : 'dash');
     fs.mkdirSync(streamDir, { recursive: true });
     if (tool === 'mp4-hls') {
-      await helpers.exec('ffmpeg', ['-y', '-i', inputPath, '-c:v', 'libx264', '-c:a', 'aac', '-f', 'hls', '-hls_time', '6', '-hls_playlist_type', 'vod', path.join(streamDir, 'index.m3u8')]);
+      await helpers.exec('ffmpeg', ['-y', ...(videoTrimArgs?.pre || []), '-i', inputPath, ...(videoTrimArgs?.post || []), '-c:v', 'libx264', '-c:a', 'aac', '-f', 'hls', '-hls_time', '6', '-hls_playlist_type', 'vod', path.join(streamDir, 'index.m3u8')]);
     } else {
-      await helpers.exec('ffmpeg', ['-y', '-i', inputPath, '-map', '0', '-c:v', 'libx264', '-c:a', 'aac', '-f', 'dash', path.join(streamDir, 'manifest.mpd')]);
+      await helpers.exec('ffmpeg', ['-y', ...(videoTrimArgs?.pre || []), '-i', inputPath, ...(videoTrimArgs?.post || []), '-map', '0', '-c:v', 'libx264', '-c:a', 'aac', '-f', 'dash', path.join(streamDir, 'manifest.mpd')]);
     }
     const zipPath = path.join(workDir, `${baseName}_${tool === 'mp4-hls' ? 'hls' : 'dash'}.zip`);
     await helpers.exec('7z', ['a', '-tzip', zipPath, '.'], { cwd: streamDir });
@@ -717,15 +718,15 @@ const convertMediaTool = async (helpers, {
 
   const outputPath = path.join(workDir, `${baseName}.${outputExt}`);
   if (tool === 'mp4-prores') {
-    await helpers.exec('ffmpeg', ['-y', '-i', inputPath, '-c:v', 'prores_ks', '-profile:v', '3', '-c:a', 'pcm_s16le', outputPath]);
+    await helpers.exec('ffmpeg', ['-y', ...(videoTrimArgs?.pre || []), '-i', inputPath, ...(videoTrimArgs?.post || []), '-c:v', 'prores_ks', '-profile:v', '3', '-c:a', 'pcm_s16le', outputPath]);
     return [outputPath];
   }
   if (tool === 'mp4-vp9') {
-    await helpers.exec('ffmpeg', ['-y', '-i', inputPath, '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '33', '-c:a', 'libopus', outputPath]);
+    await helpers.exec('ffmpeg', ['-y', ...(videoTrimArgs?.pre || []), '-i', inputPath, ...(videoTrimArgs?.post || []), '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '33', '-c:a', 'libopus', outputPath]);
     return [outputPath];
   }
   if (outputExt === 'gif') {
-    await helpers.exec('ffmpeg', ['-y', '-i', inputPath, '-vf', 'fps=10,scale=640:-1:flags=lanczos', outputPath]);
+    await helpers.exec('ffmpeg', ['-y', ...(videoTrimArgs?.pre || []), '-i', inputPath, ...(videoTrimArgs?.post || []), '-vf', 'fps=10,scale=640:-1:flags=lanczos', outputPath]);
     return [outputPath];
   }
 
@@ -762,7 +763,7 @@ const convertMediaTool = async (helpers, {
       m4v: ['-c:v', 'libx264', '-c:a', 'aac'],
       ogv: ['-c:v', 'libtheora', '-c:a', 'libvorbis']
     };
-    await helpers.exec('ffmpeg', ['-y', '-i', inputPath, ...videoArgs, ...codecArgsByExt[outputExt], outputPath]);
+    await helpers.exec('ffmpeg', ['-y', ...(videoTrimArgs?.pre || []), '-i', inputPath, ...(videoTrimArgs?.post || []), ...videoArgs, ...codecArgsByExt[outputExt], outputPath]);
     return [outputPath];
   }
 
@@ -983,6 +984,7 @@ const convertTool = async ({ tool, inputPath, workDir, settings, meta, helpers }
   const inputExt = getExt(inputPath);
   const imageArgs = helpers.buildImageArgs(settings?.image);
   const videoArgs = helpers.buildVideoArgs(settings?.video);
+  const videoTrimArgs = helpers.buildMediaTrimArgs(settings?.video);
   const audioArgs = helpers.buildAudioArgs(settings?.audio);
 
   if (meta.type === 'data') {
@@ -994,7 +996,7 @@ const convertTool = async ({ tool, inputPath, workDir, settings, meta, helpers }
   }
 
   if (meta.type === 'video' || meta.type === 'audio' || VIDEO_EXTS.has(outputExt) || AUDIO_EXTS.has(outputExt)) {
-    return convertMediaTool(helpers, { tool, inputPath, workDir, baseName, outputExt, videoArgs, audioArgs });
+    return convertMediaTool(helpers, { tool, inputPath, workDir, baseName, outputExt, videoArgs, videoTrimArgs, audioArgs });
   }
 
   if (meta.type === 'image' || (IMAGE_EXTS.has(inputExt) && (IMAGE_EXTS.has(outputExt) || outputExt === 'pdf' || outputExt === 'svg'))) {
