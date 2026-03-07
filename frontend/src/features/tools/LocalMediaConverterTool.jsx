@@ -152,7 +152,8 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
     }
   }, [allowedFormats, selectedFormat]);
 
-  const ensureFfmpegLoaded = useCallback(async () => {
+  const loadFFmpeg = useCallback(async ({ silent = false } = {}) => {
+    if (!supportsSharedArrayBuffer) return null;
     if (!ffmpegRef.current) {
       ffmpegRef.current = new FFmpeg();
       ffmpegRef.current.on('progress', ({ progress: rawProgress }) => {
@@ -162,17 +163,41 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
     }
     if (ffmpegLoadedRef.current) return ffmpegRef.current;
 
-    setStatus('loading');
-    setStatusText('Загружаем FFmpeg ядро...');
-    const coreURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript');
-    const wasmURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm');
-    const workerURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.worker.js`, 'text/javascript');
-    await ffmpegRef.current.load({ coreURL, wasmURL, workerURL });
-    ffmpegLoadedRef.current = true;
-    return ffmpegRef.current;
-  }, []);
+    if (!silent) {
+      setStatus('loading');
+      setStatusText('Загружаем FFmpeg ядро...');
+      setError('');
+    }
+    try {
+      const coreURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm');
+      const workerURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.worker.js`, 'text/javascript');
+      await ffmpegRef.current.load({ coreURL, wasmURL, workerURL });
+      ffmpegLoadedRef.current = true;
+      return ffmpegRef.current;
+    } catch (loadError) {
+      if (!silent) {
+        setStatus('error');
+        setStatusText('Не удалось загрузить FFmpeg ядро');
+        setError(String(loadError?.message || 'Не удалось инициализировать FFmpeg.'));
+      }
+      throw loadError;
+    }
+  }, [supportsSharedArrayBuffer]);
 
-  const runLocalConversion = useCallback(async () => {
+  useEffect(() => {
+    let active = true;
+    if (!supportsSharedArrayBuffer) return () => { active = false; };
+    void loadFFmpeg({ silent: true }).catch(() => {
+      if (!active) return;
+      // Keep UX non-blocking: user can retry by pressing convert.
+    });
+    return () => {
+      active = false;
+    };
+  }, [loadFFmpeg, supportsSharedArrayBuffer]);
+
+  const handleConvert = useCallback(async () => {
     if (status === 'loading' || status === 'converting') return;
     if (!supportsSharedArrayBuffer) {
       setError(UNSUPPORTED_SAB_MESSAGE);
@@ -191,7 +216,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
     setProgress(2);
 
     try {
-      const ffmpeg = await ensureFfmpegLoaded();
+      const ffmpeg = await loadFFmpeg();
       if (jobId !== currentJobRef.current) return;
 
       setStatus('converting');
@@ -227,7 +252,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
       setStatusText('Конвертация завершилась с ошибкой');
       setError(String(conversionError?.message || 'Не удалось выполнить локальную конвертацию.'));
     }
-  }, [allowedFormats, cleanupResultUrl, ensureFfmpegLoaded, selectedFormat, sourceFile, status, supportsSharedArrayBuffer]);
+  }, [allowedFormats, cleanupResultUrl, loadFFmpeg, selectedFormat, sourceFile, status, supportsSharedArrayBuffer]);
 
   const onDrop = (event) => {
     event.preventDefault();
@@ -360,7 +385,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
 
         <button
           type="button"
-          onClick={() => void runLocalConversion()}
+          onClick={() => void handleConvert()}
           disabled={isBusy || disabledBySupport || !sourceFile}
           className="rounded-2xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02] flex items-center justify-center gap-2"
         >
