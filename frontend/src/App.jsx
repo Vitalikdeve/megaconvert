@@ -45,7 +45,7 @@ import ShareButton from './features/sharing/ShareButton.jsx';
 import HistoryList from './features/history/HistoryList.jsx';
 import BatchUploader from './features/batch/BatchUploader.jsx';
 import NextActions from './features/recommendations/NextActions.jsx';
-import SmartAssistantPanel from './features/ai/SmartAssistantPanel.jsx';
+import AiStudioPage from './features/ai/AiStudioPage.jsx';
 import { getSmartTips } from './features/tips/TipsEngine.js';
 import AdminApp from './admin/AdminApp.tsx';
 
@@ -1199,7 +1199,7 @@ export default function App() {
 
   const navItems = useMemo(() => ([
     { label: t.navTools, to: '/tools' },
-    { label: t.navAiAssistant || 'AI', to: '/convert/pdf-to-word' },
+    { label: t.navAiAssistant || 'AI', to: '/ai' },
     { label: 'Guides', to: '/guides' },
     { label: t.navDevelopers || 'Developers', to: '/developers' },
     { label: t.navStatus || 'Status', to: '/status' },
@@ -4854,6 +4854,7 @@ export default function App() {
   const isSecurityWhitepaper = path === '/security-whitepaper';
   const isContact = path === '/contact';
   const isAdmin = path === '/admin' || path.startsWith('/admin/');
+  const isAiPage = path === '/ai' || path === '/ai/';
   const isConvertRoot = path === '/convert' || path === '/convert/';
   const directConversionSlug = decodeURIComponent(path.replace(/^\/+|\/+$/g, ''));
   const isDirectConversionRoute = Boolean(
@@ -4863,7 +4864,7 @@ export default function App() {
   );
   const isConvert = (path.startsWith('/convert/') && !isConvertRoot) || isDirectConversionRoute;
   const isShare = path.startsWith('/s/');
-  const isNotFound = !isHome && !isTools && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isAdmin && !isConvert && !isConvertRoot && !isShare;
+  const isNotFound = !isHome && !isTools && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isAdmin && !isAiPage && !isConvert && !isConvertRoot && !isShare;
   const showMobileUploadBar = (isHome || isConvert || isConvertRoot) && !showAuthModal && !showTwofaModal;
   const saveDataMode = typeof navigator !== 'undefined' && navigator.connection?.saveData;
 
@@ -4926,6 +4927,7 @@ export default function App() {
       canonicalPath = `/guides/${currentGuidePost.slug}`;
     } else {
       const seoPageMap = {
+        '/ai': ['AI Assistant | MegaConvert', 'Upload a file and describe the result you want in natural language.'],
         '/security': ['File Conversion Security | MegaConvert', 'Security architecture and data protection for conversion workflows.'],
         '/privacy': ['Privacy Policy | MegaConvert', 'How MegaConvert handles data, storage, and retention.'],
         '/about': ['About MegaConvert', 'Learn about MegaConvert and the platform mission.'],
@@ -5358,36 +5360,6 @@ export default function App() {
                   <span className="ml-2 font-semibold">Remaining: {freeTierRemaining}</span>
                 </div>
               )}
-
-              <SmartAssistantPanel
-                file={file}
-                isDragOver={isDragOver}
-                onDragEnter={() => setIsDragOver(true)}
-                onDragLeave={() => setIsDragOver(false)}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setIsDragOver(true);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setIsDragOver(false);
-                  handleFilesSelected(event.dataTransfer.files);
-                }}
-                onBrowseClick={openFilePicker}
-                onClear={reset}
-                prompt={aiAssistantPrompt}
-                onPromptChange={(value) => {
-                  setAiAssistantPrompt(value);
-                  if (aiAssistantError) setAiAssistantError('');
-                }}
-                onSubmit={() => {
-                  void handleAiAssistantSubmit();
-                }}
-                disabled={aiAssistantStage !== 'idle' || !file || !String(aiAssistantPrompt || '').trim()}
-                stage={aiAssistantStage}
-                intent={aiAssistantIntent}
-                error={aiAssistantError}
-              />
 
               {file && (
                 <div className="rounded-2xl border border-slate-200 p-4">
@@ -7863,6 +7835,49 @@ console.log(job.status, job.downloadUrl)`}
     <SharePage key={shareToken} token={shareToken} apiBase={API_BASE} lang={lang} onNavigate={navigate} />
   );
 
+  const renderAiPage = () => (
+    <AiStudioPage
+      file={file}
+      isDragOver={isDragOver}
+      onDragEnter={() => setIsDragOver(true)}
+      onDragLeave={() => setIsDragOver(false)}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragOver(false);
+        handleFilesSelected(event.dataTransfer.files);
+      }}
+      onBrowseClick={openFilePicker}
+      onClear={reset}
+      prompt={aiAssistantPrompt}
+      onPromptChange={(value) => {
+        setAiAssistantPrompt(value);
+        if (aiAssistantError) setAiAssistantError('');
+      }}
+      onSubmit={() => {
+        void handleAiAssistantSubmit();
+      }}
+      onSuggestionPick={(value) => {
+        setAiAssistantPrompt(value);
+        if (aiAssistantError) setAiAssistantError('');
+      }}
+      disabled={aiAssistantStage !== 'idle' || !file || !String(aiAssistantPrompt || '').trim()}
+      stage={aiAssistantStage}
+      intent={aiAssistantIntent}
+      error={aiAssistantError}
+      status={status}
+      progress={progress}
+      pipelineStage={pipelineStage}
+      downloadUrl={downloadUrl}
+      conversionError={errorInfo?.message || ''}
+      onDownload={download}
+      onReset={reset}
+    />
+  );
+
   const renderNotFoundPage = () => (
     <Page title={t.pageNotFoundTitle} subtitle={t.pageNotFoundSubtitle}>
       <PageCard>
@@ -8242,8 +8257,8 @@ console.log(job.status, job.downloadUrl)`}
           handleFilesSelected(e.target.files);
         }}
         className="hidden"
-        accept={currentTool.accept}
-        multiple={batchMode}
+        accept={isAiPage ? '*/*' : currentTool.accept}
+        multiple={isAiPage ? false : batchMode}
       />
 
       <main>
@@ -8261,6 +8276,8 @@ console.log(job.status, job.downloadUrl)`}
           ) : (
             renderConvertPage()
           )
+        ) : isAiPage ? (
+          renderAiPage()
         ) : isConvertRoot || isTools ? (
           renderToolsPage()
         ) : isApi ? (
@@ -8411,64 +8428,66 @@ console.log(job.status, job.downloadUrl)`}
         </div>
       )}
 
-      <footer className="bg-slate-900 text-slate-300 py-14 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 grid md:grid-cols-5 gap-8 text-sm">
-          <div>
-            <div className="font-bold text-white mb-3 flex items-center gap-2"><Zap size={16} /> MegaConvert</div>
-            <div className="text-slate-400">{t.footerTagline}</div>
-          </div>
-          <div>
-            <div className="font-semibold text-white mb-3">{t.navProduct}</div>
-            <div className="space-y-2">
-              <button onClick={() => navigate('/tools')} className="block hover:text-white">{t.navTools}</button>
-              <button onClick={() => navigate('/developers')} className="block hover:text-white">{t.navDevelopers || 'Developers'}</button>
-              <button onClick={() => navigate('/pricing')} className="block hover:text-white">{t.navPricing}</button>
-              <button onClick={() => navigate('/security')} className="block hover:text-white">{t.navSecurity}</button>
+      {!isAiPage && (
+        <footer className="bg-slate-900 text-slate-300 py-14 mt-auto">
+          <div className="max-w-7xl mx-auto px-4 grid md:grid-cols-5 gap-8 text-sm">
+            <div>
+              <div className="font-bold text-white mb-3 flex items-center gap-2"><Zap size={16} /> MegaConvert</div>
+              <div className="text-slate-400">{t.footerTagline}</div>
+            </div>
+            <div>
+              <div className="font-semibold text-white mb-3">{t.navProduct}</div>
+              <div className="space-y-2">
+                <button onClick={() => navigate('/tools')} className="block hover:text-white">{t.navTools}</button>
+                <button onClick={() => navigate('/developers')} className="block hover:text-white">{t.navDevelopers || 'Developers'}</button>
+                <button onClick={() => navigate('/pricing')} className="block hover:text-white">{t.navPricing}</button>
+                <button onClick={() => navigate('/security')} className="block hover:text-white">{t.navSecurity}</button>
+              </div>
+            </div>
+            <div>
+              <div className="font-semibold text-white mb-3">{t.navCompany}</div>
+              <div className="space-y-2">
+                <button onClick={() => navigate('/about')} className="block hover:text-white">{t.navAbout}</button>
+                <button onClick={() => navigate('/mission')} className="block hover:text-white">Mission</button>
+                <button onClick={() => navigate('/careers')} className="block hover:text-white">Careers</button>
+                <button onClick={() => navigate('/press-kit')} className="block hover:text-white">Press Kit</button>
+                <button onClick={() => navigate('/roadmap')} className="block hover:text-white">{t.navRoadmap || 'Roadmap'}</button>
+                <button onClick={() => navigate('/changelog')} className="block hover:text-white">{t.navChangelog || 'Changelog'}</button>
+                <button onClick={() => navigate('/guides')} className="block hover:text-white">Guides</button>
+                <button onClick={() => navigate('/contact')} className="block hover:text-white">{t.navContact}</button>
+                <button onClick={() => navigate('/blog')} className="block hover:text-white">{t.navBlog}</button>
+                <a href={X_ACCOUNT_URL} target="_blank" rel="noreferrer" className="block hover:text-white">{t.socialX}</a>
+              </div>
+            </div>
+            <div>
+              <div className="font-semibold text-white mb-3">{t.navLegal}</div>
+              <div className="space-y-2">
+                <button onClick={() => navigate('/privacy')} className="block hover:text-white">{t.navPrivacy}</button>
+                <button onClick={() => navigate('/terms')} className="block hover:text-white">{t.navTerms}</button>
+                <button onClick={() => navigate('/cookie-policy')} className="block hover:text-white">{t.navCookies}</button>
+                <button onClick={() => navigate('/disclaimer')} className="block hover:text-white">{t.navDisclaimer}</button>
+                <button onClick={() => navigate('/legal')} className="block hover:text-white">{t.navLegalCenter}</button>
+              </div>
+            </div>
+            <div>
+              <div className="font-semibold text-white mb-3">{t.navSupport}</div>
+              <div className="space-y-2">
+                <button onClick={() => navigate('/resources')} className="block hover:text-white">Resources</button>
+                <button onClick={() => navigate('/faq')} className="block hover:text-white">{t.navHelpCenter}</button>
+                <button onClick={() => navigate('/contact')} className="block hover:text-white">{t.navContact}</button>
+                <button onClick={() => navigate('/status')} className="block hover:text-white">{t.navStatus}</button>
+                <button onClick={() => navigate('/reliability')} className="block hover:text-white">{t.navReliability || 'SLA / Reliability'}</button>
+                <button onClick={() => navigate('/bug-bounty')} className="block hover:text-white">Bug Bounty</button>
+                <button onClick={() => navigate('/security-whitepaper')} className="block hover:text-white">Security Whitepaper</button>
+                <a href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer" className="block hover:text-white">{t.socialTelegramBot}</a>
+              </div>
             </div>
           </div>
-          <div>
-            <div className="font-semibold text-white mb-3">{t.navCompany}</div>
-            <div className="space-y-2">
-              <button onClick={() => navigate('/about')} className="block hover:text-white">{t.navAbout}</button>
-              <button onClick={() => navigate('/mission')} className="block hover:text-white">Mission</button>
-              <button onClick={() => navigate('/careers')} className="block hover:text-white">Careers</button>
-              <button onClick={() => navigate('/press-kit')} className="block hover:text-white">Press Kit</button>
-              <button onClick={() => navigate('/roadmap')} className="block hover:text-white">{t.navRoadmap || 'Roadmap'}</button>
-              <button onClick={() => navigate('/changelog')} className="block hover:text-white">{t.navChangelog || 'Changelog'}</button>
-              <button onClick={() => navigate('/guides')} className="block hover:text-white">Guides</button>
-              <button onClick={() => navigate('/contact')} className="block hover:text-white">{t.navContact}</button>
-              <button onClick={() => navigate('/blog')} className="block hover:text-white">{t.navBlog}</button>
-              <a href={X_ACCOUNT_URL} target="_blank" rel="noreferrer" className="block hover:text-white">{t.socialX}</a>
-            </div>
+          <div className="max-w-7xl mx-auto px-4 pt-10 text-xs text-slate-500">
+            {t.footerCopyright.replace('{year}', currentYear)}
           </div>
-          <div>
-            <div className="font-semibold text-white mb-3">{t.navLegal}</div>
-            <div className="space-y-2">
-              <button onClick={() => navigate('/privacy')} className="block hover:text-white">{t.navPrivacy}</button>
-              <button onClick={() => navigate('/terms')} className="block hover:text-white">{t.navTerms}</button>
-              <button onClick={() => navigate('/cookie-policy')} className="block hover:text-white">{t.navCookies}</button>
-              <button onClick={() => navigate('/disclaimer')} className="block hover:text-white">{t.navDisclaimer}</button>
-              <button onClick={() => navigate('/legal')} className="block hover:text-white">{t.navLegalCenter}</button>
-            </div>
-          </div>
-          <div>
-            <div className="font-semibold text-white mb-3">{t.navSupport}</div>
-            <div className="space-y-2">
-              <button onClick={() => navigate('/resources')} className="block hover:text-white">Resources</button>
-              <button onClick={() => navigate('/faq')} className="block hover:text-white">{t.navHelpCenter}</button>
-              <button onClick={() => navigate('/contact')} className="block hover:text-white">{t.navContact}</button>
-              <button onClick={() => navigate('/status')} className="block hover:text-white">{t.navStatus}</button>
-              <button onClick={() => navigate('/reliability')} className="block hover:text-white">{t.navReliability || 'SLA / Reliability'}</button>
-              <button onClick={() => navigate('/bug-bounty')} className="block hover:text-white">Bug Bounty</button>
-              <button onClick={() => navigate('/security-whitepaper')} className="block hover:text-white">Security Whitepaper</button>
-              <a href={TELEGRAM_BOT_URL} target="_blank" rel="noreferrer" className="block hover:text-white">{t.socialTelegramBot}</a>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 pt-10 text-xs text-slate-500">
-          {t.footerCopyright.replace('{year}', currentYear)}
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {showCookie && (
         <div className="fixed bottom-4 left-4 right-4 z-[80] bg-white border border-slate-200 shadow-lg rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
