@@ -1,5 +1,6 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2, Zap, ShieldCheck, Globe2, ServerCog,
   Upload, Download, Settings, Search, Cloud, Layers,
@@ -56,6 +57,8 @@ import BatchWatermarkTool from './features/tools/BatchWatermarkTool.jsx';
 import { getSmartTips } from './features/tips/TipsEngine.js';
 import QuickLookModal from './features/preview/QuickLookModal.jsx';
 import GlassToast from './components/GlassToast.jsx';
+import SmoothScrollProvider from './components/SmoothScrollProvider.jsx';
+import PageTransition from './components/PageTransition.jsx';
 import { useTheme } from './theme/ThemeProvider.jsx';
 import AdminApp from './admin/AdminApp.tsx';
 
@@ -5319,21 +5322,40 @@ export default function App() {
   }, [lastJobId, quickLookConfig, showToast]);
   const handleCreateShareLink = async () => {
     if (!downloadUrl) return;
-    if (isLocalDownloadUrl(downloadUrl)) {
-      setShareHint('Локальный результат нельзя опубликовать ссылкой. Скачайте файл или включите серверный режим.');
-      return;
-    }
     setShareHint('');
     setShareLink('');
     setIsShareLinkCreating(true);
     try {
-      const res = await fetch(`${API_BASE}/share/24h`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file_url: downloadUrl
-        })
-      });
+      let res = null;
+      if (isLocalDownloadUrl(downloadUrl)) {
+        const blobResponse = await fetch(downloadUrl);
+        if (!blobResponse.ok) {
+          throw new Error(`local_blob_fetch_failed_${blobResponse.status}`);
+        }
+        const localBlob = await blobResponse.blob();
+        const fallbackExt = getExtensionFromValue(downloadFileName || downloadUrl) || 'bin';
+        const fallbackName = `megaconvert-result-${Date.now()}.${fallbackExt}`;
+        const safeName = String(downloadFileName || fallbackName).trim() || fallbackName;
+        const uploadFile = new File([localBlob], safeName, {
+          type: localBlob.type || 'application/octet-stream'
+        });
+        const form = new FormData();
+        form.append('file', uploadFile);
+        form.append('expires_preset', 'one_day');
+        res = await fetch(`${API_BASE}/share`, {
+          method: 'POST',
+          body: form
+        });
+      } else {
+        res = await fetch(`${API_BASE}/share`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_url: downloadUrl,
+            expires_preset: 'one_day'
+          })
+        });
+      }
       if (!res.ok) {
         let details = null;
         try {
@@ -5353,11 +5375,14 @@ export default function App() {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(link);
         setShareHint('Публичная ссылка на 24 часа скопирована в буфер.');
+        showToast('Ссылка на 24 часа скопирована в буфер.', 'success', 3600);
       } else {
         setShareHint('Публичная ссылка на 24 часа создана.');
+        showToast('Ссылка на 24 часа создана.', 'success', 3600);
       }
     } catch {
       setShareHint('Не удалось создать ссылку. Попробуйте снова.');
+      showToast('Не удалось создать ссылку.', 'error', 4000);
     } finally {
       setIsShareLinkCreating(false);
     }
@@ -8651,7 +8676,7 @@ console.log(job.status, job.downloadUrl)`}
   const renderBatchWatermarkToolPage = () => (
     <Page
       title="Пакетный watermark"
-      subtitle="Массовая обработка изображений на сервере: текст, цвет, позиция и ZIP-архив"
+      subtitle="Массовая обработка изображений в браузере: текст, цвет, позиция и ZIP-архив"
       actions={(
         <>
           <Button variant="secondary" onClick={() => navigate('/tools')}>{t.btnBrowseTools}</Button>
@@ -8952,63 +8977,68 @@ console.log(job.status, job.downloadUrl)`}
   );
   if (isAccountBlocked) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 px-4 py-8 flex items-center justify-center">
-        <div className="w-full max-w-2xl rounded-3xl border border-red-500/30 bg-red-950/30 backdrop-blur p-8 md:p-10 text-center shadow-[0_24px_80px_rgba(220,38,38,0.22)]">
-          <div className="inline-flex items-center rounded-full border border-red-400/40 bg-red-500/15 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-red-200">
-            Account blocked
-          </div>
-          <h1 className="mt-5 text-3xl md:text-4xl font-semibold text-red-100">
-            Ваш аккаунт заблокирован
-          </h1>
-          <p className="mt-4 text-base md:text-lg text-red-50/90">
-            Доступ к сайту полностью отключен. Вы больше не можете пользоваться функциями и переходить по разделам.
-          </p>
-          {blockedReason && (
-            <p className="mt-4 text-sm text-red-200">
-              Причина: <span className="font-semibold">{blockedReason.replace(/[_-]+/g, ' ')}</span>
+      <SmoothScrollProvider>
+        <div className="min-h-screen bg-slate-950 text-slate-100 px-4 py-8 flex items-center justify-center">
+          <div className="w-full max-w-2xl rounded-3xl border border-red-500/30 bg-red-950/30 backdrop-blur p-8 md:p-10 text-center shadow-[0_24px_80px_rgba(220,38,38,0.22)]">
+            <div className="inline-flex items-center rounded-full border border-red-400/40 bg-red-500/15 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-red-200">
+              Account blocked
+            </div>
+            <h1 className="mt-5 text-3xl md:text-4xl font-semibold text-red-100">
+              Ваш аккаунт заблокирован
+            </h1>
+            <p className="mt-4 text-base md:text-lg text-red-50/90">
+              Доступ к сайту полностью отключен. Вы больше не можете пользоваться функциями и переходить по разделам.
             </p>
-          )}
-          {blockedSince && (
-            <p className="mt-2 text-sm text-red-200">
-              Дата блокировки: <span className="font-semibold">{formatUiDateTime(blockedSince)}</span>
-            </p>
-          )}
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            {user?.isTestMode && (
-              <Button
-                variant="secondary"
-                onClick={() => void handleTestModeUnlock()}
-                disabled={testModeUnlockLoading}
-              >
-                {testModeUnlockLoading ? 'Разблокировка...' : 'Разблокировать тестовый режим'}
-              </Button>
+            {blockedReason && (
+              <p className="mt-4 text-sm text-red-200">
+                Причина: <span className="font-semibold">{blockedReason.replace(/[_-]+/g, ' ')}</span>
+              </p>
             )}
-            <Button onClick={() => void logoutCurrentUser()}>
-              Выйти из аккаунта
-            </Button>
+            {blockedSince && (
+              <p className="mt-2 text-sm text-red-200">
+                Дата блокировки: <span className="font-semibold">{formatUiDateTime(blockedSince)}</span>
+              </p>
+            )}
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              {user?.isTestMode && (
+                <Button
+                  variant="secondary"
+                  onClick={() => void handleTestModeUnlock()}
+                  disabled={testModeUnlockLoading}
+                >
+                  {testModeUnlockLoading ? 'Разблокировка...' : 'Разблокировать тестовый режим'}
+                </Button>
+              )}
+              <Button onClick={() => void logoutCurrentUser()}>
+                Выйти из аккаунта
+              </Button>
+            </div>
+            {user?.isTestMode && testModeUnlockError && (
+              <p className="mt-4 text-sm text-red-200">
+                {testModeUnlockError}
+              </p>
+            )}
           </div>
-          {user?.isTestMode && testModeUnlockError && (
-            <p className="mt-4 text-sm text-red-200">
-              {testModeUnlockError}
-            </p>
-          )}
         </div>
-      </div>
+      </SmoothScrollProvider>
     );
   }
   if (isAdmin) {
     return (
-      <AdminApp
-        path={path}
-        navigate={navigate}
-        apiBase={API_BASE}
-        lang={lang}
-        t={t}
-      />
+      <SmoothScrollProvider>
+        <AdminApp
+          path={path}
+          navigate={navigate}
+          apiBase={API_BASE}
+          lang={lang}
+          t={t}
+        />
+      </SmoothScrollProvider>
     );
   }
   return (
-    <div className="site-shell min-h-screen bg-slate-50 text-slate-900 dark:bg-[#09090b] dark:text-slate-100 font-sans transition-all duration-300 ease-out">
+    <SmoothScrollProvider>
+      <div className="site-shell min-h-screen bg-slate-50 text-slate-900 dark:bg-[#09090b] dark:text-slate-100 font-sans transition-all duration-300 ease-out">
       <nav className="top-nav top-nav--minimal fixed w-full z-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="nav-pill nav-pill--minimal mt-4 rounded-2xl h-16 px-4 flex items-center justify-between border border-white/40 dark:border-white/10 bg-white/70 dark:bg-[#09090b]/70 backdrop-blur-2xl shadow-[0_10px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.35)] transition-all duration-300 ease-out">
@@ -9155,7 +9185,9 @@ console.log(job.status, job.downloadUrl)`}
       />
 
       <main>
-        {isConvert ? (
+        <AnimatePresence mode="wait" initial={false}>
+          <PageTransition key={path} pageKey={path}>
+            {isConvert ? (
           conversionFromSlug && !toolIds.has(conversionFromSlug.id) ? (
             <SeoPage
               slug={convertSlug}
@@ -9256,6 +9288,8 @@ console.log(job.status, job.downloadUrl)`}
         ) : (
           renderHomePage()
         )}
+          </PageTransition>
+        </AnimatePresence>
       </main>
       {showMobileUploadBar && (
         <div className="mobile-upload-bar md:hidden">
@@ -9447,7 +9481,8 @@ console.log(job.status, job.downloadUrl)`}
       )}
 
       <span className="sr-only" data-testid="active-tool">{activeTab}</span>
-    </div>
+      </div>
+    </SmoothScrollProvider>
   );
 }
 

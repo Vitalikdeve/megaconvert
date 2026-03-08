@@ -18,6 +18,13 @@ const formatBytes = (value) => {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 };
 
+const formatHumanSize = (value) => {
+  const size = Number(value || 0);
+  if (!Number.isFinite(size) || size <= 0) return '0 KB';
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(size / 1024).toFixed(1)} KB`;
+};
+
 const toCompressedName = (name, type) => {
   const safe = String(name || 'image')
     .trim()
@@ -48,7 +55,8 @@ export default function ImageCompressorTool() {
   const [sourceUrl, setSourceUrl] = useState('');
   const [compressedFile, setCompressedFile] = useState(null);
   const [compressedUrl, setCompressedUrl] = useState('');
-  const [quality, setQuality] = useState(75);
+  const [quality, setQuality] = useState(0.8);
+  const [draftQuality, setDraftQuality] = useState(0.8);
   const [lastComputedQuality, setLastComputedQuality] = useState(null);
   const [comparePosition, setComparePosition] = useState(50);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -92,10 +100,11 @@ export default function ImageCompressorTool() {
     setCompressedFile(null);
     setCompressedUrl('');
     setLastComputedQuality(null);
-    setQuality(75);
+    setQuality(0.8);
+    setDraftQuality(0.8);
     setComparePosition(50);
     setError('');
-    setStatusText('Двигаете ползунок качества — оценка и превью обновляются');
+    setStatusText('Передвиньте ползунок и отпустите его, чтобы пересчитать сжатие');
   }, [clearCompressedUrl, clearSourceUrl]);
 
   const clearAll = useCallback(() => {
@@ -104,7 +113,8 @@ export default function ImageCompressorTool() {
     setCompressedFile(null);
     setCompressedUrl('');
     setLastComputedQuality(null);
-    setQuality(75);
+    setQuality(0.8);
+    setDraftQuality(0.8);
     setComparePosition(50);
     setIsProcessing(false);
     setError('');
@@ -119,12 +129,12 @@ export default function ImageCompressorTool() {
     setError('');
     setStatusText('Пересчитываем сжатие...');
     try {
-      const maxSizeMb = Math.max(0.05, Number(file.size || 0) / (1024 * 1024));
+      const originalMb = Math.max(0.01, Number(file.size || 0) / (1024 * 1024));
       const resultFile = await imageCompression(file, {
         useWebWorker: true,
         maxIteration: 10,
-        maxSizeMB: maxSizeMb,
-        initialQuality: clamp(targetQuality, 1, 100) / 100,
+        maxSizeMB: Math.max(0.01, originalMb * Math.max(0.1, targetQuality)),
+        initialQuality: clamp(targetQuality, 0.1, 1),
         fileType: String(file.type || '').trim() || undefined
       });
       if (jobId !== jobRef.current) return;
@@ -133,16 +143,14 @@ export default function ImageCompressorTool() {
       compressedUrlRef.current = nextUrl;
       setCompressedFile(resultFile);
       setCompressedUrl(nextUrl);
-      setLastComputedQuality(clamp(targetQuality, 1, 100));
+      setLastComputedQuality(Number(targetQuality.toFixed(2)));
       setStatusText('Превью и размер обновлены');
     } catch {
       if (jobId !== jobRef.current) return;
       setError('Не удалось выполнить сжатие. Попробуйте другой файл.');
       setStatusText('Ошибка сжатия');
     } finally {
-      if (jobId === jobRef.current) {
-        setIsProcessing(false);
-      }
+      if (jobId === jobRef.current) setIsProcessing(false);
     }
   }, [clearCompressedUrl]);
 
@@ -150,11 +158,13 @@ export default function ImageCompressorTool() {
     if (!sourceFile) return;
     const nextJobId = jobRef.current + 1;
     jobRef.current = nextJobId;
-    const timer = window.setTimeout(() => {
-      void runCompressionPreview(sourceFile, quality, nextJobId);
-    }, 180);
-    return () => window.clearTimeout(timer);
+    void runCompressionPreview(sourceFile, quality, nextJobId);
   }, [quality, runCompressionPreview, sourceFile]);
+
+  const commitQuality = useCallback(() => {
+    const normalized = Number(clamp(draftQuality, 0.1, 1).toFixed(2));
+    setQuality(normalized);
+  }, [draftQuality]);
 
   const onDrop = (event) => {
     event.preventDefault();
@@ -165,15 +175,17 @@ export default function ImageCompressorTool() {
 
   const heuristicSize = useMemo(() => {
     if (!sourceFile) return 0;
-    const q = clamp(quality, 1, 100) / 100;
+    const q = clamp(draftQuality, 0.1, 1);
     const ratio = Math.max(0.06, Math.min(1, 0.08 + (0.92 * Math.pow(q, 1.65))));
     return Math.round((sourceFile.size || 0) * ratio);
-  }, [quality, sourceFile]);
+  }, [draftQuality, sourceFile]);
 
   const shownCompressedSize = useMemo(() => {
-    if (compressedFile && lastComputedQuality === quality) return compressedFile.size;
+    if (compressedFile && lastComputedQuality === Number(clamp(draftQuality, 0.1, 1).toFixed(2))) {
+      return compressedFile.size;
+    }
     return heuristicSize;
-  }, [compressedFile, heuristicSize, lastComputedQuality, quality]);
+  }, [compressedFile, draftQuality, heuristicSize, lastComputedQuality]);
 
   const canDownload = Boolean(compressedFile && compressedUrl);
   const outputName = toCompressedName(sourceFile?.name, compressedFile?.type || sourceFile?.type);
@@ -247,18 +259,28 @@ export default function ImageCompressorTool() {
             <div className="mt-3 flex items-center gap-3">
               <input
                 type="range"
-                min={1}
-                max={100}
-                value={quality}
-                onChange={(event) => setQuality(clamp(Number(event.target.value || 75), 1, 100))}
+                min={0.1}
+                max={1}
+                step={0.01}
+                value={draftQuality}
+                onChange={(event) => setDraftQuality(clamp(Number(event.target.value || 0.8), 0.1, 1))}
+                onMouseUp={commitQuality}
+                onTouchEnd={commitQuality}
+                onPointerUp={commitQuality}
+                onKeyUp={commitQuality}
                 className="w-full accent-cyan-600"
               />
-              <div className="w-12 text-right text-sm font-semibold text-slate-800 dark:text-slate-100">{quality}%</div>
+              <div className="w-16 text-right text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {draftQuality.toFixed(2)}
+              </div>
             </div>
             <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-              Оригинал: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatBytes(sourceFile.size)}</span>
-              {' '}→{' '}
-              После сжатия: <span className="font-semibold text-slate-900 dark:text-slate-100">~{formatBytes(shownCompressedSize)}</span>
+              Оригинал: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatHumanSize(sourceFile.size)}</span>
+              {' -> '}
+              Сжатый: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatHumanSize(shownCompressedSize)}</span>
+            </div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Реальное сжатие запускается после отпускания ползунка.
             </div>
           </div>
 
@@ -315,7 +337,7 @@ export default function ImageCompressorTool() {
                 className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/60 dark:border-emerald-300/30 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
               >
                 <Download size={15} />
-                Скачать сжатое
+                Скачать сжатое ({formatBytes(compressedFile?.size || 0)})
               </a>
             )}
           </div>

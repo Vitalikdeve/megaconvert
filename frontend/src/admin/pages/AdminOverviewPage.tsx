@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
   Cpu,
@@ -48,46 +48,46 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'settings', label: 'Настройки', href: '/admin/settings', icon: Settings }
 ];
 
-const METRICS: MetricCardData[] = [
+const INITIAL_METRICS: MetricCardData[] = [
   {
     id: 'conversions',
     title: 'Конверсий сегодня',
-    value: '18 426',
-    note: 'vs вчера: 16 920',
-    trend: '+8.9%',
+    value: '142',
+    note: 'vs вчера: 131',
+    trend: '+8.4%',
     tone: 'positive',
     icon: FileStack
   },
   {
     id: 'worker',
     title: 'Нагрузка на Worker',
-    value: '67%',
-    note: 'P95 latency: 412 ms',
-    trend: 'Стабильно',
+    value: '12%',
+    note: 'P95 latency: 138 ms',
+    trend: 'Оптимально',
     tone: 'neutral',
     icon: Cpu
   },
   {
     id: 'errors',
     title: 'Ошибки',
-    value: '12',
+    value: '2',
     note: 'за последние 24 часа',
-    trend: '-14%',
+    trend: '-60%',
     tone: 'positive',
     icon: TriangleAlert
   },
   {
     id: 'active_users',
     title: 'Активные пользователи',
-    value: '3 082',
+    value: '296',
     note: 'сейчас онлайн',
-    trend: '+4.1%',
+    trend: '+3.3%',
     tone: 'positive',
     icon: Users
   }
 ];
 
-const RECENT_ACTIVITY: ActivityItem[] = [
+const INITIAL_ACTIVITY: ActivityItem[] = [
   { id: '1', action: 'Запущена пакетная конвертация PDF -> DOCX', user: 'admin@megaconvert.ai', time: '2 мин назад', status: 'Успешно' },
   { id: '2', action: 'Обновлены лимиты очереди Worker', user: 'ops@megaconvert.ai', time: '11 мин назад', status: 'Изменено' },
   { id: '3', action: 'Удалены просроченные файлы из хранилища', user: 'system', time: '24 мин назад', status: 'Автоматически' },
@@ -143,6 +143,45 @@ export const AdminOverviewPage = ({ navigate }: OverviewProps) => {
   const { adminUser, logout } = useAdminAuth();
   const adminLabel = String(adminUser?.email || adminUser?.name || 'admin').trim();
   const avatarLetter = (adminLabel[0] || 'A').toUpperCase();
+  const [metrics, setMetrics] = useState<MetricCardData[]>(INITIAL_METRICS);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>(INITIAL_ACTIVITY);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setMetrics((prev) => prev.map((item) => {
+        if (item.id === 'conversions') {
+          const current = Number(item.value.replace(/[^\d]/g, '')) || 142;
+          return { ...item, value: String(current + Math.floor(Math.random() * 3)) };
+        }
+        if (item.id === 'worker') {
+          const next = Math.max(8, Math.min(28, 12 + Math.floor(Math.random() * 7) - 3));
+          return { ...item, value: `${next}%`, note: `P95 latency: ${120 + Math.floor(Math.random() * 40)} ms` };
+        }
+        if (item.id === 'active_users') {
+          const base = Number(item.value.replace(/[^\d]/g, '')) || 296;
+          return { ...item, value: String(Math.max(180, base + Math.floor(Math.random() * 9) - 4)) };
+        }
+        return item;
+      }));
+
+      setRecentActivity((prev) => {
+        const nextItem: ActivityItem = {
+          id: `auto-${Date.now()}`,
+          action: 'Фоновая проверка очередей завершена',
+          user: 'monitoring',
+          time: 'только что',
+          status: 'OK'
+        };
+        return [nextItem, ...prev].slice(0, 6);
+      });
+    }, 9000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const metricsCountLabel = useMemo(
+    () => `${metrics.length} ключевых метрики`,
+    [metrics.length]
+  );
 
   const handleLogout = async () => {
     await logout();
@@ -200,7 +239,7 @@ export const AdminOverviewPage = ({ navigate }: OverviewProps) => {
           </header>
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {METRICS.map((metric) => (
+            {metrics.map((metric) => (
               <MetricCard key={metric.id} metric={metric} />
             ))}
           </section>
@@ -208,7 +247,7 @@ export const AdminOverviewPage = ({ navigate }: OverviewProps) => {
           <section className="rounded-3xl bg-white/80 backdrop-blur-xl border border-white/40 shadow-[0_20px_45px_rgba(15,23,42,0.05)] p-4 sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-semibold text-slate-900">Недавняя активность</h2>
-              <span className="text-xs text-slate-500">Последние 60 минут</span>
+              <span className="text-xs text-slate-500">{metricsCountLabel}</span>
             </div>
 
             <div className="mt-4 overflow-x-auto">
@@ -221,8 +260,8 @@ export const AdminOverviewPage = ({ navigate }: OverviewProps) => {
                     <th className="py-3 font-medium">Статус</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {RECENT_ACTIVITY.map((row) => (
+                <tbody className="divide-y divide-slate-200/60">
+                  {recentActivity.map((row) => (
                     <tr key={row.id}>
                       <td className="py-3.5 pr-4 text-slate-900">{row.action}</td>
                       <td className="py-3.5 pr-4 text-slate-600">{row.user}</td>

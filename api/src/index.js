@@ -12,6 +12,7 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const nacl = require('tweetnacl');
+const { customAlphabet } = require('nanoid');
 const { TOOL_EXT, TOOL_IDS, TOOL_META } = require('../shared/tools');
 
 const envCandidates = [
@@ -474,6 +475,7 @@ const SHARE_EXPIRY_PRESETS = {
 const SHARE_TOKEN_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const SHARE_TOKEN_LENGTH = Math.max(6, Number(process.env.SHARE_TOKEN_LENGTH || 8));
 const SHARE_CLEANUP_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.SHARE_CLEANUP_INTERVAL_MS || 10 * 60 * 1000));
+const createNanoShareId = customAlphabet(SHARE_TOKEN_ALPHABET, SHARE_TOKEN_LENGTH);
 
 const withTimeout = (promise, timeoutMs, timeoutMessage) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
@@ -839,6 +841,14 @@ const batchWatermarkUpload = multer({
       return cb(null, true);
     }
     return cb(new Error('UNSUPPORTED_IMAGE_FORMAT'));
+  }
+});
+
+const shareUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 1,
+    fileSize: MAX_FILE_SIZE
   }
 });
 
@@ -2931,11 +2941,7 @@ function saveShareLinksStore(next) {
 function generateShortShareToken(existing = {}) {
   const occupied = asObject(existing);
   for (let attempt = 0; attempt < 12; attempt += 1) {
-    const bytes = crypto.randomBytes(SHARE_TOKEN_LENGTH);
-    let token = '';
-    for (let i = 0; i < bytes.length; i += 1) {
-      token += SHARE_TOKEN_ALPHABET[bytes[i] % SHARE_TOKEN_ALPHABET.length];
-    }
+    const token = createNanoShareId();
     if (!occupied[token]) return token;
   }
   const fallback = crypto.randomBytes(8).toString('hex').slice(0, SHARE_TOKEN_LENGTH);
@@ -2974,6 +2980,50 @@ function resolveShareStorageKey(item) {
   const explicit = normalizeStorageKey(payload.storage_key || payload.storageKey || '');
   if (explicit) return explicit;
   return extractStorageKeyFromShareUrl(payload.url || payload.file_url || '');
+}
+
+function resolveShareTtlSeconds(payload, fallbackPreset = 'seven_days') {
+  const source = asObject(payload);
+  const preset = String(source.expires_preset || '').trim().toLowerCase();
+  const presetSeconds = Object.prototype.hasOwnProperty.call(SHARE_EXPIRY_PRESETS, preset)
+    ? SHARE_EXPIRY_PRESETS[preset]
+    : null;
+  const explicitSeconds = Number(source.expires_in);
+  const fallbackSeconds = Object.prototype.hasOwnProperty.call(SHARE_EXPIRY_PRESETS, fallbackPreset)
+    ? SHARE_EXPIRY_PRESETS[fallbackPreset]
+    : SHARE_EXPIRY_PRESETS.seven_days;
+  if (Number.isFinite(explicitSeconds) && explicitSeconds >= 0) {
+    return {
+      ttlSeconds: explicitSeconds,
+      preset: preset || (explicitSeconds === 0 ? 'never' : 'custom')
+    };
+  }
+  const ttlSeconds = presetSeconds !== null ? presetSeconds : fallbackSeconds;
+  return {
+    ttlSeconds,
+    preset: preset || fallbackPreset
+  };
+}
+
+async function storeUploadedShareFile(req, file, token) {
+  const safeOriginalName = sanitizeFileName(String(file?.originalname || 'upload.bin'));
+  const parsed = path.parse(safeOriginalName);
+  const ext = String(parsed.ext || '').trim() || '.bin';
+  const baseName = String(parsed.name || 'upload').trim() || 'upload';
+  const dateBucket = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const outputName = `${baseName}-${token}${ext}`;
+  const storageKey = `outputs/share/${dateBucket}/${outputName}`;
+  const buffer = Buffer.isBuffer(file?.buffer) ? file.buffer : Buffer.from(file?.buffer || []);
+  if (!buffer.length) {
+    throw new Error('share_upload_empty_file');
+  }
+  const contentType = String(file?.mimetype || 'application/octet-stream').trim() || 'application/octet-stream';
+  await putObjectBuffer(storageKey, buffer, contentType);
+  const fileUrl = buildDownloadUrl(req, storageKey);
+  if (!fileUrl) {
+    throw new Error('share_upload_url_build_failed');
+  }
+  return { storageKey, fileUrl, safeOriginalName };
 }
 
 function buildExpiredShareTombstone(token, sourceItem, nowMs = Date.now()) {
@@ -6589,42 +6639,99 @@ app.post('/flags/evaluate', (req, res) => {
   return res.json({ ok: true, flags: subset });
 });
 
-app.post('/share', (req, res) => {
-  const payload = asObject(req.body || {});
-  const fileUrl = String(payload.file_url || '').trim();
-  if (!fileUrl) {
-    return res.status(400).json({
-      status: 'error',
-      code: 'INVALID',
-      message: 'file_url is required',
-      requestId: req.requestId
+app.post(
+  '/share',
+  conversionRateLimitMiddleware,
+  (req, res, next) => {
+    shareUpload.single('file')(req, res, (error) => {
+      if (!error) return next();
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json(fileTooLargePayload(req.requestId));
+      }
+      return next(error);
     });
+  },
+  async (req, res) => {
+    const payload = asObject(req.body || {});
+    const shares = asObject(loadShareLinksStore());
+    const token = generateShortShareToken(shares);
+    let fileUrl = String(payload.file_url || '').trim();
+    let storageKey = '';
+
+    try {
+      if (req.file) {
+        const stored = await storeUploadedShareFile(req, req.file, token);
+        fileUrl = stored.fileUrl;
+        storageKey = stored.storageKey;
+      }
+
+      if (!fileUrl) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'INVALID',
+          message: 'file_url or multipart file is required',
+          requestId: req.requestId
+        });
+      }
+
+      if (!storageKey) {
+        storageKey = resolveShareStorageKey({
+          url: fileUrl,
+          storage_key: payload.storage_key || payload.storageKey || ''
+        });
+      }
+
+      if (storageKey) {
+        const exists = await hasStoredObject(storageKey);
+        if (!exists) {
+          return res.status(404).json({
+            status: 'error',
+            code: 'FILE_NOT_FOUND',
+            message: 'File not found',
+            requestId: req.requestId
+          });
+        }
+      }
+
+      const ttlSettings = resolveShareTtlSeconds(payload, req.file ? 'one_day' : 'seven_days');
+      const now = Date.now();
+      const item = {
+        id: token,
+        file_id: payload.file_id ? String(payload.file_id) : null,
+        url: fileUrl,
+        storage_key: storageKey || null,
+        expires_preset: ttlSettings.preset,
+        expires_in: ttlSettings.ttlSeconds,
+        expires_at: ttlSettings.ttlSeconds > 0 ? now + (ttlSettings.ttlSeconds * 1000) : null,
+        created_at: now
+      };
+      shares[token] = item;
+      saveShareLinksStore(shares);
+      const base = getRequestBaseUrl(req);
+      const shareUrl = base ? `${base}/s/${token}` : `/s/${token}`;
+      return res.status(201).json({
+        ok: true,
+        token,
+        share_url: shareUrl,
+        url: item.url,
+        expires_in: item.expires_in,
+        expires_at: item.expires_at
+      });
+    } catch (error) {
+      logError({
+        type: 'share_create_failed',
+        requestId: req.requestId,
+        error: error?.message || 'unknown'
+      });
+      return res.status(500).json({
+        status: 'error',
+        code: 'SHARE_CREATE_FAILED',
+        message: 'Failed to create share link',
+        requestId: req.requestId
+      });
+    }
   }
-  const preset = String(payload.expires_preset || '').trim().toLowerCase();
-  const presetSeconds = Object.prototype.hasOwnProperty.call(SHARE_EXPIRY_PRESETS, preset)
-    ? SHARE_EXPIRY_PRESETS[preset]
-    : null;
-  const explicitSeconds = Number(payload.expires_in);
-  const ttlSeconds = Number.isFinite(explicitSeconds) && explicitSeconds >= 0
-    ? explicitSeconds
-    : (presetSeconds !== null ? presetSeconds : SHARE_EXPIRY_PRESETS.seven_days);
-  const token = crypto.randomBytes(9).toString('hex');
-  const now = Date.now();
-  const storageKey = resolveShareStorageKey({ url: fileUrl });
-  const item = {
-    id: token,
-    file_id: payload.file_id ? String(payload.file_id) : null,
-    url: fileUrl,
-    storage_key: storageKey || null,
-    expires_preset: preset || (ttlSeconds === 0 ? 'never' : 'custom'),
-    expires_in: ttlSeconds,
-    expires_at: ttlSeconds > 0 ? now + (ttlSeconds * 1000) : null,
-    created_at: now
-  };
-  const shares = { ...loadShareLinksStore(), [token]: item };
-  saveShareLinksStore(shares);
-  return res.json({ token, url: item.url, expires_in: item.expires_in, expires_at: item.expires_at });
-});
+);
 
 app.post('/share/24h', async (req, res) => {
   const payload = asObject(req.body || {});

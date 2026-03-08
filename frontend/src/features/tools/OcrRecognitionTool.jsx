@@ -58,11 +58,18 @@ export default function OcrRecognitionTool() {
 
   const fileInputRef = useRef(null);
   const copyResetRef = useRef(null);
+  const workerRef = useRef(null);
+  const workerLangRef = useRef('');
 
   useEffect(() => () => {
     if (copyResetRef.current) {
       clearTimeout(copyResetRef.current);
       copyResetRef.current = null;
+    }
+    if (workerRef.current && typeof workerRef.current.terminate === 'function') {
+      void workerRef.current.terminate().catch(() => {});
+      workerRef.current = null;
+      workerLangRef.current = '';
     }
   }, []);
 
@@ -136,24 +143,42 @@ export default function OcrRecognitionTool() {
 
     try {
       const moduleRef = await import('tesseract.js');
-      const recognize = moduleRef?.recognize || moduleRef?.default?.recognize;
-      if (typeof recognize !== 'function') {
+      const createWorker = moduleRef?.createWorker || moduleRef?.default?.createWorker;
+      if (typeof createWorker !== 'function') {
         throw new Error('OCR-модуль не инициализирован.');
       }
 
-      const result = await recognize(sourceFile, language, {
-        logger: (message) => {
-          if (!message) return;
-          const nextProgress = clampProgress(Math.round(Number(message.progress || 0) * 100));
-          if (nextProgress > 0) {
-            setProgress((prev) => Math.max(prev, nextProgress));
-          }
-          const prettyStatus = prettifyStatus(message.status);
-          if (prettyStatus) {
-            setStatusText(`OCR: ${prettyStatus}`);
-          }
+      const logger = (message) => {
+        if (!message) return;
+        const nextProgress = clampProgress(Math.round(Number(message.progress || 0) * 100));
+        if (nextProgress > 0) {
+          setProgress((prev) => Math.max(prev, nextProgress));
         }
-      });
+        const prettyStatus = prettifyStatus(message.status);
+        if (prettyStatus) {
+          setStatusText(`OCR: ${prettyStatus}`);
+        }
+      };
+
+      if (workerRef.current && workerLangRef.current !== language) {
+        try {
+          await workerRef.current.terminate();
+        } catch {
+          // ignore terminate errors
+        }
+        workerRef.current = null;
+        workerLangRef.current = '';
+      }
+
+      if (!workerRef.current) {
+        setStatusText('Инициализация OCR worker...');
+        setProgress(6);
+        workerRef.current = await createWorker(language, 1, { logger });
+        workerLangRef.current = language;
+      }
+
+      setStatusText('OCR: Распознавание');
+      const result = await workerRef.current.recognize(sourceFile);
 
       const extractedText = String(result?.data?.text || '');
       setRecognizedText(extractedText);

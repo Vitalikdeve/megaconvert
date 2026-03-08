@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import JSZip from 'jszip';
 import {
   AlertTriangle,
   Archive,
@@ -33,23 +34,49 @@ const isImageFile = (file) => {
   return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.avif'].some((ext) => lowerName.endsWith(ext));
 };
 
-const parseFileNameFromDisposition = (value) => {
-  const source = String(value || '');
-  if (!source) return '';
-  const utf8Match = source.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) {
-    try {
-      return decodeURIComponent(utf8Match[1].replace(/["']/g, ''));
-    } catch {
-      return utf8Match[1].replace(/["']/g, '');
-    }
-  }
-  const plainMatch = source.match(/filename="?([^";]+)"?/i);
-  if (plainMatch?.[1]) return plainMatch[1].trim();
-  return '';
+const getOutputFormat = (type) => {
+  const raw = String(type || '').toLowerCase();
+  if (raw.includes('png')) return { mime: 'image/png', ext: 'png' };
+  if (raw.includes('webp')) return { mime: 'image/webp', ext: 'webp' };
+  return { mime: 'image/jpeg', ext: 'jpg' };
 };
 
-export default function BatchWatermarkTool({ apiBase = '/api' }) {
+const stripFileExtension = (name) => {
+  const safe = String(name || 'image').trim().replace(/[^\w.-]+/g, '-');
+  if (!safe.includes('.')) return safe || 'image';
+  return safe.slice(0, safe.lastIndexOf('.')) || 'image';
+};
+
+const resolveTextPlacement = (position, width, height, padding) => {
+  if (position === 'top-left') return { x: padding, y: padding, align: 'left', baseline: 'top' };
+  if (position === 'top-right') return { x: width - padding, y: padding, align: 'right', baseline: 'top' };
+  if (position === 'bottom-left') return { x: padding, y: height - padding, align: 'left', baseline: 'bottom' };
+  if (position === 'bottom-right') return { x: width - padding, y: height - padding, align: 'right', baseline: 'bottom' };
+  return { x: width / 2, y: height / 2, align: 'center', baseline: 'middle' };
+};
+
+const fileToImage = (file) => new Promise((resolve, reject) => {
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    resolve(image);
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error('image_load_failed'));
+  };
+  image.src = objectUrl;
+});
+
+const canvasToBlob = (canvas, type, quality) => new Promise((resolve, reject) => {
+  canvas.toBlob((blob) => {
+    if (blob) resolve(blob);
+    else reject(new Error('canvas_export_failed'));
+  }, type, quality);
+});
+
+export default function BatchWatermarkTool() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [files, setFiles] = useState([]);
   const [watermarkText, setWatermarkText] = useState('MegaConvert');
@@ -62,22 +89,13 @@ export default function BatchWatermarkTool({ apiBase = '/api' }) {
   const [result, setResult] = useState(null);
 
   const fileInputRef = useRef(null);
-  const progressTimerRef = useRef(null);
   const resultUrlRef = useRef(null);
 
-  const clearProgressTimer = useCallback(() => {
-    if (!progressTimerRef.current) return;
-    window.clearInterval(progressTimerRef.current);
-    progressTimerRef.current = null;
-  }, []);
-
   useEffect(() => () => {
-    clearProgressTimer();
-    if (resultUrlRef.current) {
-      URL.revokeObjectURL(resultUrlRef.current);
-      resultUrlRef.current = null;
-    }
-  }, [clearProgressTimer]);
+    if (!resultUrlRef.current) return;
+    URL.revokeObjectURL(resultUrlRef.current);
+    resultUrlRef.current = null;
+  }, []);
 
   const appendFiles = useCallback((incomingFiles) => {
     const allFiles = Array.from(incomingFiles || []);
@@ -115,7 +133,6 @@ export default function BatchWatermarkTool({ apiBase = '/api' }) {
   const canSubmit = files.length > 0 && String(watermarkText || '').trim().length > 0 && !isBusy;
 
   const clearAll = useCallback(() => {
-    clearProgressTimer();
     if (resultUrlRef.current) {
       URL.revokeObjectURL(resultUrlRef.current);
       resultUrlRef.current = null;
@@ -129,57 +146,77 @@ export default function BatchWatermarkTool({ apiBase = '/api' }) {
     setProgress(0);
     setError('');
     setResult(null);
-  }, [clearProgressTimer]);
-
-  const startProgressAnimation = useCallback(() => {
-    clearProgressTimer();
-    setProgress(4);
-    progressTimerRef.current = window.setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 92) return 92;
-        const delta = Math.max(1, Math.round((100 - prev) * 0.06));
-        return Math.min(92, prev + delta);
-      });
-    }, 260);
-  }, [clearProgressTimer]);
+  }, []);
 
   const onSubmit = useCallback(async () => {
     if (!canSubmit) return;
     setError('');
     setResult(null);
     setStatus('processing');
-    setStatusText('Накладываем watermark и готовим ZIP архив...');
-    startProgressAnimation();
+    setStatusText('Накладываем watermark на изображения...');
+    setProgress(2);
+
     try {
       if (resultUrlRef.current) {
         URL.revokeObjectURL(resultUrlRef.current);
         resultUrlRef.current = null;
       }
-      const form = new FormData();
-      files.forEach((file) => form.append('files', file));
-      form.append('watermarkText', watermarkText.trim());
-      form.append('watermarkColor', watermarkColor);
-      form.append('watermarkPosition', watermarkPosition);
 
-      const response = await fetch(`${apiBase}/tools/batch-watermark`, {
-        method: 'POST',
-        body: form
-      });
+      const zip = new JSZip();
+      const normalizedText = watermarkText.trim().slice(0, 64);
 
-      if (!response.ok) {
-        let details = null;
-        try {
-          details = await response.json();
-        } catch {
-          details = null;
-        }
-        throw new Error(String(details?.message || `batch_watermark_failed_${response.status}`));
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const image = await fileToImage(file);
+        const width = Math.max(1, image.naturalWidth || image.width || 1);
+        const height = Math.max(1, image.naturalHeight || image.height || 1);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d', { alpha: false });
+        if (!context) throw new Error('canvas_context_missing');
+
+        context.drawImage(image, 0, 0, width, height);
+
+        const fontSize = Math.max(12, Math.round(Math.min(width, height) * 0.06));
+        const padding = Math.max(12, Math.round(Math.min(width, height) * 0.04));
+        const placement = resolveTextPlacement(watermarkPosition, width, height, padding);
+
+        context.font = `600 ${fontSize}px "SF Pro Display", "Segoe UI", sans-serif`;
+        context.textAlign = placement.align;
+        context.textBaseline = placement.baseline;
+        context.shadowColor = 'rgba(0,0,0,0.45)';
+        context.shadowBlur = Math.max(1, Math.round(fontSize * 0.24));
+        context.shadowOffsetX = 0;
+        context.shadowOffsetY = Math.max(1, Math.round(fontSize * 0.08));
+        context.fillStyle = watermarkColor;
+        context.globalAlpha = 0.78;
+        context.fillText(normalizedText, placement.x, placement.y);
+        context.globalAlpha = 1;
+        context.shadowColor = 'transparent';
+
+        const output = getOutputFormat(file.type);
+        const processedBlob = await canvasToBlob(
+          canvas,
+          output.mime,
+          output.mime === 'image/jpeg' || output.mime === 'image/webp' ? 0.92 : undefined
+        );
+
+        const outputName = `${stripFileExtension(file.name)}-watermarked.${output.ext}`;
+        zip.file(outputName, processedBlob);
+        setProgress(Math.round(((index + 1) / files.length) * 85));
       }
 
-      const archiveBlob = await response.blob();
-      const disposition = response.headers.get('content-disposition');
-      const defaultName = `megaconvert-watermark-${Date.now()}.zip`;
-      const fileName = parseFileNameFromDisposition(disposition) || defaultName;
+      setStatusText('Упаковываем обработанные изображения в ZIP...');
+      const archiveBlob = await zip.generateAsync(
+        { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 9 } },
+        (meta) => {
+          const zipProgress = Math.max(85, Math.round(85 + ((Number(meta.percent || 0) / 100) * 15)));
+          setProgress(Math.min(99, zipProgress));
+        }
+      );
+
+      const archiveName = `megaconvert-watermark-${Date.now()}.zip`;
       const url = URL.createObjectURL(archiveBlob);
       resultUrlRef.current = url;
 
@@ -187,24 +224,19 @@ export default function BatchWatermarkTool({ apiBase = '/api' }) {
       setStatus('done');
       setStatusText('Архив готов. Можно скачать одним файлом.');
       setResult({
-        fileName,
+        fileName: archiveName,
         size: archiveBlob.size,
         url
       });
-    } catch (requestError) {
+    } catch (processingError) {
       setStatus('error');
       setStatusText('Обработка завершилась с ошибкой');
-      setError(String(requestError?.message || 'Не удалось выполнить пакетную обработку.'));
+      setError(String(processingError?.message || 'Не удалось выполнить пакетную обработку.'));
       setProgress(0);
-    } finally {
-      clearProgressTimer();
     }
   }, [
-    apiBase,
     canSubmit,
-    clearProgressTimer,
     files,
-    startProgressAnimation,
     watermarkColor,
     watermarkPosition,
     watermarkText
@@ -218,7 +250,7 @@ export default function BatchWatermarkTool({ apiBase = '/api' }) {
           Пакетный watermark для изображений
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-3xl">
-          Загрузите до 50 изображений, настройте текст, цвет и позицию. Бэкенд обработает массив файлов и вернет единый ZIP архив.
+          Полностью клиентский pipeline: canvas-наложение watermark и сборка ZIP через JSZip без отправки исходников на сервер.
         </p>
       </div>
 

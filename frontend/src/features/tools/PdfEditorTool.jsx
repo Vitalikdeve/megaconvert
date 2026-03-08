@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PDFDocument } from 'pdf-lib';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
   AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
   Download,
   FileText,
   Loader2,
@@ -11,6 +11,10 @@ import {
   Trash2,
   Upload
 } from 'lucide-react';
+
+if (GlobalWorkerOptions.workerSrc !== pdfWorkerUrl) {
+  GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+}
 
 const formatBytes = (value) => {
   const size = Number(value || 0);
@@ -27,15 +31,38 @@ const ensurePdfFile = (file) => {
   return String(file.name || '').toLowerCase().endsWith('.pdf');
 };
 
-const createSourceId = (file, index) => {
-  const key = `${file.name || 'pdf'}-${file.size || 0}-${file.lastModified || 0}-${index}`;
-  return key.replace(/[^\w.-]+/g, '-');
+const createDocumentId = (file, index) => {
+  const raw = `${file.name || 'pdf'}-${file.size || 0}-${file.lastModified || 0}-${index}`;
+  return raw.replace(/[^\w.-]+/g, '-');
+};
+
+const renderFirstPagePreview = async (bytes) => {
+  const loadingTask = getDocument({ data: bytes });
+  const pdf = await loadingTask.promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 1 });
+  const safeWidth = Math.max(1, viewport.width);
+  const scale = 260 / safeWidth;
+  const scaled = page.getViewport({ scale: Math.max(0.25, Math.min(2.6, scale)) });
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d', { alpha: false });
+  if (!context) throw new Error('canvas_context_missing');
+  canvas.width = Math.max(1, Math.floor(scaled.width));
+  canvas.height = Math.max(1, Math.floor(scaled.height));
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: context, viewport: scaled }).promise;
+  const dataUrl = canvas.toDataURL('image/png');
+  const pageCount = Number(pdf.numPages || 0);
+  if (typeof loadingTask.destroy === 'function') loadingTask.destroy();
+  if (typeof pdf.cleanup === 'function') pdf.cleanup();
+  if (typeof pdf.destroy === 'function') await pdf.destroy();
+  return { dataUrl, pageCount: pageCount > 0 ? pageCount : 1 };
 };
 
 export default function PdfEditorTool() {
   const [isDragOver, setIsDragOver] = useState(false);
-  const [sources, setSources] = useState({});
-  const [pages, setPages] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [statusText, setStatusText] = useState('Загрузите один или несколько PDF');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -44,57 +71,42 @@ export default function PdfEditorTool() {
   const fileInputRef = useRef(null);
   const resultUrlRef = useRef(null);
 
-  const cleanupResultUrl = useCallback(() => {
+  const clearResultLink = useCallback(() => {
     if (!resultUrlRef.current) return;
     URL.revokeObjectURL(resultUrlRef.current);
     resultUrlRef.current = null;
   }, []);
 
   useEffect(() => () => {
-    cleanupResultUrl();
-  }, [cleanupResultUrl]);
+    clearResultLink();
+  }, [clearResultLink]);
 
-  const removePageById = useCallback((pageId) => {
-    setPages((prev) => prev.filter((item) => item.id !== pageId));
+  const removeDocument = useCallback((documentId) => {
+    setDocuments((prev) => prev.filter((item) => item.id !== documentId));
     setError('');
-    setStatusText('Страница удалена из финального PDF');
-  }, []);
-
-  const movePage = useCallback((index, direction) => {
-    setPages((prev) => {
-      const target = index + direction;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = prev.slice();
-      const tmp = next[index];
-      next[index] = next[target];
-      next[target] = tmp;
-      return next;
-    });
-    setError('');
-    setStatusText('Порядок страниц обновлен');
+    setStatusText('Карточка удалена из сборки');
   }, []);
 
   const clearAll = useCallback(() => {
-    setSources({});
-    setPages([]);
+    setDocuments([]);
     setError('');
     setStatusText('Редактор очищен');
-    cleanupResultUrl();
+    clearResultLink();
     setResult(null);
-  }, [cleanupResultUrl]);
+  }, [clearResultLink]);
 
   const appendPdfFiles = useCallback(async (incomingFiles) => {
     const files = Array.from(incomingFiles || []);
     if (!files.length) return;
 
     setError('');
-    setStatusText('Подготавливаем PDF для редактирования...');
-    cleanupResultUrl();
+    setStatusText('Извлекаем первую страницу каждого PDF...');
+    clearResultLink();
     setResult(null);
 
-    const nextSources = {};
-    const nextPages = [];
     const failed = [];
+    const parsed = [];
+    const existingIds = new Set(documents.map((item) => item.id));
 
     for (let i = 0; i < files.length; i += 1) {
       const file = files[i];
@@ -102,50 +114,34 @@ export default function PdfEditorTool() {
         failed.push(`${file.name || `file-${i + 1}`}: неподдерживаемый формат`);
         continue;
       }
-      const sourceId = createSourceId(file, i);
+      const id = createDocumentId(file, i);
+      if (existingIds.has(id)) continue;
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const doc = await PDFDocument.load(bytes, { ignoreEncryption: false });
-        const pageCount = doc.getPageCount();
-        if (!pageCount) {
-          failed.push(`${file.name || `file-${i + 1}`}: пустой PDF`);
-          continue;
-        }
-
-        nextSources[sourceId] = {
-          id: sourceId,
+        const preview = await renderFirstPagePreview(bytes);
+        parsed.push({
+          id,
           fileName: file.name,
+          size: file.size,
           bytes,
-          pageCount
-        };
-
-        for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-          nextPages.push({
-            id: `${sourceId}-${pageIndex + 1}`,
-            sourceId,
-            sourceName: file.name,
-            sourcePageIndex: pageIndex,
-            pageNumber: pageIndex + 1
-          });
-        }
+          pageCount: preview.pageCount,
+          firstPagePreview: preview.dataUrl
+        });
       } catch {
-        failed.push(`${file.name || `file-${i + 1}`}: не удалось прочитать PDF`);
+        failed.push(`${file.name || `file-${i + 1}`}: не удалось извлечь превью`);
       }
     }
 
-    if (Object.keys(nextSources).length > 0) {
-      setSources((prev) => ({ ...prev, ...nextSources }));
-      setPages((prev) => [...prev, ...nextPages]);
-      setStatusText(`Добавлено страниц: ${nextPages.length}`);
+    if (parsed.length) {
+      setDocuments((prev) => [...prev, ...parsed]);
+      setStatusText(`Добавлено PDF: ${parsed.length}`);
     }
 
-    if (failed.length > 0) {
+    if (failed.length) {
       setError(`Некоторые файлы пропущены: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}`);
-      if (!nextPages.length) {
-        setStatusText('Не удалось загрузить PDF');
-      }
+      if (!parsed.length) setStatusText('Не удалось загрузить PDF');
     }
-  }, [cleanupResultUrl]);
+  }, [clearResultLink, documents]);
 
   const onDrop = (event) => {
     event.preventDefault();
@@ -153,57 +149,49 @@ export default function PdfEditorTool() {
     void appendPdfFiles(event.dataTransfer?.files || []);
   };
 
-  const saveNewPdf = useCallback(async () => {
+  const mergePDFs = useCallback(async () => {
     if (isSaving) return;
-    if (!pages.length) {
-      setError('Добавьте хотя бы одну страницу для сохранения PDF.');
+    if (!documents.length) {
+      setError('Добавьте хотя бы один PDF для объединения.');
       return;
     }
+
     setError('');
     setIsSaving(true);
-    setStatusText('Собираем новый PDF...');
-    cleanupResultUrl();
+    setStatusText('Склеиваем PDF...');
+    clearResultLink();
     setResult(null);
 
     try {
       const outputDoc = await PDFDocument.create();
-      const sourceDocCache = new Map();
 
-      for (const page of pages) {
-        const source = sources[page.sourceId];
-        if (!source || !(source.bytes instanceof Uint8Array)) {
-          throw new Error('source_missing');
-        }
-        let sourceDoc = sourceDocCache.get(page.sourceId);
-        if (!sourceDoc) {
-          sourceDoc = await PDFDocument.load(source.bytes, { ignoreEncryption: false });
-          sourceDocCache.set(page.sourceId, sourceDoc);
-        }
-        const [copiedPage] = await outputDoc.copyPages(sourceDoc, [page.sourcePageIndex]);
-        outputDoc.addPage(copiedPage);
+      for (const doc of documents) {
+        const sourceDoc = await PDFDocument.load(doc.bytes, { ignoreEncryption: false });
+        const pageIndices = sourceDoc.getPageIndices();
+        const copiedPages = await outputDoc.copyPages(sourceDoc, pageIndices);
+        copiedPages.forEach((page) => outputDoc.addPage(page));
       }
 
       const outputBytes = await outputDoc.save();
       const blob = new Blob([outputBytes], { type: 'application/pdf' });
-      const objectUrl = URL.createObjectURL(blob);
-      resultUrlRef.current = objectUrl;
-      const outputName = `megaconvert-edited-${Date.now()}.pdf`;
+      const url = URL.createObjectURL(blob);
+      resultUrlRef.current = url;
+      const fileName = `megaconvert-merged-${Date.now()}.pdf`;
 
-      setResult({
-        fileName: outputName,
-        size: blob.size,
-        url: objectUrl
-      });
-      setStatusText('Новый PDF готов к скачиванию');
+      setResult({ fileName, size: blob.size, url });
+      setStatusText('PDF успешно склеен');
     } catch {
-      setError('Не удалось собрать новый PDF. Проверьте исходные файлы и попробуйте снова.');
-      setStatusText('Ошибка сохранения PDF');
+      setError('Не удалось объединить PDF. Проверьте исходные файлы и попробуйте снова.');
+      setStatusText('Ошибка при объединении');
     } finally {
       setIsSaving(false);
     }
-  }, [cleanupResultUrl, isSaving, pages, sources]);
+  }, [clearResultLink, documents, isSaving]);
 
-  const sourceCount = useMemo(() => Object.keys(sources).length, [sources]);
+  const pageTotal = useMemo(
+    () => documents.reduce((sum, item) => sum + Number(item.pageCount || 0), 0),
+    [documents]
+  );
 
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8">
@@ -213,7 +201,7 @@ export default function PdfEditorTool() {
           Визуальный PDF-редактор
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-3xl">
-          Загружайте несколько PDF, удаляйте страницы, меняйте их порядок и сохраняйте новый файл полностью в браузере.
+          Загружайте несколько PDF, смотрите превью первой страницы каждого файла и склеивайте документы в один.
         </p>
       </div>
 
@@ -244,7 +232,7 @@ export default function PdfEditorTool() {
           >
             Добавить PDF
           </button>
-          {(sourceCount > 0 || pages.length > 0) && (
+          {documents.length > 0 && (
             <button
               type="button"
               onClick={clearAll}
@@ -271,7 +259,7 @@ export default function PdfEditorTool() {
       <div className="mt-5 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Источников: {sourceCount} · Страниц в сборке: {pages.length}
+            PDF-файлов: {documents.length} · Страниц всего: {pageTotal}
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400">{statusText}</div>
         </div>
@@ -287,52 +275,41 @@ export default function PdfEditorTool() {
       )}
 
       <div className="mt-6">
-        {pages.length === 0 ? (
+        {documents.length === 0 ? (
           <div className="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/5 p-8 text-center">
             <FileText size={18} className="mx-auto text-slate-400 dark:text-slate-500" />
-            <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Загрузите PDF, чтобы начать редактирование страниц.</div>
+            <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Загрузите PDF, чтобы открыть карточки с превью.</div>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {pages.map((page, index) => (
-              <div
-                key={page.id}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {documents.map((doc, index) => (
+              <article
+                key={doc.id}
                 className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/75 dark:bg-white/5 backdrop-blur-xl p-4 transition-all duration-300 ease-out hover:translate-y-[-1px]"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Страница {index + 1}</div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">PDF {index + 1}</div>
                   <button
                     type="button"
-                    onClick={() => removePageById(page.id)}
+                    onClick={() => removeDocument(doc.id)}
                     className="h-8 w-8 rounded-lg border border-red-200 dark:border-red-300/20 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-300 flex items-center justify-center transition-all duration-300 ease-out hover:scale-[1.04]"
-                    aria-label="Удалить страницу"
+                    aria-label="Удалить карточку"
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{page.sourceName}</div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Исходная страница: {page.pageNumber}</div>
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => movePage(index, -1)}
-                    disabled={index === 0}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02]"
-                  >
-                    <ArrowLeft size={13} />
-                    Влево
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => movePage(index, 1)}
-                    disabled={index === pages.length - 1}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02]"
-                  >
-                    <ArrowRight size={13} />
-                    Вправо
-                  </button>
+                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200/70 dark:border-white/10 bg-white dark:bg-slate-900">
+                  {doc.firstPagePreview ? (
+                    <img src={doc.firstPagePreview} alt={`preview-${doc.fileName}`} className="h-40 w-full object-contain bg-white" />
+                  ) : (
+                    <div className="h-40 w-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-300">Превью недоступно</div>
+                  )}
                 </div>
-              </div>
+                <div className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{doc.fileName}</div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Страниц: {doc.pageCount} · {formatBytes(doc.size)}
+                </div>
+              </article>
             ))}
           </div>
         )}
@@ -341,19 +318,19 @@ export default function PdfEditorTool() {
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <button
           type="button"
-          onClick={() => void saveNewPdf()}
-          disabled={isSaving || pages.length === 0}
+          onClick={() => void mergePDFs()}
+          disabled={isSaving || documents.length === 0}
           className="rounded-2xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02] flex items-center justify-center gap-2"
         >
           {isSaving ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              Собираем PDF...
+              Склеиваем PDF...
             </>
           ) : (
             <>
               <Save size={16} />
-              Сохранить новый PDF
+              Склеить PDF
             </>
           )}
         </button>
