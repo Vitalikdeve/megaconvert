@@ -25,7 +25,8 @@ import {
   signInAnonymously
 } from 'firebase/auth';
 
-import { translations, defaultLang } from './i18n';
+import { translations, defaultLang } from './i18n/index.js';
+import appI18n from './i18n.js';
 import SeoPage from './SeoPage.jsx';
 import { CONVERSIONS, getConversionBySlug } from './seo/conversions';
 import { runConversion, decryptFileGcm } from './conversion';
@@ -59,8 +60,8 @@ import QuickLookModal from './features/preview/QuickLookModal.jsx';
 import GlassToast from './components/GlassToast.jsx';
 import SmoothScrollProvider from './components/SmoothScrollProvider.jsx';
 import PageTransition from './components/PageTransition.jsx';
+import LanguageSwitcher from './components/LanguageSwitcher.jsx';
 import { useTheme } from './theme/ThemeProvider.jsx';
-import AdminApp from './admin/AdminApp.tsx';
 
 // --- Firebase ---
 const firebaseConfig = {
@@ -2446,6 +2447,10 @@ export default function App() {
   }, [clearAssistantTimer]);
 
   useEffect(() => {
+    void appI18n.changeLanguage(lang);
+  }, [lang]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const toolParam = params.get('tool');
     const autoPick = params.get('autopick') === '1';
@@ -2736,6 +2741,7 @@ export default function App() {
 
   const changeLanguage = (code) => {
     setLang(code);
+    void appI18n.changeLanguage(code);
     setIsLangMenuOpen(false);
     updateUserPreferences({ locale: code });
     emitSystemEvent('locale_changed', { locale: code });
@@ -5437,7 +5443,6 @@ export default function App() {
   const isBugBounty = path === '/bug-bounty';
   const isSecurityWhitepaper = path === '/security-whitepaper';
   const isContact = path === '/contact';
-  const isAdmin = path === '/admin' || path.startsWith('/admin/');
   const isWorkspaceV3 = path === '/workspace' || path.startsWith('/workspace/');
   const isAiPage = path === '/ai' || path === '/ai/';
   const isConvertRoot = path === '/convert' || path === '/convert/';
@@ -5449,7 +5454,7 @@ export default function App() {
   );
   const isConvert = (path.startsWith('/convert/') && !isConvertRoot) || isDirectConversionRoute;
   const isShare = path.startsWith('/s/');
-  const isNotFound = !isHome && !isTools && !isLocalConverterTool && !isOcrTool && !isPdfEditorTool && !isImageCompressorTool && !isBatchWatermarkTool && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isAdmin && !isWorkspaceV3 && !isAiPage && !isConvert && !isConvertRoot && !isShare;
+  const isNotFound = !isHome && !isTools && !isLocalConverterTool && !isOcrTool && !isPdfEditorTool && !isImageCompressorTool && !isBatchWatermarkTool && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isWorkspaceV3 && !isAiPage && !isConvert && !isConvertRoot && !isShare;
   const showMobileUploadBar = (isHome || isConvert || isConvertRoot) && !showAuthModal && !showTwofaModal;
   const saveDataMode = typeof navigator !== 'undefined' && navigator.connection?.saveData;
 
@@ -6944,7 +6949,7 @@ export default function App() {
           'Performance Architecture',
           'Integration Architecture',
           'Automation Architecture',
-          'Admin / Control Architecture',
+          'Control Architecture',
           'Deployment Architecture',
           'Resilience Architecture'
         ].map((item) => (
@@ -7449,7 +7454,7 @@ export default function App() {
                     ) : promoHistory.length === 0 ? (
                       <div className="text-sm text-slate-500 mt-3">{t.accountNoPromoHistory}</div>
                     ) : (
-                      <div className="mt-3 overflow-auto">
+                      <div className="mt-3 overflow-x-auto w-full">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-left text-slate-500">
@@ -7899,7 +7904,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="mt-4 overflow-auto">
+                  <div className="mt-4 overflow-x-auto w-full">
                     {accountApiKeys.length === 0 ? (
                       <div className="text-sm text-slate-600">No API keys yet.</div>
                     ) : (
@@ -8096,7 +8101,7 @@ export default function App() {
                       {accountApiWebhookDeliveries.length === 0 ? (
                         <div className="text-sm text-slate-600 mt-2">No deliveries yet.</div>
                       ) : (
-                        <div className="mt-2 overflow-auto">
+                        <div className="mt-2 overflow-x-auto w-full">
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="text-left text-slate-500">
@@ -8759,7 +8764,7 @@ console.log(job.status, job.downloadUrl)`}
   const renderHomePage = () => (
     <>
       <div className="pt-32 pb-24 px-4 relative overflow-hidden page-enter">
-        <div className="ambient-orb orb-a absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-blue-500/30 via-violet-500/20 to-slate-900/10 rounded-full blur-3xl opacity-70" />
+        <div className="ambient-orb orb-a absolute -top-40 -right-40 w-[70vw] h-[70vw] max-w-96 max-h-96 bg-gradient-to-br from-blue-500/30 via-violet-500/20 to-slate-900/10 rounded-full blur-3xl opacity-70" />
         <div className="ambient-orb orb-b absolute -bottom-32 -left-24 w-[32rem] h-[32rem] bg-gradient-to-br from-slate-900/40 via-blue-500/20 to-violet-500/10 rounded-full blur-3xl opacity-70" />
         <div className="max-w-5xl mx-auto relative">
           <div className="hero-copy reveal relative z-10 text-slate-100 text-center" data-reveal>
@@ -9023,22 +9028,9 @@ console.log(job.status, job.downloadUrl)`}
       </SmoothScrollProvider>
     );
   }
-  if (isAdmin) {
-    return (
-      <SmoothScrollProvider>
-        <AdminApp
-          path={path}
-          navigate={navigate}
-          apiBase={API_BASE}
-          lang={lang}
-          t={t}
-        />
-      </SmoothScrollProvider>
-    );
-  }
   return (
     <SmoothScrollProvider>
-      <div className="site-shell min-h-screen bg-slate-50 text-slate-900 dark:bg-[#09090b] dark:text-slate-100 font-sans transition-all duration-300 ease-out">
+      <div className="site-shell min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-slate-50 text-slate-900 dark:bg-[#09090b] dark:text-slate-100 font-sans transition-all duration-300 ease-out">
       <nav className="top-nav top-nav--minimal fixed w-full z-50">
         <div className="max-w-7xl mx-auto px-4">
           <div className="nav-pill nav-pill--minimal mt-4 rounded-2xl h-16 px-4 flex items-center justify-between border border-white/40 dark:border-white/10 bg-white/70 dark:bg-[#09090b]/70 backdrop-blur-2xl shadow-[0_10px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.35)] transition-all duration-300 ease-out">
@@ -9073,20 +9065,7 @@ console.log(job.status, job.downloadUrl)`}
               >
                 {resolvedTheme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </button>
-              <div className="relative hidden lg:block" ref={langMenuRef}>
-                <button onClick={() => setIsLangMenuOpen(!isLangMenuOpen)} className="h-10 px-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]">
-                  {LANGUAGES.find((l) => l.code === lang)?.flag} <ChevronDown size={14} />
-                </button>
-                {isLangMenuOpen && (
-                  <div className="absolute top-full right-0 mt-2 w-44 bg-white/90 dark:bg-slate-900/95 shadow-xl rounded-2xl border border-slate-200 dark:border-white/10 py-2 backdrop-blur-2xl">
-                    {LANGUAGES.map((l) => (
-                      <button key={l.code} onClick={() => changeLanguage(l.code)} className="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-white/5 flex gap-2 text-slate-700 dark:text-slate-200 text-sm">
-                        {l.flag} {l.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <LanguageSwitcher value={lang} onChange={changeLanguage} className="hidden lg:flex" />
               {!user ? (
                 <Button onClick={() => navigate('/login')}>{t.navLogin}</Button>
               ) : (
@@ -9159,12 +9138,8 @@ console.log(job.status, job.downloadUrl)`}
               </div>
               <div className="mt-4 border-t border-slate-200 dark:border-white/10 pt-4">
                 <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t.navLanguage}</div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {LANGUAGES.map((item) => (
-                    <button key={item.code} onClick={() => changeLanguage(item.code)} className="px-3 py-1.5 rounded-full border border-slate-200 dark:border-white/10 text-xs font-semibold bg-white/90 dark:bg-white/5">
-                      {item.flag} {item.name}
-                    </button>
-                  ))}
+                <div className="mt-2">
+                  <LanguageSwitcher value={lang} onChange={changeLanguage} className="w-full sm:w-auto" />
                 </div>
               </div>
             </div>
@@ -9485,4 +9460,5 @@ console.log(job.status, job.downloadUrl)`}
     </SmoothScrollProvider>
   );
 }
+
 

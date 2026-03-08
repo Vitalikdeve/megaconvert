@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { ThemeProvider } from './theme/ThemeProvider.jsx'
+import './i18n.js'
 import './design-tokens.css'
 import './index.css'
 
