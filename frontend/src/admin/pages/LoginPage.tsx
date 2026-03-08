@@ -9,9 +9,6 @@ export const LoginPage = ({ navigate }) => {
   const { t } = useAdminI18n();
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState('');
-  const isLocalDevHost = typeof window !== 'undefined'
-    && ['localhost', '127.0.0.1', '::1'].includes(String(window.location.hostname || '').toLowerCase());
-
   useEffect(() => {
     void refreshMe();
   }, [refreshMe]);
@@ -47,19 +44,17 @@ export const LoginPage = ({ navigate }) => {
             required
           />
         </div>
-        {isLocalDevHost && (
-          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            <div className="font-medium">Local dev credentials are enabled.</div>
-            <div className="mt-1">Password: <span className="font-mono">{LOCAL_DEV_ADMIN_PASSWORD}</span></div>
-            <button
-              type="button"
-              onClick={() => setPassword(LOCAL_DEV_ADMIN_PASSWORD)}
-              className="mt-2 rounded-lg bg-amber-100 px-2.5 py-1 font-medium hover:bg-amber-200"
-            >
-              Use local password
-            </button>
-          </div>
-        )}
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <div className="font-medium">Встроенный пароль меню включен.</div>
+          <div className="mt-1">Password: <span className="font-mono">{LOCAL_DEV_ADMIN_PASSWORD}</span></div>
+          <button
+            type="button"
+            onClick={() => setPassword(LOCAL_DEV_ADMIN_PASSWORD)}
+            className="mt-2 rounded-lg bg-amber-100 px-2.5 py-1 font-medium hover:bg-amber-200"
+          >
+            Подставить пароль
+          </button>
+        </div>
         {(localError || error) && (
           <div className="mt-3 text-sm text-red-600">{localError || error}</div>
         )}
