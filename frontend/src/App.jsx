@@ -50,6 +50,10 @@ import DynamicBatchStack from './features/batch/DynamicBatchStack.jsx';
 import NextActions from './features/recommendations/NextActions.jsx';
 import AiStudioPage from './features/ai/AiStudioPage.jsx';
 import WorkspaceV3Page from './features/v3/WorkspaceV3Page.jsx';
+import LoginPage from './features/auth/pages/LoginPage.jsx';
+import RegisterPage from './features/auth/pages/RegisterPage.jsx';
+import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage.jsx';
+import ResetPasswordPage from './features/auth/pages/ResetPasswordPage.jsx';
 import LocalMediaConverterTool from './features/tools/LocalMediaConverterTool.jsx';
 import OcrRecognitionTool from './features/tools/OcrRecognitionTool.jsx';
 import PdfEditorTool from './features/tools/PdfEditorTool.jsx';
@@ -2628,33 +2632,53 @@ export default function App() {
   }, [lastJobId, status]);
 
   useEffect(() => {
-    const elements = Array.from(document.querySelectorAll('[data-reveal]'));
-    if (!elements.length) return undefined;
-
-    elements.forEach((el) => el.classList.remove('is-visible'));
-
     let observer;
-    if ('IntersectionObserver' in window) {
-      observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) entry.target.classList.add('is-visible');
-        });
-      }, { threshold: 0.15 });
-      elements.forEach((el) => observer.observe(el));
-    } else {
-      elements.forEach((el) => el.classList.add('is-visible'));
-    }
+    let fallbackTimer = 0;
+    let initialized = false;
+    const retryTimers = [];
 
-    const fallbackTimer = window.setTimeout(() => {
-      elements.forEach((el) => {
-        const rect = el.getBoundingClientRect();
-        if (rect.top < window.innerHeight * 0.9) el.classList.add('is-visible');
+    const setupReveal = () => {
+      if (initialized) return true;
+      const elements = Array.from(document.querySelectorAll('[data-reveal]'));
+      if (!elements.length) return false;
+
+      initialized = true;
+      elements.forEach((el) => el.classList.remove('is-visible'));
+
+      if ('IntersectionObserver' in window) {
+        observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) entry.target.classList.add('is-visible');
+          });
+        }, { threshold: 0.15 });
+        elements.forEach((el) => observer.observe(el));
+      } else {
+        elements.forEach((el) => el.classList.add('is-visible'));
+      }
+
+      fallbackTimer = window.setTimeout(() => {
+        elements.forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          if (rect.top < window.innerHeight * 0.9) el.classList.add('is-visible');
+        });
+      }, 80);
+      return true;
+    };
+
+    if (!setupReveal()) {
+      // AnimatePresence mode="wait" mounts the next page later; retry reveal binding after transition.
+      [180, 460, 760].forEach((delay) => {
+        const id = window.setTimeout(() => {
+          setupReveal();
+        }, delay);
+        retryTimers.push(id);
       });
-    }, 80);
+    }
 
     return () => {
       if (observer) observer.disconnect();
-      window.clearTimeout(fallbackTimer);
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      retryTimers.forEach((id) => window.clearTimeout(id));
     };
   }, [path]);
 
@@ -2667,7 +2691,6 @@ export default function App() {
 
   useEffect(() => {
     track('page_view', { path });
-    if (path === '/login') setShowAuthModal(true);
     if (path === '/settings/billing') setAccountSection('billing');
     setIsMobileMenuOpen(false);
     setIsLangMenuOpen(false);
@@ -5411,6 +5434,9 @@ export default function App() {
   const isChangelog = path === '/changelog';
   const isArchitecture = path === '/architecture';
   const isLogin = path === '/login';
+  const isRegister = path === '/register';
+  const isForgotPassword = path === '/forgot-password';
+  const isResetPassword = path === '/reset-password';
   const isDashboard = path === '/dashboard';
   const isAccount = path === '/account' || path === '/settings/billing';
   const isBlog = path === '/blog' || path === '/blog/';
@@ -5454,7 +5480,7 @@ export default function App() {
   );
   const isConvert = (path.startsWith('/convert/') && !isConvertRoot) || isDirectConversionRoute;
   const isShare = path.startsWith('/s/');
-  const isNotFound = !isHome && !isTools && !isLocalConverterTool && !isOcrTool && !isPdfEditorTool && !isImageCompressorTool && !isBatchWatermarkTool && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isWorkspaceV3 && !isAiPage && !isConvert && !isConvertRoot && !isShare;
+  const isNotFound = !isHome && !isTools && !isLocalConverterTool && !isOcrTool && !isPdfEditorTool && !isImageCompressorTool && !isBatchWatermarkTool && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isRegister && !isForgotPassword && !isResetPassword && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isWorkspaceV3 && !isAiPage && !isConvert && !isConvertRoot && !isShare;
   const showMobileUploadBar = (isHome || isConvert || isConvertRoot) && !showAuthModal && !showTwofaModal;
   const saveDataMode = typeof navigator !== 'undefined' && navigator.connection?.saveData;
 
@@ -5591,88 +5617,98 @@ export default function App() {
 
 
 
-  const renderPricingPage = () => (
-    <Page
-      title={t.pagePricingTitle}
-      subtitle={t.pagePricingSubtitle}
-      actions={(
-        <>
-          <Button onClick={() => navigate('/')}>{t.btnStartConverting}</Button>
-          <Button variant="secondary" onClick={() => navigate('/contact')}>{t.btnTalkToSales}</Button>
-        </>
-      )}
-    >
-      <div className="grid md:grid-cols-3 gap-6">
-        <PageCard>
-          <div className="text-sm uppercase tracking-widest text-slate-500">{t.planFreeName}</div>
-          <div className="text-3xl font-bold mt-2">{t.planFreePrice}</div>
-          <div className="text-slate-500 mt-2">{t.planFreeDesc}</div>
-          <div className="mt-4 space-y-2 text-sm text-slate-600">
-            <div>{t.planFreeFeature1}</div>
-            <div>{t.planFreeFeature2}</div>
-            <div>{t.planFreeFeature3}</div>
-            <div>{t.planFreeFeature4}</div>
-          </div>
-          <Button className="mt-6 w-full" onClick={() => navigate('/')}>{t.btnGetStarted}</Button>
-        </PageCard>
-        <PageCard className="border-2 border-blue-500">
-          <div className="text-sm uppercase tracking-widest text-blue-600">{t.planProName}</div>
-          <div className="text-3xl font-bold mt-2">{t.planProPrice}</div>
-          <div className="text-slate-500 mt-2">{t.planProDesc}</div>
-          <div className="mt-4 space-y-2 text-sm text-slate-600">
-            <div>{t.planProFeature1}</div>
-            <div>{t.planProFeature2}</div>
-            <div>{t.planProFeature3}</div>
-            <div>{t.planProFeature4}</div>
-          </div>
-          <Button className="mt-6 w-full" variant="primary" onClick={() => navigate('/account')}>
-            {t.btnUpgradePro}
-          </Button>
-        </PageCard>
-        <PageCard>
-          <div className="text-sm uppercase tracking-widest text-slate-500">{t.planTeamName}</div>
-          <div className="text-3xl font-bold mt-2">{t.planTeamPrice}</div>
-          <div className="text-slate-500 mt-2">{t.planTeamDesc}</div>
-          <div className="mt-4 space-y-2 text-sm text-slate-600">
-            <div>{t.planTeamFeature1}</div>
-            <div>{t.planTeamFeature2}</div>
-            <div>{t.planTeamFeature3}</div>
-            <div>{t.planTeamFeature4}</div>
-          </div>
-          <Button className="mt-6 w-full" variant="secondary" onClick={() => navigate('/contact')}>{t.btnContactSales}</Button>
-        </PageCard>
-      </div>
+  const renderPricingPage = () => {
+    const comingSoonLabel = t.accountApiComingSoonTitle || 'Coming Soon';
 
-      <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
-        {t.pricingIndividualPromoOnlyNote}
-      </div>
-
-      <div className="mt-10 bg-white rounded-2xl border border-slate-200 overflow-hidden text-slate-900">
-        <div className="grid grid-cols-4 gap-4 text-xs uppercase tracking-widest text-slate-500 px-6 py-3 border-b">
-          <div>{t.pricingTableFeature}</div>
-          <div>{t.planFreeName}</div>
-          <div>{t.planProName}</div>
-          <div>{t.planTeamName}</div>
-        </div>
-        <div className="divide-y text-sm">
-          {[
-            [t.pricingRowMaxFile, t.pricingValueFreeMax, t.pricingValueProMax, t.pricingValueTeamMax],
-            [t.pricingRowSpeed, t.pricingValueStandard, t.pricingValuePriority, t.pricingValueDedicated],
-            [t.pricingRowBatch, t.commonYes, t.commonYes, t.commonYes],
-            [t.pricingRowApi, t.pricingValuePlanned, t.pricingValuePlanned, t.pricingValueIncluded],
-            [t.pricingRowSupport, t.pricingValueCommunity, t.pricingValuePriority, t.pricingValueSla]
-          ].map((row) => (
-            <div key={row[0]} className="grid grid-cols-4 gap-4 px-6 py-4">
-              <div className="font-medium text-slate-800">{row[0]}</div>
-              <div className="text-slate-600">{row[1]}</div>
-              <div className="text-slate-600">{row[2]}</div>
-              <div className="text-slate-600">{row[3]}</div>
+    return (
+      <Page
+        title={t.pagePricingTitle}
+        subtitle={t.pagePricingSubtitle}
+        actions={(
+          <>
+            <Button onClick={() => navigate('/')}>{t.btnStartConverting}</Button>
+            <Button variant="secondary" onClick={() => navigate('/contact')}>{t.btnTalkToSales}</Button>
+          </>
+        )}
+      >
+        <div className="grid md:grid-cols-3 gap-6">
+          <PageCard>
+            <div className="text-sm uppercase tracking-widest text-slate-500">{t.planFreeName}</div>
+            <div className="text-3xl font-bold mt-2">{t.planFreePrice}</div>
+            <div className="text-slate-500 mt-2">{t.planFreeDesc}</div>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <div>{t.planFreeFeature1}</div>
+              <div>{t.planFreeFeature2}</div>
+              <div>{t.planFreeFeature3}</div>
+              <div>{t.planFreeFeature4}</div>
             </div>
-          ))}
+            <Button className="mt-6 w-full" onClick={() => navigate('/')}>{t.btnGetStarted}</Button>
+          </PageCard>
+          <PageCard className="border-2 border-blue-500">
+            <div className="text-sm uppercase tracking-widest text-blue-600">{t.planProName}</div>
+            <div className="text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+              {comingSoonLabel}
+            </div>
+            <div className="text-slate-500 mt-2">{t.planProDesc}</div>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <div>{t.planProFeature1}</div>
+              <div>{t.planProFeature2}</div>
+              <div>{t.planProFeature3}</div>
+              <div>{t.planProFeature4}</div>
+            </div>
+            <Button className="mt-6 w-full opacity-50" variant="primary" disabled onClick={() => navigate('/account')}>
+              {comingSoonLabel}
+            </Button>
+          </PageCard>
+          <PageCard>
+            <div className="text-sm uppercase tracking-widest text-slate-500">{t.planTeamName}</div>
+            <div className="text-3xl font-bold mt-2 bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+              {comingSoonLabel}
+            </div>
+            <div className="text-slate-500 mt-2">{t.planTeamDesc}</div>
+            <div className="mt-4 space-y-2 text-sm text-slate-600">
+              <div>{t.planTeamFeature1}</div>
+              <div>{t.planTeamFeature2}</div>
+              <div>{t.planTeamFeature3}</div>
+              <div>{t.planTeamFeature4}</div>
+            </div>
+            <Button className="mt-6 w-full opacity-50" variant="secondary" disabled onClick={() => navigate('/contact')}>
+              {comingSoonLabel}
+            </Button>
+          </PageCard>
         </div>
-      </div>
-    </Page>
-  );
+
+        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+          {t.pricingIndividualPromoOnlyNote}
+        </div>
+
+        <div className="mt-10 bg-white rounded-2xl border border-slate-200 overflow-hidden text-slate-900">
+          <div className="grid grid-cols-4 gap-4 text-xs uppercase tracking-widest text-slate-500 px-6 py-3 border-b">
+            <div>{t.pricingTableFeature}</div>
+            <div>{t.planFreeName}</div>
+            <div>{t.planProName}</div>
+            <div>{t.planTeamName}</div>
+          </div>
+          <div className="divide-y text-sm">
+            {[
+              [t.pricingRowMaxFile, t.pricingValueFreeMax, t.pricingValueProMax, t.pricingValueTeamMax],
+              [t.pricingRowSpeed, t.pricingValueStandard, t.pricingValuePriority, t.pricingValueDedicated],
+              [t.pricingRowBatch, t.commonYes, t.commonYes, t.commonYes],
+              [t.pricingRowApi, t.pricingValuePlanned, t.pricingValuePlanned, t.pricingValueIncluded],
+              [t.pricingRowSupport, t.pricingValueCommunity, t.pricingValuePriority, t.pricingValueSla]
+            ].map((row) => (
+              <div key={row[0]} className="grid grid-cols-4 gap-4 px-6 py-4">
+                <div className="font-medium text-slate-800">{row[0]}</div>
+                <div className="text-slate-600">{row[1]}</div>
+                <div className="text-slate-600">{row[2]}</div>
+                <div className="text-slate-600">{row[3]}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Page>
+    );
+  };
   const renderConverterPanel = ({ compact = false } = {}) => {
     const steps = [t.stepUpload, t.stepSettings, t.stepConvert, t.stepProgress, t.stepResult];
     const stepIndex = status === 'processing' ? 3 : status === 'done' ? 4 : status === 'error' ? 3 : file ? 1 : 0;
@@ -6962,27 +6998,19 @@ export default function App() {
   );
 
   const renderLoginPage = () => (
-    <Page
-      title={t.pageLoginTitle}
-      subtitle={t.pageLoginSubtitle}
-      actions={(
-        <>
-          <Button onClick={() => setShowAuthModal(true)}>{t.btnOpenSignIn}</Button>
-          <Button variant="secondary" onClick={handleGuest}>{t.btnContinueGuest}</Button>
-        </>
-      )}
-    >
-      <div className="grid md:grid-cols-2 gap-6">
-        <PageCard>
-          <div className="font-semibold mb-2">{t.loginWhyTitle}</div>
-          <div className="text-sm text-slate-600">{t.loginWhyDesc}</div>
-        </PageCard>
-        <PageCard>
-          <div className="font-semibold mb-2">{t.loginSecurityTitle}</div>
-          <div className="text-sm text-slate-600">{t.loginSecurityDesc}</div>
-        </PageCard>
-      </div>
-    </Page>
+    <LoginPage apiBase={API_BASE} onNavigate={navigate} />
+  );
+
+  const renderRegisterPage = () => (
+    <RegisterPage apiBase={API_BASE} onNavigate={navigate} />
+  );
+
+  const renderForgotPasswordPage = () => (
+    <ForgotPasswordPage apiBase={API_BASE} onNavigate={navigate} />
+  );
+
+  const renderResetPasswordPage = () => (
+    <ResetPasswordPage apiBase={API_BASE} onNavigate={navigate} />
   );
 
   const renderDashboardPage = () => {
@@ -9214,6 +9242,12 @@ console.log(job.status, job.downloadUrl)`}
           renderArchitecturePage()
         ) : isLogin ? (
           renderLoginPage()
+        ) : isRegister ? (
+          renderRegisterPage()
+        ) : isForgotPassword ? (
+          renderForgotPasswordPage()
+        ) : isResetPassword ? (
+          renderResetPasswordPage()
         ) : isDashboard ? (
           renderDashboardPage()
         ) : isAccount ? (

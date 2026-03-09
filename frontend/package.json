@@ -18,6 +18,7 @@
     "verify:smoke": "npm run prerender && npm run lint && npm run check:interactions && npm run test:seo && npm run test:buttons"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "^1.1.4",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@studio-freight/lenis": "^1.0.42",

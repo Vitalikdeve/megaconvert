@@ -9,6 +9,7 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const { TOOL_EXT, TOOL_IDS } = require('../../shared/tools');
+const { createAuthRouter } = require('./auth.controller');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const storageMode = (process.env.STORAGE_MODE || 's3').toLowerCase();
@@ -45,6 +46,8 @@ app.use((req, res, next) => {
   });
   next();
 });
+
+app.use('/api/auth', createAuthRouter());
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1024 * 1024 * 1024 } });
 
