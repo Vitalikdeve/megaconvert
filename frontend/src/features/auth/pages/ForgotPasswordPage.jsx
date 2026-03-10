@@ -49,6 +49,7 @@ export default function ForgotPasswordPage({ apiBase, onNavigate }) {
       const response = await fetch(buildAuthEndpoint(apiBase, 'forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email: normalizedEmail })
       });
       const payload = await parsePayload(response);

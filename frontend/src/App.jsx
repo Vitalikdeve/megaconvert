@@ -139,6 +139,9 @@ const TOP_TOOL_IDS = ['pdf-word', 'mp4-mp3', 'heic-jpg', 'jpg-pdf', 'pdf-png-hir
 const TOOL_OPEN_COUNTS_STORAGE_KEY = 'tool_open_counts';
 const CLIENT_SESSION_ID_STORAGE_KEY = 'mc_client_session_id';
 const TEST_MODE_SESSION_STORAGE_KEY = 'mc_test_mode_session';
+const AUTH_TOKEN_STORAGE_KEY = 'mc_auth_token';
+const AUTH_EMAIL_STORAGE_KEY = 'mc_auth_email';
+const AUTH_USER_STORAGE_KEY = 'mc_auth_user';
 const MAX_BATCH_FILES_DEFAULT = 10;
 const OAUTH_PROVIDER_IDS = {
   google: 'google.com',
@@ -428,6 +431,78 @@ const clearStoredTestModeUser = () => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(TEST_MODE_SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+};
+
+const normalizeEmailAuthUser = (value) => {
+  const user = value && typeof value === 'object' ? value : null;
+  const email = String(user?.email || '').trim().toLowerCase();
+  const uid = String(user?.uid || user?.id || email).trim();
+  if (!uid) return null;
+  const name = String(user?.name || user?.display_name || (email ? email.split('@')[0] : 'User')).trim() || 'User';
+  return {
+    uid,
+    name,
+    email: email || null,
+    photo: null,
+    isAnon: false,
+    isTestMode: false,
+    provider_data: [
+      {
+        provider_id: 'email_password',
+        uid,
+        email: email || null
+      }
+    ]
+  };
+};
+
+const readStoredEmailAuthSession = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = String(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '').trim();
+    if (!token) return null;
+    const storedEmail = String(localStorage.getItem(AUTH_EMAIL_STORAGE_KEY) || '').trim().toLowerCase();
+    const rawUser = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    let parsedUser = null;
+    if (rawUser) {
+      try {
+        parsedUser = JSON.parse(rawUser);
+      } catch {
+        parsedUser = null;
+      }
+    }
+    const normalizedUser = normalizeEmailAuthUser({
+      ...(parsedUser && typeof parsedUser === 'object' ? parsedUser : {}),
+      email: storedEmail || parsedUser?.email
+    });
+    if (!normalizedUser) return null;
+    return { token, user: normalizedUser };
+  } catch {
+    return null;
+  }
+};
+
+const persistEmailAuthSession = ({ token, email, user } = {}) => {
+  if (typeof window === 'undefined') return;
+  const normalizedUser = normalizeEmailAuthUser(user || { email });
+  try {
+    if (token) localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, String(token).trim());
+    if (normalizedUser?.email) localStorage.setItem(AUTH_EMAIL_STORAGE_KEY, normalizedUser.email);
+    if (normalizedUser) localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(normalizedUser));
+  } catch {
+    // Ignore storage write failures.
+  }
+};
+
+const clearStoredEmailAuthSession = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(AUTH_EMAIL_STORAGE_KEY);
+    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
   } catch {
     // Ignore storage cleanup failures.
   }
@@ -2480,6 +2555,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         clearStoredTestModeUser();
+        clearStoredEmailAuthSession();
         setUser({
           name: u.displayName || u.email?.split('@')[0] || defaultUserName,
           email: u.email,
@@ -2507,6 +2583,7 @@ export default function App() {
             const r = await fetch(`${API_BASE}/auth/2fa/verify-token`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify({ email: u.email, token })
             });
             const j = await r.json();
@@ -2525,8 +2602,15 @@ export default function App() {
           setIsPro(true);
           setShowTwofaModal(false);
         } else {
-          setUser(null);
-          setIsPro(false);
+          const emailSession = readStoredEmailAuthSession();
+          if (emailSession?.user) {
+            setUser(emailSession.user);
+            setIsPro(false);
+            setShowTwofaModal(false);
+          } else {
+            setUser(null);
+            setIsPro(false);
+          }
         }
       }
     });
@@ -2777,6 +2861,13 @@ export default function App() {
 
   const buildAuthHeaders = useCallback(() => {
     const headers = {};
+    let token = '';
+    try {
+      token = String(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '').trim();
+    } catch {
+      token = '';
+    }
+    if (token) headers.Authorization = `Bearer ${token}`;
     if (user?.uid) headers['x-user-id'] = user.uid;
     if (clientSessionId) headers['x-session-id'] = clientSessionId;
     return headers;
@@ -2788,6 +2879,22 @@ export default function App() {
     } catch {
       return null;
     }
+  }, []);
+
+  const handleEmailAuthSuccess = useCallback((session) => {
+    const payload = session && typeof session === 'object' ? session : {};
+    const normalizedUser = normalizeEmailAuthUser(payload.user || { email: payload.email });
+    if (!normalizedUser) return;
+    persistEmailAuthSession({
+      token: payload.token,
+      email: normalizedUser.email,
+      user: normalizedUser
+    });
+    clearStoredTestModeUser();
+    setUser(normalizedUser);
+    setIsPro(false);
+    setShowTwofaModal(false);
+    setShowAuthModal(false);
   }, []);
 
   const createPipelineDraftNode = useCallback((partial = {}, index = 0) => {
@@ -2833,6 +2940,7 @@ export default function App() {
       void error;
     }
     clearStoredTestModeUser();
+    clearStoredEmailAuthSession();
     setShowTwofaModal(false);
     setUser(null);
     setIsPro(false);
@@ -4428,6 +4536,7 @@ export default function App() {
       const response = await fetch(`${API_BASE}/auth/test-mode/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           password: pass,
           login: String(email || '').trim() || 'tester'
@@ -4466,6 +4575,7 @@ export default function App() {
           'Content-Type': 'application/json',
           ...buildAuthHeaders()
         },
+        credentials: 'include',
         body: JSON.stringify({
           user_id: user.uid
         })
@@ -4524,6 +4634,7 @@ export default function App() {
       const r = await fetch(`${API_BASE}/auth/2fa/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email: user.email })
       });
       const j = await r.json();
@@ -4543,6 +4654,7 @@ export default function App() {
       const r = await fetch(`${API_BASE}/auth/2fa/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email: user.email, code: twofaCode })
       });
       const j = await r.json();
@@ -6998,11 +7110,11 @@ export default function App() {
   );
 
   const renderLoginPage = () => (
-    <LoginPage apiBase={API_BASE} onNavigate={navigate} />
+    <LoginPage apiBase={API_BASE} onNavigate={navigate} onAuthSuccess={handleEmailAuthSuccess} />
   );
 
   const renderRegisterPage = () => (
-    <RegisterPage apiBase={API_BASE} onNavigate={navigate} />
+    <RegisterPage apiBase={API_BASE} onNavigate={navigate} onAuthSuccess={handleEmailAuthSuccess} />
   );
 
   const renderForgotPasswordPage = () => (

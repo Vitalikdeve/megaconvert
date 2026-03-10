@@ -7,6 +7,7 @@ const nodemailer = require('nodemailer');
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const ACCESS_TOKEN_TTL = '1h';
 const RESET_TOKEN_TTL = '1h';
+const ACCESS_TOKEN_MAX_AGE_MS = 60 * 60 * 1000;
 const RESET_LINK_BASE = (process.env.APP_BASE_URL || 'https://megaconvert.com').replace(/\/+$/g, '');
 const SESSION_JWT_SECRET = process.env.JWT_SESSION_SECRET || process.env.JWT_SECRET || 'dev-session-secret-change-me';
 const RESET_JWT_SECRET = process.env.JWT_RESET_SECRET || process.env.JWT_SECRET || 'dev-reset-secret-change-me';
@@ -123,6 +124,33 @@ const createSessionToken = (user) => jwt.sign(
   { expiresIn: ACCESS_TOKEN_TTL }
 );
 
+const resolveCookieSameSite = () => {
+  const raw = String(process.env.AUTH_COOKIE_SAMESITE || 'none').trim().toLowerCase();
+  if (raw === 'lax') return 'lax';
+  if (raw === 'strict') return 'strict';
+  return 'none';
+};
+
+const setSessionCookie = (res, sessionId) => {
+  const sameSite = resolveCookieSameSite();
+  const secureByEnv = String(process.env.AUTH_COOKIE_SECURE || '').trim().toLowerCase();
+  const secure = secureByEnv
+    ? secureByEnv === 'true'
+    : sameSite === 'none';
+  const cookieDomain = String(process.env.AUTH_COOKIE_DOMAIN || '').trim();
+
+  const options = {
+    httpOnly: true,
+    secure,
+    sameSite,
+    maxAge: ACCESS_TOKEN_MAX_AGE_MS,
+    path: '/'
+  };
+  if (cookieDomain) options.domain = cookieDomain;
+
+  res.cookie('session_id', String(sessionId || ''), options);
+};
+
 const createResetToken = (user) => {
   const jti = createId();
   const token = jwt.sign(
@@ -231,9 +259,13 @@ class AuthController {
     users.push(user);
 
     const token = createSessionToken(user);
+    const sessionId = createId();
+    setSessionCookie(res, sessionId);
     return res.status(201).json({
       ok: true,
       token,
+      access_token: token,
+      session_id: sessionId,
       user: toPublicUser(user)
     });
   }
@@ -269,9 +301,13 @@ class AuthController {
     }
 
     const token = createSessionToken(user);
+    const sessionId = createId();
+    setSessionCookie(res, sessionId);
     return res.json({
       ok: true,
       token,
+      access_token: token,
+      session_id: sessionId,
       user: toPublicUser(user)
     });
   }

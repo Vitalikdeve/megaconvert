@@ -70,6 +70,7 @@ export default function ResetPasswordPage({ apiBase, onNavigate }) {
       const response = await fetch(buildAuthEndpoint(apiBase, 'reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           token,
           newPassword

@@ -25,7 +25,7 @@ const buildAuthEndpoint = (apiBase, route) => {
     : `${base}/api/auth/${normalizedRoute}`;
 };
 
-export default function RegisterPage({ apiBase, onNavigate }) {
+export default function RegisterPage({ apiBase, onNavigate, onAuthSuccess }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -73,6 +73,7 @@ export default function RegisterPage({ apiBase, onNavigate }) {
       const response = await fetch(buildAuthEndpoint(apiBase, 'register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           name: String(name || '').trim(),
           email: normalizedEmail,
@@ -81,12 +82,28 @@ export default function RegisterPage({ apiBase, onNavigate }) {
         })
       });
       const payload = await parsePayload(response);
-      if (!response.ok || !payload?.token) {
+      const sessionToken = String(payload?.token || payload?.access_token || '').trim();
+      const sessionUser = payload?.user && typeof payload.user === 'object' ? payload.user : null;
+      if (!response.ok || !sessionToken) {
         throw new Error(payload?.message || t('auth.registerFailed', 'Unable to create account.'));
       }
 
-      localStorage.setItem('mc_auth_token', String(payload.token));
+      localStorage.setItem('mc_auth_token', sessionToken);
       localStorage.setItem('mc_auth_email', normalizedEmail);
+      if (sessionUser) {
+        try {
+          localStorage.setItem('mc_auth_user', JSON.stringify(sessionUser));
+        } catch {
+          // Ignore storage quota issues and continue registration flow.
+        }
+      }
+      if (typeof onAuthSuccess === 'function') {
+        onAuthSuccess({
+          token: sessionToken,
+          email: normalizedEmail,
+          user: sessionUser
+        });
+      }
       setSuccess(t('auth.registerSuccess', 'Account created successfully.'));
       setTimeout(() => navigate('/'), 600);
     } catch (submitError) {

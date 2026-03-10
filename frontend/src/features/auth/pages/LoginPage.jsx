@@ -20,7 +20,7 @@ const buildAuthEndpoint = (apiBase, route) => {
     : `${base}/api/auth/${normalizedRoute}`;
 };
 
-export default function LoginPage({ apiBase, onNavigate }) {
+export default function LoginPage({ apiBase, onNavigate, onAuthSuccess }) {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -48,18 +48,35 @@ export default function LoginPage({ apiBase, onNavigate }) {
       const response = await fetch(buildAuthEndpoint(apiBase, 'login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           email: normalizedEmail,
           password
         })
       });
       const payload = await parsePayload(response);
-      if (!response.ok || !payload?.token) {
+      const sessionToken = String(payload?.token || payload?.access_token || '').trim();
+      const sessionUser = payload?.user && typeof payload.user === 'object' ? payload.user : null;
+      if (!response.ok || !sessionToken) {
         throw new Error(payload?.message || t('auth.invalidCredentials', 'Invalid email or password.'));
       }
 
-      localStorage.setItem('mc_auth_token', String(payload.token));
+      localStorage.setItem('mc_auth_token', sessionToken);
       localStorage.setItem('mc_auth_email', normalizedEmail);
+      if (sessionUser) {
+        try {
+          localStorage.setItem('mc_auth_user', JSON.stringify(sessionUser));
+        } catch {
+          // Ignore storage quota issues and continue login flow.
+        }
+      }
+      if (typeof onAuthSuccess === 'function') {
+        onAuthSuccess({
+          token: sessionToken,
+          email: normalizedEmail,
+          user: sessionUser
+        });
+      }
       navigate('/');
     } catch (submitError) {
       setError(String(submitError?.message || t('auth.loginFailed', 'Unable to sign in. Please try again.')));

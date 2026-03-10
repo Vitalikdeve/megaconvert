@@ -26,8 +26,50 @@ for (const key of required) {
 const log = (payload) => console.log(JSON.stringify(payload));
 const logError = (payload) => console.error(JSON.stringify(payload));
 
+const DEFAULT_CORS_ORIGINS = [
+  'https://megaconvert-web.vercel.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
+const parseCorsOrigins = (value) => String(value || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const allowedCorsOrigins = new Set([
+  ...DEFAULT_CORS_ORIGINS,
+  ...parseCorsOrigins(process.env.CORS_ORIGIN),
+  ...parseCorsOrigins(process.env.CORS_ORIGINS)
+]);
+
+const corsOptionsDelegate = (req, callback) => {
+  const requestOrigin = String(req.header('Origin') || '').trim();
+  const baseOptions = {
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-id', 'x-session-id', 'x-request-id'],
+    optionsSuccessStatus: 204,
+    maxAge: 86400
+  };
+
+  // Non-browser or same-origin requests can pass through without Origin header.
+  if (!requestOrigin) {
+    callback(null, { ...baseOptions, origin: true });
+    return;
+  }
+
+  if (allowedCorsOrigins.has(requestOrigin)) {
+    callback(null, { ...baseOptions, origin: requestOrigin });
+    return;
+  }
+
+  callback(null, { ...baseOptions, origin: false });
+};
+
 const app = express();
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true }));
+app.use(cors(corsOptionsDelegate));
+app.options('*', cors(corsOptionsDelegate));
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   const start = Date.now();
