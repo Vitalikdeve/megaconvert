@@ -14,6 +14,7 @@ const crypto = require('crypto');
 const nacl = require('tweetnacl');
 const { customAlphabet } = require('nanoid');
 const { TOOL_EXT, TOOL_IDS, TOOL_META } = require('../shared/tools');
+const { createAuthRouter } = require('./auth.controller');
 
 const envCandidates = [
   path.join(__dirname, '..', '.env'),
@@ -13320,6 +13321,9 @@ app.post('/auth/2fa/verify-token', (req, res) => {
   }
   return res.json({ ok: true });
 });
+
+// Public user auth routes must be above API-key protection middleware.
+app.use('/api/auth', createAuthRouter());
 
 app.use('/api', requireApiKeyAuth, enforceApiKeyLimits, apiKeyUsageTracker);
 

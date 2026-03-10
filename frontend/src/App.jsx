@@ -1788,7 +1788,31 @@ export default function App() {
   const normalizeApiBase = (value) => {
     const normalized = String(value || '').trim();
     if (!normalized) return '/api';
-    return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+    if (!/^https?:\/\//i.test(normalized)) {
+      return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+    }
+
+    try {
+      const parsed = new URL(normalized);
+      const host = String(parsed.hostname || '').trim().toLowerCase();
+      const loopbackHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+
+      // Public API must not leak internal Docker/VPS app port into browser requests.
+      if (!loopbackHost && String(parsed.port || '').trim() === '5000') {
+        parsed.port = '';
+      }
+      if (!loopbackHost && typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol === 'http:') {
+        parsed.protocol = 'https:';
+      }
+
+      parsed.pathname = parsed.pathname.replace(/\/+$/g, '');
+      if (parsed.pathname === '/api') {
+        parsed.pathname = '';
+      }
+      return parsed.toString().replace(/\/+$/g, '');
+    } catch {
+      return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+    }
   };
   const isLoopbackHost = (host) => host === 'localhost' || host === '127.0.0.1' || host === '::1';
   const resolveApiBase = () => {
