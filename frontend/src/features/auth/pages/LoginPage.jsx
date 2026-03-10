@@ -63,13 +63,16 @@ export default function LoginPage({ apiBase, onNavigate, onAuthSuccess }) {
     setError('');
 
     try {
+      const captchaToken = '';
       const response = await fetch(buildAuthEndpoint(apiBase, 'login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           email: normalizedEmail,
-          password
+          password,
+          captchaToken,
+          'cf-turnstile-response': captchaToken
         })
       });
       const payload = await parsePayload(response);

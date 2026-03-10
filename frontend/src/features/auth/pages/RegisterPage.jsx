@@ -96,7 +96,9 @@ export default function RegisterPage({ apiBase, onNavigate, onAuthSuccess }) {
           name: String(name || '').trim(),
           email: normalizedEmail,
           password,
-          turnstileToken
+          turnstileToken,
+          captchaToken: turnstileToken,
+          'cf-turnstile-response': turnstileToken
         })
       });
       const payload = await parsePayload(response);

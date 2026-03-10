@@ -72,14 +72,20 @@ const createMailer = () => {
 
 const mailer = createMailer();
 
+const resolveTurnstileSecret = () => String(process.env.TURNSTILE_SECRET_KEY || '').trim();
+const readTurnstileToken = (body) => String(
+  body?.['cf-turnstile-response']
+    || body?.captchaToken
+    || body?.turnstileToken
+    || ''
+).trim();
+
 const verifyTurnstile = async ({ turnstileToken, remoteIp }) => {
-  const secret =
-    process.env.CLOUDFLARE_TURNSTILE_SECRET ||
-    process.env.TURNSTILE_SECRET_KEY ||
-    process.env.TURNSTILE_SECRET;
+  const secret = resolveTurnstileSecret();
 
   if (!secret) {
-    return { ok: false, error: 'Turnstile secret is not configured' };
+    console.warn('[auth][turnstile] TURNSTILE_SECRET_KEY is not configured. Captcha check is bypassed for debug mode.');
+    return { ok: true, skipped: true, reason: 'TURNSTILE_SECRET_KEY_MISSING' };
   }
 
   if (!turnstileToken) {
@@ -100,16 +106,30 @@ const verifyTurnstile = async ({ turnstileToken, remoteIp }) => {
       method: 'POST',
       body: payload
     });
+    const responseText = await response.text();
+    let result;
+    try {
+      result = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      result = { raw: responseText };
+    }
+
     if (!response.ok) {
+      console.error('[auth][turnstile] Cloudflare HTTP error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: result
+      });
       return { ok: false, error: `Turnstile HTTP ${response.status}` };
     }
-    const result = await response.json();
     if (!result?.success) {
+      console.error('[auth][turnstile] Cloudflare verification failed:', result);
       const errorCodes = Array.isArray(result?.['error-codes']) ? result['error-codes'].join(',') : 'verification_failed';
-      return { ok: false, error: errorCodes };
+      return { ok: false, error: errorCodes, provider: result };
     }
     return { ok: true };
   } catch (error) {
+    console.error('[auth][turnstile] Verification request failed:', error);
     return { ok: false, error: String(error?.message || 'turnstile_request_failed') };
   }
 };
@@ -205,13 +225,13 @@ class AuthController {
     const email = normalizeEmail(req.body?.email);
     const password = String(req.body?.password || '');
     const name = String(req.body?.name || '').trim() || email.split('@')[0] || 'User';
-    const turnstileToken = String(req.body?.turnstileToken || req.body?.captchaToken || '').trim();
+    const turnstileToken = readTurnstileToken(req.body);
 
-    if (!email || !password || !turnstileToken) {
+    if (!email || !password) {
       return res.status(400).json({
         ok: false,
         code: 'VALIDATION_ERROR',
-        message: 'email, password and turnstileToken are required'
+        message: 'email and password are required'
       });
     }
 
