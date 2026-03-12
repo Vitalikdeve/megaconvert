@@ -1,44 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import Lenis from '@studio-freight/lenis';
+import React from 'react';
 
 export default function SmoothScrollProvider({ children }) {
-  const lenisRef = useRef(null);
-  const rafRef = useRef(0);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) return undefined;
-
-    const lenis = new Lenis({
-      lerp: 0.12,
-      smoothWheel: true,
-      smoothTouch: false,
-      wheelMultiplier: 1.1,
-      touchMultiplier: 1,
-      syncTouch: false
-    });
-    lenisRef.current = lenis;
-
-    const raf = (time) => {
-      lenis.raf(time);
-      rafRef.current = window.requestAnimationFrame(raf);
-    };
-
-    rafRef.current = window.requestAnimationFrame(raf);
-
-    return () => {
-      if (rafRef.current) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = 0;
-      }
-      if (lenisRef.current) {
-        lenisRef.current.destroy();
-        lenisRef.current = null;
-      }
-    };
-  }, []);
-
   return <>{children}</>;
 }
