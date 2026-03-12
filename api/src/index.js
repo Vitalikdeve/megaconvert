@@ -52,30 +52,6 @@ const DATA_ROOT_DIR = String(
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: corsOptions
-});
-app.set('etag', false);
-app.set('trust proxy', true);
-app.use((req, res, next) => {
-  const start = Date.now();
-  const requestId = req.headers['x-request-id'] || uuidv4();
-  req.requestId = requestId;
-  res.setHeader('x-request-id', requestId);
-  res.on('finish', () => {
-    log({
-      type: 'http',
-      requestId,
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      durationMs: Date.now() - start,
-      origin: req.headers.origin || null,
-      host: req.headers.host || null
-    });
-  });
-  next();
-});
 
 const allowedOrigins = String(process.env.CORS_ORIGIN || 'http://localhost:5173')
   .split(',')
@@ -117,6 +93,30 @@ const corsOptions = {
   credentials: true
 };
 
+const io = new Server(server, {
+  cors: corsOptions
+});
+app.set('etag', false);
+app.set('trust proxy', true);
+app.use((req, res, next) => {
+  const start = Date.now();
+  const requestId = req.headers['x-request-id'] || uuidv4();
+  req.requestId = requestId;
+  res.setHeader('x-request-id', requestId);
+  res.on('finish', () => {
+    log({
+      type: 'http',
+      requestId,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      durationMs: Date.now() - start,
+      origin: req.headers.origin || null,
+      host: req.headers.host || null
+    });
+  });
+  next();
+});
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 const rawSecurityHeadersEnabled = String(process.env.SECURITY_HEADERS_ENABLED || 'true').trim().toLowerCase();
