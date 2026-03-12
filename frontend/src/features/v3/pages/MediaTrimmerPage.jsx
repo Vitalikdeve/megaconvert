@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
-import { AlertTriangle, AudioLines, Clock3, Download, Loader2, Scissors, Upload, Video } from 'lucide-react';
-import WorkspaceModuleShell from '../components/WorkspaceModuleShell.jsx';
+import { AlertTriangle, Download, Loader2, Scissors, Upload } from 'lucide-react';
 
 const FFMPEG_CORE_BASE_URL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
 const UNSUPPORTED_SAB_MESSAGE = 'Ваш браузер не поддерживает локальную обработку FFmpeg. Откройте сайт в современной версии Chrome/Edge/Firefox.';
@@ -317,32 +316,7 @@ export default function MediaTrimmerPage() {
   const trimDuration = Math.max(0, endTime - startTime);
 
   return (
-    <WorkspaceModuleShell
-      eyebrow="Media / Precision Trim"
-      title="Cut the exact moment before you convert."
-      description="Load video or audio, preview duration, set the in and out points, and export the trimmed segment locally with FFmpeg.wasm."
-      badges={['FFmpeg.wasm', 'No re-upload', 'Audio + video']}
-      metrics={[
-        { label: 'Engine', value: ffmpegReady ? 'Ready' : 'Loading', icon: Scissors, note: 'Local FFmpeg core' },
-        { label: 'Timeline', value: duration ? formatTimelineTime(duration) : '--:--', icon: Clock3, note: 'Detected source duration' },
-        { label: 'Lane', value: mediaKind === 'audio' ? 'Audio' : 'Video', icon: mediaKind === 'audio' ? AudioLines : Video, note: 'Current media type' }
-      ]}
-      asideCards={[
-        {
-          eyebrow: 'Why here',
-          title: 'Trim before the heavy work',
-          copy: 'Shortening a clip before conversion, share or AI cleanup saves time, bandwidth and browser compute immediately.',
-          icon: Scissors
-        },
-        {
-          eyebrow: 'Privacy',
-          title: 'No raw upload',
-          copy: 'The source media stays on the device while you carve out the exact section you need.',
-          icon: AlertTriangle
-        }
-      ]}
-    >
-      <section className="mc-card rounded-3xl p-6 md:p-8">
+    <section className="mc-card rounded-3xl p-6 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / Timeline</div>
@@ -588,7 +562,6 @@ export default function MediaTrimmerPage() {
           </div>
         </div>
       )}
-      </section>
-    </WorkspaceModuleShell>
+    </section>
   );
 }

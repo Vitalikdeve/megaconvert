@@ -21,6 +21,7 @@ import {
   WifiOff
 } from 'lucide-react';
 import useMegaGridEngine from '../../../hooks/useMegaGridEngine.js';
+import useWorkspaceLocale from '../lib/useWorkspaceLocale.js';
 
 const CHUNK_SIZE = 64 * 1024;
 const MAX_BUFFERED_AMOUNT = 512 * 1024;
@@ -201,13 +202,16 @@ const buildPeerStateTone = (connected) => (
     : 'border-slate-200/70 bg-white/80 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200'
 );
 
-const getDefaultWorkerLabel = () => {
-  if (typeof navigator === 'undefined') return 'Worker Node';
+const getDefaultWorkerLabel = (isRussian = false) => {
+  if (typeof navigator === 'undefined') return isRussian ? 'Воркер-нода' : 'Worker Node';
   const platform = String(navigator.platform || '').trim();
-  return platform ? `Worker ${platform}` : 'Worker Node';
+  return platform
+    ? `${isRussian ? 'Воркер' : 'Worker'} ${platform}`
+    : (isRussian ? 'Воркер-нода' : 'Worker Node');
 };
 
 export default function MegaGridLab() {
+  const { isRussian, pick } = useWorkspaceLocale();
   const socketBase = useMemo(() => resolveRealtimeBase(), []);
   const initialSessionCode = useMemo(() => getInitialSessionCode(), []);
   const webRtcSupported = typeof window !== 'undefined'
@@ -237,7 +241,7 @@ export default function MegaGridLab() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [segmentSeconds, setSegmentSeconds] = useState(5);
   const [selectedFormat, setSelectedFormat] = useState(GRID_FORMAT_OPTIONS[0].id);
-  const [workerLabel, setWorkerLabel] = useState(getDefaultWorkerLabel());
+  const [workerLabel, setWorkerLabel] = useState(() => getDefaultWorkerLabel(isRussian));
   const [workerReady, setWorkerReady] = useState(false);
   const [statusText, setStatusText] = useState(
     initialSessionCode
@@ -394,9 +398,18 @@ export default function MegaGridLab() {
     }
   }, []);
 
+  const localizedGridFormatOptions = useMemo(() => (
+    GRID_FORMAT_OPTIONS.map((option) => ({
+      ...option,
+      label: option.id === 'mp4'
+        ? pick('Распределенный MP4', 'Distributed MP4')
+        : pick('Распределенный WebM', 'Distributed WebM')
+    }))
+  ), [pick]);
+
   const getSelectedFormat = useCallback(() => (
-    GRID_FORMAT_OPTIONS.find((option) => option.id === selectedFormat) || GRID_FORMAT_OPTIONS[0]
-  ), [selectedFormat]);
+    localizedGridFormatOptions.find((option) => option.id === selectedFormat) || localizedGridFormatOptions[0]
+  ), [localizedGridFormatOptions, selectedFormat]);
 
   const updateWorkerState = useCallback(async (nextState) => {
     const socket = socketRef.current;
@@ -1091,7 +1104,7 @@ export default function MegaGridLab() {
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-4">
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Session Control</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Управление сессией', 'Session control')}</div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -1100,7 +1113,7 @@ export default function MegaGridLab() {
                 className="rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center justify-center gap-2"
               >
                 {isCreatingSession ? <Loader2 size={16} className="animate-spin" /> : <Radio size={16} />}
-                Create Master Session
+                {pick('Создать master-сессию', 'Create master session')}
               </button>
               <button
                 type="button"
@@ -1108,12 +1121,12 @@ export default function MegaGridLab() {
                 disabled={!sessionCode}
                 className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01]"
               >
-                Leave Session
+                {pick('Покинуть сессию', 'Leave session')}
               </button>
             </div>
 
             <div className="mt-5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Join as Worker</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Подключение worker-ноды', 'Join as worker')}</div>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <input
                   value={joinCode}
@@ -1129,14 +1142,14 @@ export default function MegaGridLab() {
                   className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center justify-center gap-2"
                 >
                   {isJoiningSession ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} />}
-                  Join Worker
+                  {pick('Войти как worker', 'Join worker')}
                 </button>
               </div>
             </div>
 
             {sessionCode ? (
               <div className="mt-5 rounded-2xl border border-emerald-200/60 dark:border-emerald-300/20 bg-emerald-50/70 dark:bg-emerald-500/10 p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-100">Session Code</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-100">{pick('Код сессии', 'Session code')}</div>
                 <div className="mt-2 text-3xl font-semibold tracking-[0.32em] text-slate-900 dark:text-slate-100">{sessionCode}</div>
                 <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
                   {role === 'master' ? 'Поделитесь кодом с worker-нодами.' : 'Эта нода подключена к текущему кластеру.'}
@@ -1148,14 +1161,14 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Cpu size={16} />
-              Master Pipeline
+              {pick('Master-пайплайн', 'Master pipeline')}
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-[1fr_180px_220px]">
               <div>
                 <div className="rounded-3xl border-2 border-dashed border-slate-300/70 dark:border-white/15 bg-white/70 dark:bg-white/5 px-5 py-8 text-center backdrop-blur-xl">
                   {selectedFile ? (
                     <>
-                      <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Source Video</div>
+                      <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Исходное видео', 'Source video')}</div>
                       <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100 break-all">{selectedFile.name}</div>
                       <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formatBytes(selectedFile.size)}</div>
                     </>
@@ -1198,7 +1211,7 @@ export default function MegaGridLab() {
               </div>
 
               <label className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Segment Size</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Длина сегмента', 'Segment size')}</div>
                 <input
                   type="number"
                   min="2"
@@ -1211,13 +1224,13 @@ export default function MegaGridLab() {
               </label>
 
               <label className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Output Format</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Формат результата', 'Output format')}</div>
                 <select
                   value={selectedFormat}
                   onChange={(event) => setSelectedFormat(event.target.value)}
                   className="mt-3 w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-950/40 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-400"
                 >
-                  {GRID_FORMAT_OPTIONS.map((option) => (
+                  {localizedGridFormatOptions.map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.label}
                     </option>
@@ -1234,8 +1247,8 @@ export default function MegaGridLab() {
               />
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-              <span>Progress: {Math.round(masterProgress)}%</span>
-              <span>Segments: {masterTotals.completed}/{masterTotals.total}</span>
+              <span>{pick('Прогресс', 'Progress')}: {Math.round(masterProgress)}%</span>
+              <span>{pick('Сегменты', 'Segments')}: {masterTotals.completed}/{masterTotals.total}</span>
             </div>
 
             <button
@@ -1245,12 +1258,12 @@ export default function MegaGridLab() {
               className="mt-4 rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center gap-2"
             >
               {gridEngine.isBusy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-              Start Distributed Job
+              {pick('Запустить распределенную задачу', 'Start distributed job')}
             </button>
 
             {download ? (
               <div className="mt-4 rounded-2xl border border-emerald-300/60 dark:border-emerald-400/20 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-3">
-                <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">Distributed output ready</div>
+                <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">{pick('Распределенный результат готов', 'Distributed output ready')}</div>
                 <div className="mt-1 text-xs text-emerald-700 dark:text-emerald-200">
                   {download.fileName} · {formatBytes(download.size)}
                 </div>
@@ -1269,7 +1282,7 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Users size={16} />
-              Worker Pool
+              {pick('Пул worker-нод', 'Worker pool')}
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {(sessionSnapshot?.workers || []).map((worker) => (
@@ -1279,10 +1292,10 @@ export default function MegaGridLab() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${worker.ready ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-100' : 'border-slate-200/70 bg-white/80 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'}`}>
                       {worker.ready ? <CheckCircle2 size={12} /> : <WifiOff size={12} />}
-                      {worker.ready ? 'Ready' : 'Paused'}
+                      {worker.ready ? pick('Готов', 'Ready') : pick('На паузе', 'Paused')}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      Status: {worker.status}
+                      {pick('Статус', 'Status')}: {worker.status}
                     </span>
                   </div>
                 </div>
@@ -1300,12 +1313,12 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <QrCode size={16} />
-              Invite / QR
+              {pick('Ссылка и QR', 'Invite / QR')}
             </div>
             {shareLink ? (
               <div className="mt-4 space-y-4">
                 <div className="rounded-2xl border border-emerald-200/60 dark:border-emerald-300/20 bg-emerald-50/70 dark:bg-emerald-500/10 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-100">Worker Link</div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-100">{pick('Ссылка для worker-ноды', 'Worker link')}</div>
                   <div className="mt-2 break-all text-sm text-slate-800 dark:text-slate-100">{shareLink}</div>
                   <button
                     type="button"
@@ -1335,10 +1348,10 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Cpu size={16} />
-              Worker Node
+              {pick('Worker-нода', 'Worker node')}
             </div>
             <label className="mt-4 block">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Node Label</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Название ноды', 'Node label')}</div>
               <input
                 value={workerLabel}
                 onChange={(event) => setWorkerLabel(event.target.value)}
@@ -1352,10 +1365,10 @@ export default function MegaGridLab() {
               className="mt-4 rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center gap-2"
             >
               {gridEngine.isBusy && role === 'worker' ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />}
-              {workerReady ? 'Pause Worker' : 'Load Engine & Ready'}
+              {workerReady ? pick('Поставить worker на паузу', 'Pause worker') : pick('Загрузить движок и активировать', 'Load engine & ready')}
             </button>
             <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              Engine: {gridEngine.engineReady ? 'loaded' : 'not loaded'} · Ready workers in cluster: {readyWorkers.length}
+              {pick('Движок', 'Engine')}: {gridEngine.engineReady ? pick('загружен', 'loaded') : pick('не загружен', 'not loaded')} · {pick('Готовых нод в кластере', 'Ready workers in cluster')}: {readyWorkers.length}
             </div>
           </div>
 
@@ -1363,12 +1376,12 @@ export default function MegaGridLab() {
             <div className="flex items-start gap-2">
               <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
               <div>
-                <div className="font-semibold">Pipeline</div>
+                <div className="font-semibold">{pick('Пайплайн', 'Pipeline')}</div>
                 <div className="mt-1 text-cyan-800/90 dark:text-cyan-100/90">
                   Master сегментирует видео локально, coordinator отслеживает ready/busy worker-нод, а сегменты и результаты идут по WebRTC Data Channels.
                 </div>
                 <div className="mt-2 text-cyan-800/90 dark:text-cyan-100/90">
-                  Текущий формат job: {selectedFormatMeta.label} · segment time: {segmentSeconds}s
+                  {pick('Текущий формат задачи', 'Current job format')}: {selectedFormatMeta.label} · {pick('длина сегмента', 'segment time')}: {segmentSeconds}s
                 </div>
               </div>
             </div>

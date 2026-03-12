@@ -2,6 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@xenova/transformers': '@huggingface/transformers',
+    },
+  },
   plugins: [react()],
   build: {
     rollupOptions: {

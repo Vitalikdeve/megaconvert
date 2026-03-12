@@ -53,11 +53,9 @@ html.theme-dark {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  color: var(--color-ink);
-  background-color: var(--color-surface);
-  background-image: var(--gradient-surface);
-  background-size: 160% 160%;
-  animation: surfaceDrift 20s var(--ease-out-smooth) infinite alternate;
+  color: #ffffff;
+  background-color: #030303;
+  background-image: none;
   transition: background-color 300ms ease-out, color 300ms ease-out;
 }
 

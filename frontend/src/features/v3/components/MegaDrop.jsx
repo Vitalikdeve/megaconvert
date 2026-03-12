@@ -17,6 +17,7 @@ import {
   Wifi,
   WifiOff
 } from 'lucide-react';
+import useWorkspaceLocale from '../lib/useWorkspaceLocale.js';
 
 const CHUNK_SIZE = 64 * 1024;
 const MAX_BUFFERED_AMOUNT = 512 * 1024;
@@ -163,6 +164,7 @@ const waitForPeerBuffer = async (peer) => {
 };
 
 export default function MegaDrop({ initialFile = null, onInitialFileConsumed = null }) {
+  const { pick } = useWorkspaceLocale();
   const socketBase = useMemo(() => resolveRealtimeBase(), []);
   const initialRoomCode = useMemo(() => getRoomCodeFromLocation(), []);
   const webRtcSupported = typeof window !== 'undefined'
@@ -814,14 +816,14 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
             <div className="flex flex-wrap items-center gap-3">
               <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${connectionTone}`}>
                 {peerConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
-                {peerConnected ? 'P2P online' : 'Ожидание канала'}
+                {peerConnected ? pick('P2P активен', 'P2P online') : pick('Ожидание канала', 'Waiting for channel')}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                 <ShieldCheck size={14} />
-                End-to-end path
+                {pick('Прямой защищенный маршрут', 'End-to-end path')}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-                Socket: {socketState}
+                {pick('Сокет', 'Socket')}: {socketState}
               </span>
             </div>
 
@@ -829,7 +831,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
 
             {roomCode ? (
               <div className="mt-5 rounded-2xl border border-cyan-200/60 dark:border-cyan-300/20 bg-cyan-50/70 dark:bg-cyan-500/10 p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-cyan-700 dark:text-cyan-100">Room Code</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-cyan-700 dark:text-cyan-100">{pick('Код комнаты', 'Room code')}</div>
                 <div className="mt-2 text-3xl font-semibold tracking-[0.32em] text-slate-900 dark:text-slate-100">{roomCode}</div>
                 <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
                   {role === 'host'
@@ -861,7 +863,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
             </div>
 
             <div className="mt-5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Join by code</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Подключение по коду', 'Join by code')}</div>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <input
                   value={joinCode}
@@ -973,7 +975,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <QrCode size={16} />
-              Invite / QR
+              {pick('Ссылка и QR', 'Invite / QR')}
             </div>
             <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
               Создайте комнату на основном устройстве и откройте ссылку на втором. Если удобно, можно просто ввести код вручную.
@@ -982,7 +984,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
             {shareLink ? (
               <div className="mt-4 space-y-4">
                 <div className="rounded-2xl border border-cyan-200/60 dark:border-cyan-300/20 bg-cyan-50/70 dark:bg-cyan-500/10 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-100">Room Link</div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-100">{pick('Ссылка комнаты', 'Room link')}</div>
                   <div className="mt-2 break-all text-sm text-slate-800 dark:text-slate-100">{shareLink}</div>
                   <button
                     type="button"

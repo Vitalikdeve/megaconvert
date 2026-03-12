@@ -13,29 +13,31 @@ import {
 
 export const WORKSPACE_V3_DEFAULT_PATH = '/workspace/local-convert';
 
-export const WORKSPACE_V3_GROUPS = [
+const copy = (isRussian, ruText, enText) => (isRussian ? ruText : enText);
+
+export const getWorkspaceRouteGroups = (isRussian = false) => ([
   {
     id: 'media',
-    label: 'Медиа',
+    label: copy(isRussian, 'Медиа', 'Media'),
     items: [
       {
         id: 'local-convert',
-        label: 'Локальная конвертация',
+        label: copy(isRussian, 'Локальная конвертация', 'Local Conversion'),
         subtitle: '@ffmpeg/ffmpeg (WASM)',
         path: '/workspace/local-convert',
         icon: Clapperboard
       },
       {
         id: 'media-trimmer',
-        label: 'Медиа Триммер',
-        subtitle: 'Таймлайн до конвертации',
+        label: copy(isRussian, 'Медиа Триммер', 'Media Trimmer'),
+        subtitle: copy(isRussian, 'Таймлайн до конвертации', 'Trim timeline before convert'),
         path: '/workspace/media-trimmer',
         icon: AudioLines
       },
       {
         id: 'megagrid',
         label: 'MegaGrid',
-        subtitle: 'Distributed Browser Cluster',
+        subtitle: copy(isRussian, 'Распределенный браузерный кластер', 'Distributed browser cluster'),
         path: '/workspace/megagrid',
         icon: Network
       }
@@ -47,7 +49,7 @@ export const WORKSPACE_V3_GROUPS = [
     items: [
       {
         id: 'pdf-editor',
-        label: 'Визуальный PDF-редактор',
+        label: copy(isRussian, 'Визуальный PDF-редактор', 'Visual PDF Editor'),
         subtitle: 'pdf-lib + Drag & Drop',
         path: '/workspace/pdf-editor',
         icon: FileStack
@@ -56,25 +58,25 @@ export const WORKSPACE_V3_GROUPS = [
   },
   {
     id: 'tools',
-    label: 'Инструменты',
+    label: copy(isRussian, 'Инструменты', 'Tools'),
     items: [
       {
         id: 'image-optimizer',
-        label: 'Image Optimizer',
-        subtitle: 'Интерактивное сжатие',
+        label: copy(isRussian, 'Оптимизатор изображений', 'Image Optimizer'),
+        subtitle: copy(isRussian, 'Интерактивное сжатие', 'Interactive compression'),
         path: '/workspace/image-optimizer',
         icon: ImageIcon
       },
       {
         id: 'exif-scrubber',
         label: 'EXIF Scrubber',
-        subtitle: 'Privacy Mode toggle',
+        subtitle: copy(isRussian, 'Очистка метаданных', 'Privacy mode toggle'),
         path: '/workspace/exif-scrubber',
         icon: EyeOff
       },
       {
         id: 'watermark-batch',
-        label: 'Пакетный Watermark',
+        label: copy(isRussian, 'Пакетный Watermark', 'Batch Watermark'),
         subtitle: 'Resize + watermark + ZIP',
         path: '/workspace/watermark-batch',
         icon: Stamp
@@ -94,14 +96,14 @@ export const WORKSPACE_V3_GROUPS = [
     items: [
       {
         id: 'smart-ocr',
-        label: 'Умный OCR',
-        subtitle: 'tesseract.js в браузере',
+        label: copy(isRussian, 'Умный OCR', 'Smart OCR'),
+        subtitle: 'tesseract.js in browser',
         path: '/workspace/smart-ocr',
         icon: ScanText
       }
     ]
   }
-];
+]);
 
 export const normalizeWorkspacePath = (value) => {
   const raw = String(value || '').trim();
@@ -112,15 +114,15 @@ export const normalizeWorkspacePath = (value) => {
   return normalized || '/workspace';
 };
 
-export const flattenWorkspaceRoutes = () => WORKSPACE_V3_GROUPS.flatMap((group) => group.items);
+export const flattenWorkspaceRoutes = (isRussian = false) => getWorkspaceRouteGroups(isRussian).flatMap((group) => group.items);
 
-export const matchWorkspaceRoute = (path) => {
+export const matchWorkspaceRoute = (path, routes = []) => {
   const normalized = normalizeWorkspacePath(path);
-  return flattenWorkspaceRoutes().find((item) => item.path === normalized) || null;
+  return routes.find((item) => item.path === normalized) || null;
 };
 
-export const getWorkspaceHeroBadges = () => ([
-  { id: 'client-first', label: 'Client-first processing', icon: Sparkles },
-  { id: 'privacy', label: 'Privacy by design', icon: EyeOff },
-  { id: 'wasm', label: 'WASM acceleration', icon: Clapperboard }
+export const getWorkspaceHeroBadges = (isRussian = false) => ([
+  { id: 'client-first', label: copy(isRussian, 'Обработка на устройстве', 'Client-first processing'), icon: Sparkles },
+  { id: 'privacy', label: copy(isRussian, 'Приватность по умолчанию', 'Privacy by design'), icon: EyeOff },
+  { id: 'wasm', label: copy(isRussian, 'Ускорение через WASM', 'WASM acceleration'), icon: Clapperboard }
 ]);
