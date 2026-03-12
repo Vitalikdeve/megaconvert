@@ -1,17 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Cloud,
+  Cpu,
   Download,
   Loader2,
   Play,
+  Sparkles,
   Upload
 } from 'lucide-react';
-
-const FFMPEG_CORE_BASE_URL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
-const UNSUPPORTED_SAB_MESSAGE = 'Ваш браузер не поддерживает локальную конвертацию. Пожалуйста, воспользуйтесь облачным конвертером';
+import useLocalConverter from '../../hooks/useLocalConverter.js';
+import useAIAudioCleanup from '../../hooks/useAIAudioCleanup.js';
 
 const formatBytes = (value) => {
   const size = Number(value || 0);
@@ -21,28 +20,6 @@ const formatBytes = (value) => {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 };
 
-const getExtension = (name) => {
-  const parts = String(name || '').trim().toLowerCase().split('.');
-  if (parts.length < 2) return '';
-  return parts.pop() || '';
-};
-
-const toSafeOutputName = (sourceName, ext) => {
-  const cleaned = String(sourceName || 'converted-file')
-    .trim()
-    .replace(/[^\w.-]+/g, '-')
-    .replace(/\.+/g, '.');
-  const base = cleaned.includes('.') ? cleaned.slice(0, cleaned.lastIndexOf('.')) : cleaned;
-  const normalizedBase = String(base || 'converted-file').replace(/[-_.]+$/g, '') || 'converted-file';
-  return `${normalizedBase}.${ext}`;
-};
-
-const clampProgress = (value) => {
-  const next = Number(value || 0);
-  if (!Number.isFinite(next)) return 0;
-  return Math.max(0, Math.min(100, next));
-};
-
 const FORMAT_OPTIONS = [
   {
     id: 'mp4',
@@ -50,7 +27,7 @@ const FORMAT_OPTIONS = [
     ext: 'mp4',
     mime: 'video/mp4',
     kind: 'video',
-    args: (inputName, outputName) => ['-i', inputName, '-movflags', '+faststart', outputName]
+    args: ['-i', '{input}', '-movflags', '+faststart', '{output}']
   },
   {
     id: 'webm',
@@ -58,7 +35,7 @@ const FORMAT_OPTIONS = [
     ext: 'webm',
     mime: 'video/webm',
     kind: 'video',
-    args: (inputName, outputName) => ['-i', inputName, outputName]
+    args: ['-i', '{input}', '{output}']
   },
   {
     id: 'gif',
@@ -66,7 +43,7 @@ const FORMAT_OPTIONS = [
     ext: 'gif',
     mime: 'image/gif',
     kind: 'video',
-    args: (inputName, outputName) => ['-i', inputName, '-vf', 'fps=12,scale=960:-1:flags=lanczos', '-loop', '0', outputName]
+    args: ['-i', '{input}', '-vf', 'fps=12,scale=960:-1:flags=lanczos', '-loop', '0', '{output}']
   },
   {
     id: 'mp3',
@@ -74,7 +51,7 @@ const FORMAT_OPTIONS = [
     ext: 'mp3',
     mime: 'audio/mpeg',
     kind: 'audio',
-    args: (inputName, outputName) => ['-i', inputName, '-vn', '-b:a', '192k', outputName]
+    args: ['-i', '{input}', '-vn', '-b:a', '192k', '{output}']
   },
   {
     id: 'wav',
@@ -82,61 +59,60 @@ const FORMAT_OPTIONS = [
     ext: 'wav',
     mime: 'audio/wav',
     kind: 'audio',
-    args: (inputName, outputName) => ['-i', inputName, '-vn', '-ar', '44100', '-ac', '2', outputName]
+    args: ['-i', '{input}', '-vn', '-ar', '44100', '-ac', '2', '{output}']
   }
 ];
 
-export default function LocalMediaConverterTool({ onCloudFallback }) {
-  const supportsSharedArrayBuffer = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    const hasSharedArrayBuffer = typeof window.SharedArrayBuffer !== 'undefined';
-    return hasSharedArrayBuffer && window.crossOriginIsolated === true;
-  }, []);
+const clampProgress = (value) => {
+  const next = Number(value || 0);
+  if (!Number.isFinite(next)) return 0;
+  return Math.max(0, Math.min(100, next));
+};
 
+export default function LocalMediaConverterTool({ onCloudFallback }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [sourceFile, setSourceFile] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState(FORMAT_OPTIONS[0].id);
-  const [status, setStatus] = useState('idle');
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState('');
-  const [statusText, setStatusText] = useState('Готов к локальной обработке');
-  const [result, setResult] = useState(null);
-
-  const ffmpegRef = useRef(null);
-  const ffmpegLoadedRef = useRef(false);
+  const [aiCleanupEnabled, setAICleanupEnabled] = useState(false);
   const fileInputRef = useRef(null);
-  const currentObjectUrlRef = useRef(null);
-  const currentJobRef = useRef(0);
 
-  const cleanupResultUrl = useCallback(() => {
-    if (!currentObjectUrlRef.current) return;
-    URL.revokeObjectURL(currentObjectUrlRef.current);
-    currentObjectUrlRef.current = null;
-  }, []);
+  const {
+    status,
+    progress,
+    error,
+    statusText,
+    result,
+    engineReady,
+    isSupported,
+    isBusy,
+    unsupportedMessage,
+    loadEngine,
+    startConversion,
+    reset,
+    clearError
+  } = useLocalConverter();
+  const {
+    progress: aiProgress,
+    error: aiError,
+    statusText: aiStatusText,
+    modelReady: aiModelReady,
+    modelDevice,
+    lastCleanup,
+    isSupported: isAiCleanupSupported,
+    isBusy: isAiBusy,
+    loadEngine: loadAiEngine,
+    cleanupAudio,
+    reset: resetAiCleanup,
+    clearError: clearAiError
+  } = useAIAudioCleanup();
 
-  useEffect(() => () => {
-    cleanupResultUrl();
-    if (ffmpegRef.current) {
-      try {
-        ffmpegRef.current.terminate();
-      } catch {
-        // ignore
-      }
-      ffmpegRef.current = null;
-      ffmpegLoadedRef.current = false;
-    }
-  }, [cleanupResultUrl]);
-
-  const setSelectedFile = useCallback((file) => {
-    if (!file) return;
-    setSourceFile(file);
-    setError('');
-    setStatus('idle');
-    setProgress(0);
-    setStatusText('Файл загружен. Готово к конвертации');
-    cleanupResultUrl();
-    setResult(null);
-  }, [cleanupResultUrl]);
+  useEffect(() => {
+    if (!isSupported) return undefined;
+    void loadEngine({ silent: true }).catch(() => {
+      // Keep first paint fast and let the user retry from the CTA.
+    });
+    return undefined;
+  }, [isSupported, loadEngine]);
 
   const allowedFormats = useMemo(() => {
     const fileType = String(sourceFile?.type || '').toLowerCase();
@@ -146,113 +122,64 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
     return FORMAT_OPTIONS;
   }, [sourceFile?.type]);
 
-  useEffect(() => {
-    if (!allowedFormats.some((item) => item.id === selectedFormat)) {
-      setSelectedFormat(allowedFormats[0]?.id || FORMAT_OPTIONS[0].id);
-    }
-  }, [allowedFormats, selectedFormat]);
+  const activeSelectedFormat = allowedFormats.some((item) => item.id === selectedFormat)
+    ? selectedFormat
+    : (allowedFormats[0]?.id || FORMAT_OPTIONS[0].id);
+  const activeFormat = allowedFormats.find((item) => item.id === activeSelectedFormat) || allowedFormats[0] || FORMAT_OPTIONS[0];
+  const isAudioSource = String(sourceFile?.type || '').toLowerCase().startsWith('audio/');
+  const isAICleanupAvailable = Boolean(sourceFile && isAudioSource && activeFormat?.kind === 'audio');
+  const effectiveAICleanupEnabled = aiCleanupEnabled && isAICleanupAvailable;
+  const isWorking = isBusy || isAiBusy;
 
-  const loadFFmpeg = useCallback(async ({ silent = false } = {}) => {
-    if (!supportsSharedArrayBuffer) return null;
-    if (!ffmpegRef.current) {
-      ffmpegRef.current = new FFmpeg();
-      ffmpegRef.current.on('progress', ({ progress: rawProgress }) => {
-        const nextProgress = clampProgress(Math.round(Number(rawProgress || 0) * 100));
-        setProgress((prev) => Math.max(prev, nextProgress));
-      });
+  const setSelectedFile = (file) => {
+    if (!file) return;
+    const nextIsAudioSource = String(file?.type || '').toLowerCase().startsWith('audio/');
+    setSourceFile(file);
+    if (!nextIsAudioSource) {
+      setAICleanupEnabled(false);
     }
-    if (ffmpegLoadedRef.current) return ffmpegRef.current;
+    reset();
+    resetAiCleanup();
+  };
 
-    if (!silent) {
-      setStatus('loading');
-      setStatusText('Загружаем FFmpeg ядро...');
-      setError('');
-    }
-    try {
-      const coreURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm');
-      const workerURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.worker.js`, 'text/javascript');
-      await ffmpegRef.current.load({ coreURL, wasmURL, workerURL });
-      ffmpegLoadedRef.current = true;
-      return ffmpegRef.current;
-    } catch (loadError) {
-      if (!silent) {
-        setStatus('error');
-        setStatusText('Не удалось загрузить FFmpeg ядро');
-        setError(String(loadError?.message || 'Не удалось инициализировать FFmpeg.'));
-      }
-      throw loadError;
-    }
-  }, [supportsSharedArrayBuffer]);
+  const clearSelection = () => {
+    setSourceFile(null);
+    setAICleanupEnabled(false);
+    reset();
+    resetAiCleanup();
+  };
 
   useEffect(() => {
-    let active = true;
-    if (!supportsSharedArrayBuffer) return () => { active = false; };
-    void loadFFmpeg({ silent: true }).catch(() => {
-      if (!active) return;
-      // Keep UX non-blocking: user can retry by pressing convert.
+    if (!effectiveAICleanupEnabled || !isAiCleanupSupported) return undefined;
+    void loadAiEngine({ silent: true }).catch((error) => {
+      console.warn('[MegaConvert][ai-audio-load]', error);
     });
-    return () => {
-      active = false;
-    };
-  }, [loadFFmpeg, supportsSharedArrayBuffer]);
+    return undefined;
+  }, [effectiveAICleanupEnabled, isAiCleanupSupported, loadAiEngine]);
 
-  const handleConvert = useCallback(async () => {
-    if (status === 'loading' || status === 'converting') return;
-    if (!supportsSharedArrayBuffer) {
-      setError(UNSUPPORTED_SAB_MESSAGE);
-      return;
-    }
-    if (!sourceFile) {
-      setError('Сначала загрузите файл для локальной конвертации.');
-      return;
-    }
-    const target = allowedFormats.find((item) => item.id === selectedFormat) || allowedFormats[0] || FORMAT_OPTIONS[0];
-    const jobId = Date.now();
-    currentJobRef.current = jobId;
-    cleanupResultUrl();
-    setResult(null);
-    setError('');
-    setProgress(2);
+  const handleConvert = async () => {
+    if (isWorking) return;
+    if (!isSupported) return;
+    if (!sourceFile) return;
 
+    const target = activeFormat;
     try {
-      const ffmpeg = await loadFFmpeg();
-      if (jobId !== currentJobRef.current) return;
+      let inputFile = sourceFile;
 
-      setStatus('converting');
-      setStatusText('Локальная конвертация в процессе...');
-      const inputExt = getExtension(sourceFile.name) || 'bin';
-      const inputName = `input-${jobId}.${inputExt}`;
-      const outputName = toSafeOutputName(sourceFile.name, target.ext);
-      const outputPath = `output-${jobId}.${target.ext}`;
+      if (effectiveAICleanupEnabled) {
+        const cleanupResult = await cleanupAudio(sourceFile);
+        inputFile = cleanupResult.file;
+      }
 
-      await ffmpeg.writeFile(inputName, await fetchFile(sourceFile));
-      await ffmpeg.exec(target.args(inputName, outputPath));
-      const data = await ffmpeg.readFile(outputPath);
-      const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-      const blob = new Blob([bytes], { type: target.mime });
-      const objectUrl = URL.createObjectURL(blob);
-      currentObjectUrlRef.current = objectUrl;
-
-      setResult({
-        fileName: outputName,
-        size: blob.size,
-        url: objectUrl
+      await startConversion(inputFile, {
+        ext: target.ext,
+        mime: target.mime,
+        args: target.args
       });
-      setProgress(100);
-      setStatus('done');
-      setStatusText('Конвертация завершена. Файл готов к скачиванию.');
-
-      await Promise.allSettled([
-        ffmpeg.deleteFile(inputName),
-        ffmpeg.deleteFile(outputPath)
-      ]);
-    } catch (conversionError) {
-      setStatus('error');
-      setStatusText('Конвертация завершилась с ошибкой');
-      setError(String(conversionError?.message || 'Не удалось выполнить локальную конвертацию.'));
+    } catch {
+      // Error state is already handled inside the hook.
     }
-  }, [allowedFormats, cleanupResultUrl, loadFFmpeg, selectedFormat, sourceFile, status, supportsSharedArrayBuffer]);
+  };
 
   const onDrop = (event) => {
     event.preventDefault();
@@ -261,9 +188,17 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
     if (droppedFile) setSelectedFile(droppedFile);
   };
 
-  const progressStyle = { width: `${clampProgress(progress)}%` };
-  const disabledBySupport = !supportsSharedArrayBuffer;
-  const isBusy = status === 'loading' || status === 'converting';
+  const displayStatusText = status === 'idle'
+    ? sourceFile
+      ? 'Файл загружен. Готово к конвертации'
+      : 'Готов к локальной обработке'
+    : statusText;
+  const primaryProgress = isAiBusy ? aiProgress : progress;
+  const primaryStatusText = isAiBusy ? aiStatusText : displayStatusText;
+  const progressStyle = { width: `${clampProgress(primaryProgress)}%` };
+  const aiCoverageLabel = lastCleanup?.speechCoverage != null
+    ? `${Math.round(Number(lastCleanup.speechCoverage || 0) * 100)}% дорожки`
+    : null;
 
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8">
@@ -277,13 +212,19 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
             Обработка выполняется прямо в браузере пользователя через FFmpeg.wasm без отправки исходного файла на сервер.
           </p>
         </div>
+        <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-3 backdrop-blur-xl">
+          <div className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">FFmpeg Worker</div>
+          <div className={`mt-1 text-sm font-semibold ${engineReady ? 'text-emerald-700 dark:text-emerald-200' : 'text-slate-700 dark:text-slate-200'}`}>
+            {engineReady ? 'Ядро загружено' : 'Инициализация в фоне'}
+          </div>
+        </div>
       </div>
 
-      {disabledBySupport && (
+      {!isSupported && (
         <div className="mt-5 rounded-2xl border border-red-300/60 dark:border-red-400/20 bg-red-100/70 dark:bg-red-500/10 backdrop-blur-xl px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <div className="flex items-start gap-2">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            <span>{UNSUPPORTED_SAB_MESSAGE}</span>
+            <span>{unsupportedMessage}</span>
           </div>
           {typeof onCloudFallback === 'function' && (
             <div className="mt-3">
@@ -341,15 +282,8 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
           {sourceFile && (
             <button
               type="button"
-              onClick={() => {
-                setSourceFile(null);
-                setStatus('idle');
-                setProgress(0);
-                setError('');
-                setStatusText('Готов к локальной обработке');
-                cleanupResultUrl();
-                setResult(null);
-              }}
+              onClick={clearSelection}
+              disabled={isWorking}
               className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]"
             >
               Очистить
@@ -363,6 +297,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
         type="file"
         className="hidden"
         accept="video/*,audio/*"
+        disabled={isWorking}
         onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
       />
 
@@ -370,10 +305,10 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
         <label className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
           <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Формат результата</div>
           <select
-            value={selectedFormat}
+            value={activeSelectedFormat}
             onChange={(event) => setSelectedFormat(event.target.value)}
             className="mt-2 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-2 text-sm text-slate-800 dark:text-slate-100"
-            disabled={isBusy || disabledBySupport}
+            disabled={isWorking || !isSupported}
           >
             {allowedFormats.map((option) => (
               <option key={option.id} value={option.id}>
@@ -386,13 +321,15 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
         <button
           type="button"
           onClick={() => void handleConvert()}
-          disabled={isBusy || disabledBySupport || !sourceFile}
+          disabled={isWorking || !isSupported || !sourceFile}
           className="rounded-2xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02] flex items-center justify-center gap-2"
         >
-          {isBusy ? (
+          {isWorking ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              {status === 'loading' ? 'Загрузка FFmpeg...' : 'Обрабатываем...'}
+              {isAiBusy
+                ? 'AI очищает звук...'
+                : (status === 'loading' ? 'Загрузка FFmpeg...' : 'Обрабатываем...')}
             </>
           ) : (
             <>
@@ -403,10 +340,105 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
         </button>
       </div>
 
+      {isAudioSource && (
+        <div className="mt-4 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                <Sparkles size={14} />
+                Neural Edge / Audio
+              </div>
+              <div className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+                AI-очистка звука перед конвертацией
+              </div>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Speech-aware пайплайн выделяет голосовые участки через Transformers.js и мягко подавляет фон в браузере до запуска FFmpeg.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setAICleanupEnabled((current) => !current)}
+              disabled={!isAICleanupAvailable || !isAiCleanupSupported || isWorking}
+              className={`inline-flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition-all duration-300 ease-out ${
+                aiCleanupEnabled
+                  ? 'border-cyan-400/60 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'
+                  : 'border-slate-200 dark:border-white/10 bg-white/85 dark:bg-white/5 text-slate-700 dark:text-slate-200'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <span
+                className={`relative h-6 w-11 rounded-full transition-colors duration-300 ${
+                  aiCleanupEnabled ? 'bg-cyan-500/80' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                    aiCleanupEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </span>
+              {aiCleanupEnabled ? 'AI включен' : 'AI выключен'}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+            <div className="rounded-2xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                <span>Inference</span>
+                {aiModelReady && (
+                  <span className="rounded-full border border-emerald-300/60 dark:border-emerald-300/20 bg-emerald-100/80 dark:bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-200">
+                    Модель готова
+                  </span>
+                )}
+                {modelDevice && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-slate-200">
+                    <Cpu size={11} />
+                    {modelDevice === 'webgpu' ? 'WebGPU' : 'WASM fallback'}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                {isAICleanupAvailable
+                  ? (effectiveAICleanupEnabled
+                    ? aiStatusText
+                    : 'AI-режим готов. При запуске мы сначала очистим дорожку, потом передадим ее в FFmpeg.')
+                  : 'AI-очистка активируется для аудиофайлов при экспорте в аудиоформат.'}
+              </div>
+            </div>
+
+            {lastCleanup && (
+              <div className="rounded-2xl border border-cyan-300/40 dark:border-cyan-300/20 bg-cyan-50/70 dark:bg-cyan-500/10 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-100">
+                <div className="font-semibold">Последняя AI-обработка</div>
+                <div className="mt-1 text-xs text-cyan-700 dark:text-cyan-200">
+                  {aiCoverageLabel || 'Речь оценена'}
+                  {modelDevice ? ` · ${modelDevice === 'webgpu' ? 'WebGPU' : 'WASM'}` : ''}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {(effectiveAICleanupEnabled || aiError) && (
+            <div className="mt-4 rounded-2xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                <span>AI Progress</span>
+                <span>{Math.round(clampProgress(aiProgress))}%</span>
+              </div>
+              <div className="mt-3 h-[4px] rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 transition-all duration-300 ease-out"
+                  style={{ width: `${clampProgress(aiProgress)}%` }}
+                />
+              </div>
+              <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{aiStatusText}</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mt-5 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
         <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
           <span>Прогресс</span>
-          <span>{Math.round(clampProgress(progress))}%</span>
+          <span>{Math.round(clampProgress(primaryProgress))}%</span>
         </div>
         <div className="mt-3 h-[4px] rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
           <div
@@ -414,12 +446,36 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
             style={progressStyle}
           />
         </div>
-        <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{statusText}</div>
+        <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{primaryStatusText}</div>
       </div>
 
       {error && (
         <div className="mt-4 rounded-2xl border border-red-300/60 dark:border-red-400/20 bg-red-100/70 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
-          {error}
+          <div className="flex items-start justify-between gap-3">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={clearError}
+              className="shrink-0 text-xs font-semibold text-red-700 dark:text-red-200 hover:underline"
+            >
+              Скрыть
+            </button>
+          </div>
+        </div>
+      )}
+
+      {aiError && (
+        <div className="mt-4 rounded-2xl border border-red-300/60 dark:border-red-400/20 bg-red-100/70 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
+          <div className="flex items-start justify-between gap-3">
+            <span>{aiError}</span>
+            <button
+              type="button"
+              onClick={clearAiError}
+              className="shrink-0 text-xs font-semibold text-red-700 dark:text-red-200 hover:underline"
+            >
+              Скрыть
+            </button>
+          </div>
         </div>
       )}
 

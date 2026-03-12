@@ -1,11 +1,11 @@
 
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2, Zap, ShieldCheck, Globe2, ServerCog,
   Upload, Download, Settings, Search, Cloud, Layers,
   Image as ImageIcon, FileText, Music, Video,
-  ChevronDown, Box, Mail, Github, Lock, X, Eye, Moon, Sun, UserCircle2
+  ChevronDown, Box, Mail, Github, Lock, X, Eye, Moon, Sun, UserCircle2, Fingerprint
 } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
@@ -27,7 +27,6 @@ import {
 
 import { translations, defaultLang } from './i18n/index.js';
 import appI18n from './i18n.js';
-import SeoPage from './SeoPage.jsx';
 import { CONVERSIONS, getConversionBySlug } from './seo/conversions';
 import { runConversion, decryptFileGcm } from './conversion';
 import { extractLocalNameFromUrl } from './conversion/local/converter';
@@ -48,24 +47,52 @@ import HistoryList from './features/history/HistoryList.jsx';
 import BatchUploader from './features/batch/BatchUploader.jsx';
 import DynamicBatchStack from './features/batch/DynamicBatchStack.jsx';
 import NextActions from './features/recommendations/NextActions.jsx';
-import AiStudioPage from './features/ai/AiStudioPage.jsx';
-import WorkspaceV3Page from './features/v3/WorkspaceV3Page.jsx';
-import LoginPage from './features/auth/pages/LoginPage.jsx';
-import RegisterPage from './features/auth/pages/RegisterPage.jsx';
-import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage.jsx';
-import ResetPasswordPage from './features/auth/pages/ResetPasswordPage.jsx';
-import LocalMediaConverterTool from './features/tools/LocalMediaConverterTool.jsx';
-import OcrRecognitionTool from './features/tools/OcrRecognitionTool.jsx';
-import PdfEditorTool from './features/tools/PdfEditorTool.jsx';
-import ImageCompressorTool from './features/tools/ImageCompressorTool.jsx';
-import BatchWatermarkTool from './features/tools/BatchWatermarkTool.jsx';
 import { getSmartTips } from './features/tips/TipsEngine.js';
-import QuickLookModal from './features/preview/QuickLookModal.jsx';
 import GlassToast from './components/GlassToast.jsx';
 import SmoothScrollProvider from './components/SmoothScrollProvider.jsx';
 import PageTransition from './components/PageTransition.jsx';
 import LanguageSwitcher from './components/LanguageSwitcher.jsx';
 import { useTheme } from './theme/ThemeProvider.jsx';
+import { beginPasskeyAuthentication, resolvePasskeyCapabilities } from './features/auth/lib/passkeys.js';
+
+const SeoPage = lazy(() => import('./SeoPage.jsx'));
+const AiStudioPage = lazy(() => import('./features/ai/AiStudioPage.jsx'));
+const QuickLookModal = lazy(() => import('./features/preview/QuickLookModal.jsx'));
+const StaticInfoPages = lazy(() => import('./features/content/StaticInfoPages.jsx'));
+const SingularityHomePage = lazy(() => import('./features/home/SingularityHomePage.jsx'));
+const WorkspaceV3Page = lazy(() => import('./features/v3/WorkspaceV3Page.jsx'));
+const LoginPage = lazy(() => import('./features/auth/pages/LoginPage.jsx'));
+const RegisterPage = lazy(() => import('./features/auth/pages/RegisterPage.jsx'));
+const ForgotPasswordPage = lazy(() => import('./features/auth/pages/ForgotPasswordPage.jsx'));
+const ResetPasswordPage = lazy(() => import('./features/auth/pages/ResetPasswordPage.jsx'));
+const AuthCallbackPage = lazy(() => import('./features/auth/pages/AuthCallbackPage.jsx'));
+const LocalMediaConverterTool = lazy(() => import('./features/tools/LocalMediaConverterTool.jsx'));
+const OcrRecognitionTool = lazy(() => import('./features/tools/OcrRecognitionTool.jsx'));
+const PdfEditorTool = lazy(() => import('./features/tools/PdfEditorTool.jsx'));
+const ImageCompressorTool = lazy(() => import('./features/tools/ImageCompressorTool.jsx'));
+const BatchWatermarkTool = lazy(() => import('./features/tools/BatchWatermarkTool.jsx'));
+
+function RouteLoadingFallback() {
+  return (
+    <div className="pt-28 pb-16 px-4">
+      <div className="max-w-5xl mx-auto">
+        <div className="mc-card rounded-3xl p-6 md:p-8 border border-white/40 dark:border-white/10 bg-white/75 dark:bg-white/5 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,0.08)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.34)]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            MegaConvert
+          </div>
+          <div className="mt-5 h-8 w-64 rounded-2xl bg-slate-200/80 dark:bg-white/10 animate-pulse" />
+          <div className="mt-4 h-4 w-full max-w-2xl rounded-xl bg-slate-200/70 dark:bg-white/10 animate-pulse" />
+          <div className="mt-2 h-4 w-full max-w-xl rounded-xl bg-slate-200/60 dark:bg-white/10 animate-pulse" />
+          <div className="mt-8 grid gap-3 md:grid-cols-3">
+            <div className="h-28 rounded-3xl bg-slate-200/70 dark:bg-white/10 animate-pulse" />
+            <div className="h-28 rounded-3xl bg-slate-200/70 dark:bg-white/10 animate-pulse" />
+            <div className="h-28 rounded-3xl bg-slate-200/70 dark:bg-white/10 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // --- Firebase ---
 const firebaseConfig = {
@@ -442,6 +469,36 @@ const normalizeEmailAuthUser = (value) => {
   const uid = String(user?.uid || user?.id || email).trim();
   if (!uid) return null;
   const name = String(user?.name || user?.display_name || (email ? email.split('@')[0] : 'User')).trim() || 'User';
+  const rawProviderData = Array.isArray(user?.provider_data)
+    ? user.provider_data
+    : Array.isArray(user?.providers)
+      ? user.providers.map((providerId) => ({
+          provider_id: String(providerId || '').trim() || 'email_password',
+          uid,
+          email: email || null
+        }))
+      : user?.provider
+        ? [{
+            provider_id: String(user.provider || '').trim() || 'email_password',
+            uid,
+            email: email || null
+          }]
+        : null;
+  const provider_data = Array.isArray(rawProviderData) && rawProviderData.length
+    ? rawProviderData
+        .map((item) => ({
+          provider_id: String(item?.provider_id || item?.providerId || item || '').trim() || 'email_password',
+          uid: String(item?.uid || uid).trim() || uid,
+          email: String(item?.email || email || '').trim().toLowerCase() || null
+        }))
+        .filter((item) => item.provider_id)
+    : [
+        {
+          provider_id: 'email_password',
+          uid,
+          email: email || null
+        }
+      ];
   return {
     uid,
     name,
@@ -449,13 +506,7 @@ const normalizeEmailAuthUser = (value) => {
     photo: null,
     isAnon: false,
     isTestMode: false,
-    provider_data: [
-      {
-        provider_id: 'email_password',
-        uid,
-        email: email || null
-      }
-    ]
+    provider_data
   };
 };
 
@@ -514,291 +565,18 @@ const LEGAL_WEBSITE = 'https://megaconvert-web.vercel.app';
 const LEGAL_CONTACT_EMAIL = 'vitalikbussines@gmail.com';
 const TELEGRAM_BOT_URL = 'https://megaconvert-web.vercel.app';
 const X_ACCOUNT_URL = 'https://x.com/vitalikzelenko?s=11';
-const BLOG_ARTICLES = [
-  {
-    slug: 'pdf-to-word-layout-guide',
-    title: 'How to Convert PDF to Word Without Breaking Layout',
-    excerpt: 'A practical workflow to keep tables, fonts, spacing, and signatures stable after conversion.',
-    date: 'February 12, 2026',
-    readTime: '7 min read',
-    category: 'Documents',
-    toolId: 'pdf-word',
-    sections: [
-      {
-        heading: '1. Start with a clean source file',
-        paragraphs: [
-          'Layout problems usually come from the source PDF, not the converter. If the PDF has missing fonts, low-resolution scans, or mixed page sizes, DOCX output becomes harder to edit.',
-          'Before converting, quickly inspect 3 things: page orientation, embedded fonts, and whether text is selectable or image-only.'
-        ],
-        bullets: [
-          'Use text-based PDFs for best editable output',
-          'Keep one document orientation per file when possible',
-          'Avoid heavily compressed scans if you need accurate text'
-        ]
-      },
-      {
-        heading: '2. Validate headers, tables, and page breaks first',
-        paragraphs: [
-          'After conversion, do not review line by line. Validate structure blocks first: title, section headers, table widths, and page break points. This catches 90% of formatting issues quickly.',
-          'When a table shifts, set fixed column width in Word and disable auto-resize to content.'
-        ],
-        bullets: [
-          'Check first page and one random middle page',
-          'Lock table width before editing content',
-          'Reapply only missing styles, not full reformatting'
-        ]
-      },
-      {
-        heading: '3. Build a reusable correction checklist',
-        paragraphs: [
-          'Teams lose time because every person checks different things. Create one short checklist and reuse it for invoices, contracts, and reports.',
-          'A repeatable QA flow reduces manual editing time and improves consistency across exports.'
-        ],
-        bullets: [
-          'Header/footer alignment',
-          'Page numbers and section breaks',
-          'Table borders and merged cells',
-          'Special characters and currency symbols'
-        ]
-      }
-    ]
-  },
-  {
-    slug: 'scan-quality-for-ocr-results',
-    title: 'Scan Quality Rules That Improve OCR Accuracy',
-    excerpt: 'Simple preparation steps for cleaner text extraction from scanned pages and photos.',
-    date: 'February 10, 2026',
-    readTime: '6 min read',
-    category: 'OCR',
-    toolId: 'pdf-txt',
-    sections: [
-      {
-        heading: '1. Resolution and contrast are non-negotiable',
-        paragraphs: [
-          'OCR engines perform best when character edges are clear. 300 DPI with strong contrast is the minimum baseline for documents with small fonts.',
-          'Blur, shadows, and perspective distortion produce broken words and punctuation noise.'
-        ],
-        bullets: [
-          'Target 300 DPI for documents, 400 DPI for tiny print',
-          'Keep pages flat and evenly lit',
-          'Avoid aggressive JPG compression before OCR'
-        ]
-      },
-      {
-        heading: '2. Language and encoding must match content',
-        paragraphs: [
-          'Mixed languages in one file are common in forms and visas. Make sure output is handled as UTF-8 so Cyrillic, accented Latin, and symbols remain readable.',
-          'If your output looks like gibberish, this is usually an encoding mismatch after extraction, not a recognition failure.'
-        ],
-        bullets: [
-          'Prefer UTF-8 output for multilingual text',
-          'Keep one language block per page where possible',
-          'Verify quotes, dashes, and currency symbols'
-        ]
-      },
-      {
-        heading: '3. Post-process with structure, not manual rewriting',
-        paragraphs: [
-          'After OCR, first normalize line breaks and remove duplicated spaces. Then fix names, numbers, and legal references.',
-          'A two-pass cleanup process is faster and safer than rewriting text manually from scratch.'
-        ],
-        bullets: [
-          'Normalize spacing and line endings',
-          'Search for common OCR confusions (O/0, I/1)',
-          'Run quick spell-check in the target language'
-        ]
-      }
-    ]
-  },
-  {
-    slug: 'image-to-pdf-for-visa-packs',
-    title: 'Image to PDF for Visa Packages: A Reliable Checklist',
-    excerpt: 'How to assemble multi-page PDF packs from phone scans without rejection risks.',
-    date: 'February 8, 2026',
-    readTime: '8 min read',
-    category: 'Images',
-    toolId: 'image-pdf',
-    sections: [
-      {
-        heading: '1. Normalize page dimensions before merge',
-        paragraphs: [
-          'Consulates and offices often reject packs with inconsistent page sizes or rotated pages. Normalize all images to one orientation and paper ratio before converting to PDF.',
-          'Do not mix landscape and portrait pages in a single official packet unless specifically requested.'
-        ],
-        bullets: [
-          'Use consistent A4 or Letter ratio',
-          'Rotate pages to upright orientation',
-          'Keep margins visible for stamps and seals'
-        ]
-      },
-      {
-        heading: '2. Preserve readability over aggressive compression',
-        paragraphs: [
-          'File-size limits matter, but unreadable stamps or signatures are worse than a larger file. Keep text and seals sharp first, then optimize size.',
-          'If a page includes fine print, export that page at higher quality.'
-        ],
-        bullets: [
-          'Prioritize readability for signatures and numbers',
-          'Compress in steps and verify after each step',
-          'Avoid converting text-heavy pages to low-quality JPG twice'
-        ]
-      },
-      {
-        heading: '3. Final QA before upload',
-        paragraphs: [
-          'Open the final PDF on both desktop and mobile to confirm orientation, page order, and legibility. This prevents upload retries and deadline issues.',
-          'Maintain a naming standard so support teams can identify each packet quickly.'
-        ],
-        bullets: [
-          'Check page order and total page count',
-          'Confirm all pages are searchable or readable',
-          'Use clear filenames like passport-pack-v2.pdf'
-        ]
-      }
-    ]
-  },
-  {
-    slug: 'video-compression-without-quality-loss',
-    title: 'Video Compression Without Visible Quality Loss',
-    excerpt: 'A balanced method for reducing MP4 size while keeping text overlays and motion clean.',
-    date: 'February 5, 2026',
-    readTime: '7 min read',
-    category: 'Video',
-    toolId: 'mov-mp4',
-    sections: [
-      {
-        heading: '1. Pick the target first: web, social, or archive',
-        paragraphs: [
-          'Compression settings depend on destination. A web preview and an archive master should not share the same bitrate target.',
-          'Define platform and maximum upload size before conversion to avoid multiple re-encodes.'
-        ],
-        bullets: [
-          'Social uploads: optimize for faster playback',
-          'Internal review: medium bitrate with readable overlays',
-          'Archive: higher bitrate and original frame rate'
-        ]
-      },
-      {
-        heading: '2. Control bitrate and frame rate deliberately',
-        paragraphs: [
-          'Most quality loss comes from unnecessary frame-rate changes or too low bitrate for motion-heavy scenes.',
-          'For screen recordings, text clarity benefits from stable frame rate and moderate bitrate rather than extreme compression.'
-        ],
-        bullets: [
-          'Keep native frame rate when possible',
-          'Lower bitrate gradually, then compare output',
-          'Review fast-motion segments, not only static shots'
-        ]
-      },
-      {
-        heading: '3. Use a two-file strategy',
-        paragraphs: [
-          'Keep a high-quality master and a distribution version. This saves time when a platform requests a new format later.',
-          'Re-encoding from already compressed output compounds artifacts, so always re-export from source or master.'
-        ],
-        bullets: [
-          'Master file for future edits',
-          'Delivery file for upload limits',
-          'Document conversion settings in project notes'
-        ]
-      }
-    ]
-  },
-  {
-    slug: 'secure-file-sharing-after-conversion',
-    title: 'Secure File Sharing After Conversion: Team Playbook',
-    excerpt: 'Operational rules for sharing converted files safely across teams and clients.',
-    date: 'February 3, 2026',
-    readTime: '6 min read',
-    category: 'Security',
-    toolId: 'pdf-word',
-    sections: [
-      {
-        heading: '1. Share by sensitivity tier, not convenience',
-        paragraphs: [
-          'Do not treat all converted files equally. Contracts, IDs, and medical forms need stricter access windows and recipients.',
-          'Define at least three tiers: public, internal, restricted.'
-        ],
-        bullets: [
-          'Restricted files: shortest link validity',
-          'Internal files: team-only channels',
-          'Public files: sanitized and approved versions'
-        ]
-      },
-      {
-        heading: '2. Minimize file lifetime and duplication',
-        paragraphs: [
-          'Most leakage events happen through duplicates in chats, email threads, and local downloads. Limit copies and keep one canonical shared location.',
-          'Expire download links and remove stale artifacts from collaboration threads.'
-        ],
-        bullets: [
-          'Use temporary links for sensitive exports',
-          'Avoid re-uploading the same document in multiple chats',
-          'Schedule periodic cleanup of stale attachments'
-        ]
-      },
-      {
-        heading: '3. Keep an audit-friendly naming policy',
-        paragraphs: [
-          'A clear naming convention helps legal and operations teams trace which file version was sent and when.',
-          'Include project code, date, and revision in filename metadata.'
-        ],
-        bullets: [
-          'Example: contract-acme-2026-02-03-r2.pdf',
-          'Track who approved final output',
-          'Store final versions in one controlled folder'
-        ]
-      }
-    ]
-  },
-  {
-    slug: 'api-readiness-for-file-automation',
-    title: 'API Readiness Checklist for File Conversion Automation',
-    excerpt: 'How to prepare your workflow for future API integration with fewer production surprises.',
-    date: 'February 1, 2026',
-    readTime: '9 min read',
-    category: 'API',
-    toolId: 'png-jpg',
-    sections: [
-      {
-        heading: '1. Define contract rules before coding',
-        paragraphs: [
-          'Teams often start integration before agreeing on accepted formats, max file size, and retry behavior. That creates fragile automation.',
-          'Create a short conversion contract document first and align product + operations.'
-        ],
-        bullets: [
-          'Allowed input formats and expected outputs',
-          'Timeouts and retry limits',
-          'Error classes and user-facing messages'
-        ]
-      },
-      {
-        heading: '2. Design idempotent job handling',
-        paragraphs: [
-          'Automations must survive duplicate callbacks and temporary network failures. Use job IDs and idempotency keys to avoid duplicated output or billing drift.',
-          'Always separate upload, process, and delivery states in logs.'
-        ],
-        bullets: [
-          'Unique request IDs for every job',
-          'Safe retry strategy without duplicate effects',
-          'Clear final states: completed, failed, expired'
-        ]
-      },
-      {
-        heading: '3. Add observability from day one',
-        paragraphs: [
-          'Track queue time, processing time, and failure reasons. Without these metrics, SLA conversations become guesswork.',
-          'Start with basic dashboards and alerts, then tune thresholds based on real traffic.'
-        ],
-        bullets: [
-          'Median and p95 processing duration',
-          'Top 5 error categories by volume',
-          'Storage, worker, and API health in one view'
-        ]
-      }
-    ]
-  }
-];
+
+const normalizeStaticBlogPosts = (posts) => (
+  Array.isArray(posts)
+    ? posts.map((post) => ({
+        ...post,
+        id: '',
+        source: 'static',
+        likes_count: 0,
+        liked: false
+      }))
+    : []
+);
 
 const EXT_SUGGEST_MAP = {
   pdf: 'pdf-word',
@@ -814,6 +592,10 @@ const EXT_SUGGEST_MAP = {
   wav: 'wav-mp3',
   m4a: 'm4a-mp3'
 };
+
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif', 'bmp', 'avif', 'svg']);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv', 'm4v', 'gif']);
+const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg']);
 
 const inferToolFromName = (name) => {
   const ext = (name || '').toLowerCase().split('.').pop();
@@ -1377,26 +1159,6 @@ export default function App() {
     { label: t.navSecurity || 'Security', to: '/security' }
   ]), [t]);
 
-  const securityBadges = useMemo(() => ([
-    { title: t.securityBadgeEncryptTitle, desc: t.securityBadgeEncryptDesc },
-    { title: t.securityBadgeDeleteTitle, desc: t.securityBadgeDeleteDesc },
-    { title: t.securityBadgeIsolateTitle, desc: t.securityBadgeIsolateDesc },
-    { title: t.securityBadgeComplianceTitle, desc: t.securityBadgeComplianceDesc }
-  ]), [t]);
-
-  const _HOW_STEPS = useMemo(() => ([
-    { title: t.howStepUploadTitle, desc: t.howStepUploadDesc, icon: Upload },
-    { title: t.howStepConvertTitle, desc: t.howStepConvertDesc, icon: Settings },
-    { title: t.howStepDownloadTitle, desc: t.howStepDownloadDesc, icon: Download }
-  ]), [t]);
-
-  const featureList = useMemo(() => ([
-    { title: t.featureInstantTitle, desc: t.featureInstantDesc, icon: Zap },
-    { title: t.featureSecureTitle, desc: t.featureSecureDesc, icon: ShieldCheck },
-    { title: t.featureBatchTitle, desc: t.featureBatchDesc, icon: Layers },
-    { title: t.featureCloudTitle, desc: t.featureCloudDesc, icon: Cloud }
-  ]), [t]);
-
   const pipelineSteps = useMemo(() => ([
     t.pipelineStep1,
     t.pipelineStep2,
@@ -1423,13 +1185,6 @@ export default function App() {
     { label: t.statusMetricIncidentsLabel, value: t.statusMetricIncidentsValue, desc: t.statusMetricIncidentsDesc }
   ]), [t]);
 
-  const staticBlogPosts = useMemo(() => BLOG_ARTICLES.map((post) => ({
-    ...post,
-    id: '',
-    source: 'static',
-    likes_count: 0,
-    liked: false
-  })), []);
   const autoGeneratedBlogPosts = useMemo(() => {
     const updates = generateAutoUpdateArticles(lang, 8);
     const conversions = generateAutoConversionArticles(lang, CONVERSIONS);
@@ -1503,6 +1258,7 @@ export default function App() {
   const [historyStatusFilter, setHistoryStatusFilter] = useState('all');
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [shareHint, setShareHint] = useState('');
+  const [megaDropPreparedFile, setMegaDropPreparedFile] = useState(null);
   const [featureFlags, setFeatureFlags] = useState({
     smart_auto_convert: true,
     public_share_links: true,
@@ -1536,6 +1292,8 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
+  const [passkeyCapabilities, setPasskeyCapabilities] = useState({ supported: false, platformAuthenticator: false });
+  const [passkeyModalLoading, setPasskeyModalLoading] = useState(false);
   const [testModeLoading, setTestModeLoading] = useState(false);
   const [testModeUnlockLoading, setTestModeUnlockLoading] = useState(false);
   const [testModeUnlockError, setTestModeUnlockError] = useState('');
@@ -1556,9 +1314,11 @@ export default function App() {
   const [showAllFormats, setShowAllFormats] = useState(false);
   const [toolOpenCounts, setToolOpenCounts] = useState(() => readToolOpenCounts());
   const [pendingOpenToolId, setPendingOpenToolId] = useState(null);
-  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  const [, setIsLangMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [staticBlogPosts, setStaticBlogPosts] = useState([]);
+  const [staticBlogStatus, setStaticBlogStatus] = useState('idle');
   const [remoteBlogPosts, setRemoteBlogPosts] = useState([]);
   const [remoteBlogLoading, setRemoteBlogLoading] = useState(false);
   const [remoteBlogError, setRemoteBlogError] = useState('');
@@ -2707,6 +2467,18 @@ export default function App() {
       setAuthError(formatAuthError(error));
       setShowAuthModal(true);
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    resolvePasskeyCapabilities().then((capabilities) => {
+      if (!cancelled) {
+        setPasskeyCapabilities(capabilities);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -4515,6 +4287,27 @@ export default function App() {
     }
   };
 
+  const handlePasskeyModalLogin = async () => {
+    if (passkeyModalLoading) return;
+    setPasskeyModalLoading(true);
+    setAuthError('');
+    try {
+      const payload = await beginPasskeyAuthentication({
+        apiBase: API_BASE,
+        email
+      });
+      handleEmailAuthSuccess({
+        token: payload?.token || payload?.access_token || '',
+        email: payload?.user?.email || email,
+        user: payload?.user || null
+      });
+    } catch (error) {
+      setAuthError(String(error?.message || 'Passkey authentication failed.'));
+    } finally {
+      setPasskeyModalLoading(false);
+    }
+  };
+
   const handleEmailAuth = async (e) => {
     e.preventDefault();
     setAuthError('');
@@ -4547,7 +4340,7 @@ export default function App() {
     }
   };
 
-  const handleTestModeLogin = async () => {
+  const _handleTestModeLogin = async () => {
     if (testModeLoading) return;
     setAuthError('');
     const pass = String(password || '').trim();
@@ -4629,7 +4422,7 @@ export default function App() {
     }
   }, [API_BASE, buildAuthHeaders, loadAccountBilling, parseApiPayload, t, testModeUnlockLoading, user?.isTestMode, user?.uid]);
 
-  const handleGuest = async () => {
+  const _handleGuest = async () => {
     try {
       await signInAnonymously(auth);
       setShowAuthModal(false);
@@ -4731,6 +4524,7 @@ export default function App() {
     setQuickLookText('');
     setShareHint('');
     setShareLink('');
+    setMegaDropPreparedFile(null);
     setIsShareLinkCreating(false);
     setMediaDurationSec(null);
     setMediaDurationLoading(false);
@@ -5011,6 +4805,7 @@ export default function App() {
     track('job_start', { tool: targetToolId, batch: isBatchRun, count: uploadFiles.length });
 
     try {
+      const targetToolMeta = tools.find((tool) => tool.id === targetToolId) || currentTool;
       const settingsForRun = (() => {
         const next = {
           ...settings,
@@ -5019,7 +4814,7 @@ export default function App() {
           audio: { ...(settings.audio || {}) },
           privacy: { ...(settings.privacy || {}) }
         };
-        const mediaType = String(currentTool?.type || '').trim().toLowerCase();
+        const mediaType = String(targetToolMeta?.type || '').trim().toLowerCase();
         if (mediaType === 'audio' || mediaType === 'video') {
           const bucketKey = mediaType === 'video' ? 'video' : 'audio';
           const bucket = { ...(next[bucketKey] || {}) };
@@ -5385,6 +5180,89 @@ export default function App() {
     }
   }, []);
 
+  const resolveDownloadBlob = useCallback(async () => {
+    if (!downloadUrl) return null;
+    const context = lastJobId ? encryptionContextRef.current.get(lastJobId) : null;
+    const fileName = (() => {
+      const explicit = String(downloadFileName || '').trim();
+      if (explicit) return explicit;
+      const localName = extractLocalNameFromUrl(downloadUrl);
+      if (localName) return localName;
+      try {
+        const parsedUrl = new URL(downloadUrl);
+        const parts = parsedUrl.pathname.split('/');
+        const last = parts[parts.length - 1] || '';
+        if (!last) return `converted_${Date.now()}`;
+        try {
+          return decodeURIComponent(last);
+        } catch {
+          return last;
+        }
+      } catch {
+        return `converted_${Date.now()}`;
+      }
+    })();
+
+    try {
+      let blob = null;
+      if (context?.meta && context?.key) {
+        const encryptedResponse = await fetch(downloadUrl);
+        if (!encryptedResponse.ok) {
+          throw new Error(`download_failed_${encryptedResponse.status}`);
+        }
+        const encryptedBuffer = await encryptedResponse.arrayBuffer();
+        blob = await decryptFileGcm(encryptedBuffer, context.meta, context.key);
+      } else {
+        const response = await fetch(downloadUrl);
+        if (!response.ok) throw new Error(`download_failed_${response.status}`);
+        blob = await response.blob();
+      }
+
+      const isImageOutput = getPreviewType(getExtensionFromValue(fileName || downloadUrl)) === 'image';
+      const shouldStripExif = Boolean(settings?.image?.stripExif) && isImageOutput;
+      if (shouldStripExif) {
+        blob = await stripImageMetadata(blob, fileName);
+      }
+
+      return {
+        blob,
+        fileName: String(fileName || `converted_${Date.now()}`).replace(/\.enc$/, '')
+      };
+    } catch {
+      setErrorInfo(t.errorDecryptionFailed);
+      return null;
+    }
+  }, [downloadFileName, downloadUrl, lastJobId, settings?.image?.stripExif, stripImageMetadata, t]);
+
+  const prepareMegaDrop = useCallback(async () => {
+    const payload = await resolveDownloadBlob();
+    if (!payload?.blob) return { ok: false };
+    const preparedFile = new File([payload.blob], payload.fileName, {
+      type: payload.blob.type || 'application/octet-stream'
+    });
+    setMegaDropPreparedFile({
+      file: preparedFile,
+      preparedAt: Date.now(),
+      source: 'home_result'
+    });
+    navigate('/workspace/secure-share');
+    return { ok: true };
+  }, [navigate, resolveDownloadBlob]);
+
+  const launchAIMagic = useCallback(() => {
+    const selectedFile = files[0] || file || null;
+    const extension = normalizeFormatToken(String(selectedFile?.name || '').split('.').pop());
+    if (IMAGE_EXTENSIONS.has(extension)) {
+      setAiAssistantPrompt('Улучши это изображение, сделай его чище и подбери лучший формат для публикации.');
+    } else if (VIDEO_EXTENSIONS.has(extension) || AUDIO_EXTENSIONS.has(extension)) {
+      setAiAssistantPrompt('Очисти звук, убери лишний шум и подготовь лучший формат для публикации.');
+    } else {
+      setAiAssistantPrompt('Определи лучший сценарий обработки и подготовь файл к следующему шагу.');
+    }
+    setAiAssistantError('');
+    navigate('/ai');
+  }, [file, files, navigate]);
+
   const download = async () => {
     if (!downloadUrl) return;
     const context = lastJobId ? encryptionContextRef.current.get(lastJobId) : null;
@@ -5573,12 +5451,15 @@ export default function App() {
   const isRegister = path === '/register';
   const isForgotPassword = path === '/forgot-password';
   const isResetPassword = path === '/reset-password';
+  const isAuthCallback = path === '/auth/callback';
   const isDashboard = path === '/dashboard';
   const isAccount = path === '/account' || path === '/settings/billing';
   const isBlog = path === '/blog' || path === '/blog/';
   const isBlogArticle = path.startsWith('/blog/') && path !== '/blog/';
   const isGuides = path === '/guides' || path === '/guides/';
   const isGuidesArticle = path.startsWith('/guides/') && path !== '/guides/';
+  const needsStaticBlogPosts = isBlog || isGuides || isBlogArticle || isGuidesArticle;
+  const isStaticBlogPending = needsStaticBlogPosts && (staticBlogStatus === 'idle' || staticBlogStatus === 'loading') && !staticBlogPosts.length;
   const blogSlug = isBlogArticle
     ? decodeURIComponent(path.replace('/blog/', '').replace(/\/+$/, ''))
     : '';
@@ -5616,9 +5497,34 @@ export default function App() {
   );
   const isConvert = (path.startsWith('/convert/') && !isConvertRoot) || isDirectConversionRoute;
   const isShare = path.startsWith('/s/');
-  const isNotFound = !isHome && !isTools && !isLocalConverterTool && !isOcrTool && !isPdfEditorTool && !isImageCompressorTool && !isBatchWatermarkTool && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isRegister && !isForgotPassword && !isResetPassword && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isWorkspaceV3 && !isAiPage && !isConvert && !isConvertRoot && !isShare;
+  const isNotFound = !isHome && !isTools && !isLocalConverterTool && !isOcrTool && !isPdfEditorTool && !isImageCompressorTool && !isBatchWatermarkTool && !isApi && !isPricing && !isSecurity && !isStatus && !isReliability && !isDevelopers && !isTeamDevelopers && !isRoadmap && !isChangelog && !isArchitecture && !isLogin && !isRegister && !isForgotPassword && !isResetPassword && !isAuthCallback && !isDashboard && !isAccount && !isBlog && !isGuides && !currentBlogPost && !currentGuidePost && !isStaticBlogPending && !isFaq && !isPrivacy && !isTerms && !isLegal && !isCookiePolicy && !isDisclaimer && !isAbout && !isMission && !isCareers && !isPress && !isResources && !isBugBounty && !isSecurityWhitepaper && !isContact && !isWorkspaceV3 && !isAiPage && !isConvert && !isConvertRoot && !isShare;
   const showMobileUploadBar = (isHome || isConvert || isConvertRoot) && !showAuthModal && !showTwofaModal;
   const saveDataMode = typeof navigator !== 'undefined' && navigator.connection?.saveData;
+
+  useEffect(() => {
+    if (!needsStaticBlogPosts || staticBlogStatus === 'loaded' || staticBlogStatus === 'loading') {
+      return undefined;
+    }
+
+    let cancelled = false;
+    setStaticBlogStatus('loading');
+
+    import('./content/blogArticles.js')
+      .then((module) => {
+        if (cancelled) return;
+        setStaticBlogPosts(normalizeStaticBlogPosts(module.BLOG_ARTICLES || module.default || []));
+        setStaticBlogStatus('loaded');
+      })
+      .catch((error) => {
+        console.error('[MegaConvert][blog-content-load]', error);
+        if (cancelled) return;
+        setStaticBlogStatus('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [needsStaticBlogPosts, staticBlogStatus]);
 
   const convertSlug = isConvert
     ? (path.startsWith('/convert/')
@@ -5665,10 +5571,22 @@ export default function App() {
     let description = defaultDescription;
     let canonicalPath = path || '/';
 
+    if ((isBlogArticle || isGuidesArticle) && isStaticBlogPending) {
+      return;
+    }
+
     if (isConvert && conversionFromSlug) {
       title = `${conversionFromSlug.from} to ${conversionFromSlug.to} Converter | MegaConvert`;
       description = `Convert ${conversionFromSlug.from} to ${conversionFromSlug.to} online in seconds. Fast, secure, and high-quality conversion.`;
       canonicalPath = `/convert/${conversionFromSlug.slug}`;
+    } else if (isBlog) {
+      title = 'MegaConvert Blog | File Workflows and Product Updates';
+      description = 'Guides, updates, and practical advice for document, media, privacy, and automation workflows.';
+      canonicalPath = '/blog';
+    } else if (isBlogArticle && currentBlogPost) {
+      title = `${currentBlogPost.title} | MegaConvert Blog`;
+      description = currentBlogPost.excerpt || defaultDescription;
+      canonicalPath = `/blog/${currentBlogPost.slug}`;
     } else if (isGuides) {
       title = 'Conversion Guides and Tutorials | MegaConvert';
       description = 'Practical guides for document, image, audio, and video conversion workflows.';
@@ -5725,7 +5643,7 @@ export default function App() {
       operatingSystem: 'Web',
       description
     });
-  }, [conversionFromSlug, currentGuidePost, isConvert, isGuides, isGuidesArticle, isWorkspaceV3, path]);
+  }, [conversionFromSlug, currentBlogPost, currentGuidePost, isBlog, isBlogArticle, isConvert, isGuides, isGuidesArticle, isStaticBlogPending, isWorkspaceV3, path]);
 
   useEffect(() => {
     const activePost = isBlogArticle ? currentBlogPost : (isGuidesArticle ? currentGuidePost : null);
@@ -7149,6 +7067,10 @@ export default function App() {
     <ResetPasswordPage apiBase={API_BASE} onNavigate={navigate} />
   );
 
+  const renderAuthCallbackPage = () => (
+    <AuthCallbackPage onNavigate={navigate} onAuthSuccess={handleEmailAuthSuccess} />
+  );
+
   const renderDashboardPage = () => {
     const historyStatusLabels = statusLabelMap(t);
     const historyStatusOptions = [
@@ -8303,6 +8225,9 @@ export default function App() {
 
   const renderBlogPage = () => (
     <Page title={t.pageBlogTitle} subtitle={t.pageBlogSubtitle}>
+      {isStaticBlogPending && !blogPosts.length && (
+        <PageCard className="mb-6 text-sm text-slate-500">{t.blogLoadingUpdates}</PageCard>
+      )}
       {remoteBlogLoading && (
         <PageCard className="mb-6 text-sm text-slate-500">{t.blogLoadingUpdates}</PageCard>
       )}
@@ -8414,8 +8339,8 @@ export default function App() {
 
   const renderBlogArticleFallbackPage = () => (
     <Page
-      title={remoteBlogLoading ? t.blogLoadingArticleTitle : t.blogArticleNotFoundTitle}
-      subtitle={remoteBlogLoading ? t.blogLoadingArticleSubtitle : t.blogArticleNotFoundSubtitle}
+      title={(remoteBlogLoading || isStaticBlogPending) ? t.blogLoadingArticleTitle : t.blogArticleNotFoundTitle}
+      subtitle={(remoteBlogLoading || isStaticBlogPending) ? t.blogLoadingArticleSubtitle : t.blogArticleNotFoundSubtitle}
       actions={<Button variant="secondary" onClick={() => navigate('/blog')}>{t.back}</Button>}
     >
       {remoteBlogError ? (
@@ -8426,296 +8351,24 @@ export default function App() {
     </Page>
   );
 
-  const renderFaqPage = () => (
-    <Page title={t.pageFaqTitle} subtitle={t.pageFaqSubtitle}>
-      <div className="grid md:grid-cols-2 gap-6">
-        {faqItems.map((item) => (
-          <PageCard key={item.q}>
-            <div className="font-semibold">{item.q}</div>
-            <div className="text-sm text-slate-600 mt-2">{item.a}</div>
-          </PageCard>
-        ))}
-      </div>
-    </Page>
-  );
-
-  const renderPrivacyPage = () => (
-    <Page title={t.pagePrivacyTitle} subtitle={t.pagePrivacySubtitle}>
-      <div className="space-y-6">
-        <PageCard className="space-y-3">
-          <div className="text-sm text-slate-500">
-            <span className="font-semibold">{t.legalLastUpdatedLabel}</span> {formatUiDate(LEGAL_LAST_UPDATED)}
-          </div>
-          <p className="text-sm text-slate-600">{t.privacyIntroText}</p>
-          <p className="text-sm text-slate-600">
-            <span className="font-semibold">{t.legalWebsiteLabel}</span>{' '}
-            <a href={LEGAL_WEBSITE} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
-              {LEGAL_WEBSITE}
-            </a>
-          </p>
-          <p className="text-sm text-slate-600">
-            <span className="font-semibold">{t.legalContactLabel}</span>{' '}
-            <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-blue-700 hover:underline">
-              {LEGAL_CONTACT_EMAIL}
-            </a>
-          </p>
-        </PageCard>
-
-        <LegalSectionCard title={t.privacySection1Title}>
-          <p className="text-sm text-slate-600">{t.privacySection1Desc}</p>
-        </LegalSectionCard>
-        <LegalSectionCard title={t.privacySection2Title}>
-          <p className="text-sm text-slate-600">{t.privacySection2Desc}</p>
-        </LegalSectionCard>
-        <LegalSectionCard title={t.privacySection3Title}>
-          <p className="text-sm text-slate-600">{t.privacySection3Desc}</p>
-        </LegalSectionCard>
-        <LegalSectionCard title={t.privacySection4Title}>
-          <p className="text-sm text-slate-600">{t.privacySection4Desc}</p>
-        </LegalSectionCard>
-      </div>
-    </Page>
-  );
-
-  const renderTermsPage = () => (
-    <Page title={t.pageTermsTitle} subtitle={t.pageTermsSubtitle}>
-      <div className="space-y-6">
-        <PageCard className="space-y-3">
-          <div className="text-sm text-slate-500">
-            <span className="font-semibold">{t.legalLastUpdatedLabel}</span> {formatUiDate(LEGAL_LAST_UPDATED)}
-          </div>
-          <p className="text-sm text-slate-600">{t.termsIntroText}</p>
-        </PageCard>
-
-        <LegalSectionCard title={t.termsSection1Title}>
-          <p className="text-sm text-slate-600">{t.termsSection1Desc}</p>
-        </LegalSectionCard>
-        <LegalSectionCard title={t.termsSection2Title}>
-          <p className="text-sm text-slate-600">{t.termsSection2Desc}</p>
-        </LegalSectionCard>
-        <LegalSectionCard title={t.termsSection3Title}>
-          <p className="text-sm text-slate-600">{t.termsSection3Desc}</p>
-        </LegalSectionCard>
-
-        <LegalSectionCard title={t.contactGeneralTitle}>
-          <p className="text-sm text-slate-600">
-            <span className="font-semibold">{t.legalContactLabel}</span>{' '}
-            <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-blue-700 hover:underline">
-              {LEGAL_CONTACT_EMAIL}
-            </a>
-          </p>
-        </LegalSectionCard>
-      </div>
-    </Page>
-  );
-
-  const renderCookiePage = () => (
-    <Page title={t.pageCookiesTitle} subtitle={t.pageCookiesSubtitle}>
-      <div className="space-y-6">
-        <PageCard className="space-y-3">
-          <div className="text-sm text-slate-500">
-            <span className="font-semibold">{t.legalLastUpdatedLabel}</span> {formatUiDate(LEGAL_LAST_UPDATED)}
-          </div>
-          <p className="text-sm text-slate-600">{t.legalSection4Desc}</p>
-          <p className="text-sm text-slate-600">{t.cookieText}</p>
-        </PageCard>
-        <LegalSectionCard title={t.contactGeneralTitle}>
-          <p className="text-sm text-slate-600">
-            <span className="font-semibold">{t.legalContactLabel}</span>{' '}
-            <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-blue-700 hover:underline">
-              {LEGAL_CONTACT_EMAIL}
-            </a>
-          </p>
-        </LegalSectionCard>
-      </div>
-    </Page>
-  );
-
-  const renderDisclaimerPage = () => (
-    <Page title={t.pageDisclaimerTitle} subtitle={t.pageDisclaimerSubtitle}>
-      <div className="space-y-6">
-        <LegalSectionCard title={t.pageDisclaimerTitle}>
-          <p className="text-sm text-slate-600">{t.disclaimerBody}</p>
-        </LegalSectionCard>
-      </div>
-    </Page>
-  );
-
-  const renderLegalPage = () => (
-    <Page title={t.pageLegalTitle} subtitle={t.pageLegalSubtitle}>
-      <div className="space-y-6">
-        <PageCard className="space-y-3">
-          <div className="text-sm text-slate-500">
-            <span className="font-semibold">{t.legalLastUpdatedLabel}</span> {formatUiDate(LEGAL_LAST_UPDATED)}
-          </div>
-          <p className="text-sm text-slate-600">{t.legalResourcesIntro}</p>
-        </PageCard>
-
-        <div className="grid md:grid-cols-2 gap-6">
-          <PageCard className="space-y-3">
-            <h3 className="font-semibold text-slate-900">{t.privacySection1Title}</h3>
-            <p className="text-sm text-slate-600">{t.privacySection1Desc}</p>
-            <Button variant="secondary" onClick={() => navigate('/privacy')}>{t.navPrivacy}</Button>
-          </PageCard>
-          <PageCard className="space-y-3">
-            <h3 className="font-semibold text-slate-900">{t.termsSection1Title}</h3>
-            <p className="text-sm text-slate-600">{t.termsSection1Desc}</p>
-            <Button variant="secondary" onClick={() => navigate('/terms')}>{t.navTerms}</Button>
-          </PageCard>
-          <PageCard className="space-y-3">
-            <h3 className="font-semibold text-slate-900">{t.legalSection4Title}</h3>
-            <p className="text-sm text-slate-600">{t.legalSection4Desc}</p>
-            <Button variant="secondary" onClick={() => navigate('/cookie-policy')}>{t.navCookies}</Button>
-          </PageCard>
-          <PageCard className="space-y-3">
-            <h3 className="font-semibold text-slate-900">{t.pageDisclaimerTitle}</h3>
-            <p className="text-sm text-slate-600">{t.pageDisclaimerSubtitle}</p>
-            <Button variant="secondary" onClick={() => navigate('/disclaimer')}>{t.navDisclaimer}</Button>
-          </PageCard>
-        </div>
-
-        <LegalSectionCard title={t.legalDataDeletionTitle}>
-          <p className="text-sm text-slate-600">
-            {t.legalDataDeletionBody}{' '}
-            <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-blue-700 hover:underline">
-              {LEGAL_CONTACT_EMAIL}
-            </a>
-          </p>
-        </LegalSectionCard>
-      </div>
-    </Page>
-  );
-
-  const renderAboutPage = () => (
-    <Page title={t.pageAboutTitle} subtitle={t.pageAboutSubtitle}>
-      <div className="grid md:grid-cols-2 gap-6">
-        <PageCard>
-          <div className="font-semibold mb-2">{t.aboutSection1Title}</div>
-          <div className="text-sm text-slate-600">{t.aboutSection1Desc}</div>
-        </PageCard>
-        <PageCard>
-          <div className="font-semibold mb-2">{t.aboutSection2Title}</div>
-          <div className="text-sm text-slate-600">{t.aboutSection2Desc}</div>
-        </PageCard>
-        <PageCard>
-          <div className="font-semibold mb-2">{t.aboutSection3Title}</div>
-          <div className="text-sm text-slate-600">{t.aboutSection3Desc}</div>
-        </PageCard>
-        <PageCard>
-          <div className="font-semibold mb-2">{t.aboutSection4Title}</div>
-          <div className="text-sm text-slate-600">{t.aboutSection4Desc}</div>
-        </PageCard>
-      </div>
-    </Page>
-  );
-
-  const renderContactPage = () => (
-    <Page title={t.pageContactTitle} subtitle={t.pageContactSubtitle}>
-      <div className="grid md:grid-cols-2 gap-6">
-        <LegalSectionCard title={t.contactGeneralTitle}>
-          <p className="text-sm text-slate-600">
-            {t.contactGeneralIntro}
-          </p>
-          <p className="text-sm text-slate-600">
-            <span className="font-semibold">{t.legalContactLabel}</span>{' '}
-            <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-blue-700 hover:underline">
-              {LEGAL_CONTACT_EMAIL}
-            </a>
-          </p>
-          <p className="text-sm text-slate-600">{t.contactResponseTime}</p>
-        </LegalSectionCard>
-
-        <LegalSectionCard title={t.contactPrivacyChecklistTitle}>
-          <p className="text-sm text-slate-600">{t.contactPrivacyChecklistIntro}</p>
-          <LegalList
-            items={[
-              t.contactPrivacyChecklistItem1,
-              t.contactPrivacyChecklistItem2,
-              t.contactPrivacyChecklistItem3
-            ]}
-          />
-          <p className="text-sm text-slate-600">{t.contactThanks}</p>
-        </LegalSectionCard>
-      </div>
-    </Page>
-  );
-
-  const renderMissionPage = () => (
-    <Page title="Mission" subtitle="Build the most secure and intelligent file workspace on the web.">
-      <div className="grid md:grid-cols-2 gap-6">
-        <PageCard>
-          <div className="font-semibold mb-2">What we build</div>
-          <div className="text-sm text-slate-600">Conversion, automation, observability and trust in one platform.</div>
-        </PageCard>
-        <PageCard>
-          <div className="font-semibold mb-2">How we build</div>
-          <div className="text-sm text-slate-600">Reliability-first architecture with transparent status and explainable AI.</div>
-        </PageCard>
-      </div>
-    </Page>
-  );
-
-  const renderCareersPage = () => (
-    <Page title="Careers" subtitle="Join the team building enterprise-grade file infrastructure.">
-      <PageCard>
-        <div className="text-sm text-slate-600">Open roles: Product Engineer, Platform Engineer, Security Engineer.</div>
-        <div className="mt-3 text-sm text-slate-600">Send portfolio and CV to <a className="text-blue-700 hover:underline" href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>.</div>
-      </PageCard>
-    </Page>
-  );
-
-  const renderPressPage = () => (
-    <Page title="Press Kit" subtitle="Brand assets, product screenshots, and company facts for media.">
-      <div className="grid md:grid-cols-2 gap-6">
-        <PageCard>
-          <div className="font-semibold mb-2">Assets</div>
-          <div className="text-sm text-slate-600">Logos, screenshots, and product overview available on request.</div>
-        </PageCard>
-        <PageCard>
-          <div className="font-semibold mb-2">Media Contact</div>
-          <div className="text-sm text-slate-600"><a className="text-blue-700 hover:underline" href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a></div>
-        </PageCard>
-      </div>
-    </Page>
-  );
-
-  const renderResourcesPage = () => (
-    <Page title="Resources" subtitle="Documentation, guides, roadmap and security materials.">
-      <div className="grid md:grid-cols-2 gap-6">
-        {[
-          { title: 'API Docs', path: '/api' },
-          { title: 'Developer Portal', path: '/developer-portal' },
-          { title: 'Roadmap', path: '/roadmap' },
-          { title: 'Changelog', path: '/changelog' },
-          { title: 'Status', path: '/status' },
-          { title: 'Security Whitepaper', path: '/security-whitepaper' },
-          { title: 'Bug Bounty', path: '/bug-bounty' },
-          { title: 'Help Center', path: '/faq' }
-        ].map((item) => (
-          <PageCard key={item.title}>
-            <div className="font-semibold">{item.title}</div>
-            <Button className="mt-3" variant="secondary" onClick={() => navigate(item.path)}>Open</Button>
-          </PageCard>
-        ))}
-      </div>
-    </Page>
-  );
-
-  const renderBugBountyPage = () => (
-    <Page title="Bug Bounty" subtitle="Responsible disclosure process for security researchers.">
-      <PageCard>
-        <div className="text-sm text-slate-600">Report vulnerabilities to <a className="text-blue-700 hover:underline" href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>. Include reproduction steps, impact and proof of concept.</div>
-      </PageCard>
-    </Page>
-  );
-
-  const renderSecurityWhitepaperPage = () => (
-    <Page title="Security Whitepaper" subtitle="Processing model, encryption and retention controls.">
-      <PageCard>
-        <div className="text-sm text-slate-600">Request PDF whitepaper from security team. Includes architecture, controls, and incident process.</div>
-        <Button className="mt-3" onClick={() => navigate('/contact')}>Request whitepaper</Button>
-      </PageCard>
-    </Page>
+  const renderStaticInfoPage = (page) => (
+    <StaticInfoPages
+      page={page}
+      t={t}
+      faqItems={faqItems}
+      navigate={navigate}
+      formatUiDate={formatUiDate}
+      legalLastUpdated={LEGAL_LAST_UPDATED}
+      legalWebsite={LEGAL_WEBSITE}
+      legalContactEmail={LEGAL_CONTACT_EMAIL}
+      ui={{
+        Button,
+        Page,
+        PageCard,
+        LegalSectionCard,
+        LegalList
+      }}
+    />
   );
 
   const renderApiPage = () => (
@@ -8911,7 +8564,13 @@ console.log(job.status, job.downloadUrl)`}
   );
 
   const renderWorkspaceV3Page = () => (
-    <WorkspaceV3Page path={path} navigate={navigate} />
+    <WorkspaceV3Page
+      path={path}
+      navigate={navigate}
+      megadropPreparedFile={megaDropPreparedFile}
+      onConsumeMegadropPreparedFile={() => setMegaDropPreparedFile(null)}
+      recentJobs={recentJobs}
+    />
   );
 
   const renderNotFoundPage = () => (
@@ -8926,224 +8585,66 @@ console.log(job.status, job.downloadUrl)`}
     </Page>
   );
   const renderHomePage = () => (
-    <>
-      <div className="pt-32 pb-24 px-4 relative overflow-hidden page-enter">
-        <div className="ambient-orb orb-a absolute -top-40 -right-40 w-[70vw] h-[70vw] max-w-96 max-h-96 bg-gradient-to-br from-blue-500/30 via-violet-500/20 to-slate-900/10 rounded-full blur-3xl opacity-70" />
-        <div className="ambient-orb orb-b absolute -bottom-32 -left-24 w-[32rem] h-[32rem] bg-gradient-to-br from-slate-900/40 via-blue-500/20 to-violet-500/10 rounded-full blur-3xl opacity-70" />
-        <div className="max-w-5xl mx-auto relative">
-          <div className="hero-copy reveal relative z-10 text-slate-100 text-center" data-reveal>
-            <Badge color="slate" variant="dark">{t.homeBadgePlatform}</Badge>
-            <div className="mt-3 text-xs uppercase tracking-[0.4em] text-slate-400">Smart File Workspace</div>
-            <div className="mt-2 text-sm text-blue-200">Secure, intelligent file workspace - faster than any converter.</div>
-            <h1 className="text-5xl md:text-6xl font-semibold font-display mt-6 tracking-tight">
-              {t.heroTitle}
-            </h1>
-            <p className="text-lg md:text-xl text-slate-300 mt-5 max-w-2xl mx-auto">
-              {t.heroDesc}
-            </p>
-            <div className="flex flex-wrap gap-3 mt-8 justify-center">
-              <Button size="large" onClick={() => { scrollToConverter(); openFilePicker(); }} data-testid="cta-upload">{t.btnUploadFile}</Button>
-              <Button size="large" variant="secondary" onClick={() => navigate('/tools')}>{t.btnBrowseTools}</Button>
-            </div>
-            <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-300 justify-center">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-emerald-400" />
-                <span>Без регистрации</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={16} className="text-blue-300" />
-                <span>Безопасно</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Zap size={16} className="text-amber-300" />
-                <span>Быстро</span>
-              </div>
-            </div>
-            <div className="mt-8 grid sm:grid-cols-3 gap-3 max-w-3xl mx-auto">
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
-                <div className="font-semibold text-slate-100">{filesConvertedCount.toLocaleString()}</div>
-                <div className="text-xs text-slate-400 mt-1">{t.homeFilesConvertedLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
-                <div className="font-semibold text-slate-100">{t.statusMetricUptimeValue}</div>
-                <div className="text-xs text-slate-400 mt-1">{t.statusMetricUptimeLabel}</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
-                <div className="font-semibold text-slate-100">{t.statusMetricProcessingValue}</div>
-                <div className="text-xs text-slate-400 mt-1">{t.statusMetricProcessingDesc}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="hero-converter reveal relative z-10 mt-12 max-w-3xl mx-auto" id="converter" data-reveal>
-            {renderConverterPanel({ compact: true })}
-          </div>
-        </div>
-      </div>
-
-      <Section id="preview" className="border-t border-white/10 reveal" data-reveal>
-        <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-10 items-center">
-          <div>
-            <Badge color="blue" variant="dark">{t.homeHowBadge}</Badge>
-            <h2 className="text-3xl md:text-4xl font-semibold mt-4 text-slate-100">{t.homeHowTitle}</h2>
-            <p className="text-slate-400 mt-3">{t.homeHowSubtitle}</p>
-            <div className="mt-6 space-y-3 text-sm text-slate-300">
-              <div className="flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-400" />{t.labelStatusNote}</div>
-              <div className="flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-400" />{t.labelPipelineNote}</div>
-              <div className="flex items-center gap-2"><CheckCircle2 size={16} className="text-emerald-400" />{t.labelSecurityNoteBody}</div>
-            </div>
-          </div>
-          <div className="mc-card p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-widest text-slate-500">{t.labelSelected}</div>
-                <div className="text-lg font-semibold text-slate-900 mt-2">report-q4.pdf</div>
-              </div>
-              <Badge color="slate">PDF → DOCX</Badge>
-            </div>
-            <div className="mt-5 grid sm:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="text-xs uppercase tracking-widest text-slate-500">{t.labelSettings}</div>
-                <div className="mt-2 text-sm text-slate-600">Макет: сохранить</div>
-                <div className="text-sm text-slate-600">Шрифты: встроить</div>
-                <div className="text-sm text-slate-600">Проверка: включена</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <div className="text-xs uppercase tracking-widest text-slate-500">{t.labelEtaPrefix}12s</div>
-                <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full w-2/3 bg-gradient-to-r from-blue-600 to-indigo-500" />
-                </div>
-                <div className="mt-3 text-sm text-slate-600">{t.processing}</div>
-              </div>
-            </div>
-            <div className="mt-6 flex items-center justify-between text-sm text-slate-500">
-              <span>{t.labelFileReady}</span>
-              <span className="font-semibold text-slate-900">{t.done}</span>
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      <Section id="categories" className="border-t border-white/10 reveal" data-reveal>
-        <div className="text-center mb-10">
-          <Badge color="purple" variant="dark">{t.homePopularBadge}</Badge>
-          <h2 className="text-3xl md:text-4xl font-semibold mt-4 text-slate-100">{t.homePopularTitle}</h2>
-          <p className="text-slate-400 mt-3">{t.homePopularSubtitle}</p>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[
-            { label: t.categoryDocuments, icon: FileText, desc: 'PDF, DOCX, PPTX, XLSX' },
-            { label: t.categoryImages, icon: ImageIcon, desc: 'JPG, PNG, HEIC, SVG' },
-            { label: t.categoryVideo, icon: Video, desc: 'MP4, MOV, WEBM, GIF' },
-            { label: t.categoryAudio, icon: Music, desc: 'MP3, WAV, AAC, FLAC' },
-            { label: t.categoryOtherTools || 'Archives', icon: Box, desc: 'ZIP, RAR, 7Z, TAR' },
-            { label: t.navApi || 'Developer', icon: ServerCog, desc: 'API, webhooks, automation' }
-          ].map((item) => (
-            <div key={item.label} className="mc-card p-6">
-              <div className="w-11 h-11 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
-                {React.createElement(item.icon, { size: 18 })}
-              </div>
-              <div className="font-semibold text-slate-900 mt-4">{item.label}</div>
-              <div className="text-sm text-slate-600 mt-2">{item.desc}</div>
-              <Button variant="secondary" className="mt-4 w-full" onClick={() => navigate('/tools')}>
-                {t.btnBrowseTools}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section id="value" className="border-t border-white/10 reveal" data-reveal>
-        <div className="text-center mb-10">
-          <Badge color="green" variant="dark">{t.homeFeaturesBadge}</Badge>
-          <h2 className="text-3xl md:text-4xl font-semibold mt-4 text-slate-100">{t.homeFeaturesTitle}</h2>
-          <p className="text-slate-400 mt-3">{t.homeFeaturesSubtitle}</p>
-        </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featureList.map((feature) => (
-            <IconCard key={feature.title} icon={feature.icon} title={feature.title} desc={feature.desc} tone="blue" />
-          ))}
-        </div>
-      </Section>
-
-      <Section id="workflow" className="border-t border-white/10 reveal" data-reveal>
-        <div className="text-center mb-10">
-          <Badge color="slate" variant="dark">{t.homeHowBadge}</Badge>
-          <h2 className="text-3xl md:text-4xl font-semibold mt-4 text-slate-100">{t.homeHowTitle}</h2>
-          <p className="text-slate-400 mt-3">{t.homeHowSubtitle}</p>
-        </div>
-        <div className="grid md:grid-cols-4 gap-4">
-          {[t.stepUpload, t.stepSettings, t.stepConvert, t.stepResult].map((step, index) => (
-            <div key={step} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm">
-              <div className="text-xs uppercase tracking-widest text-slate-400">{index + 1}</div>
-              <div className="mt-2 font-semibold text-slate-100">{step}</div>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section id="social-proof" className="border-t border-white/10 reveal" data-reveal>
-        <div className="text-center mb-10">
-          <Badge color="blue" variant="dark">{t.homeTrustedBadge}</Badge>
-          <h2 className="text-3xl md:text-4xl font-semibold mt-4 text-slate-100">{t.homeTrustedTitle}</h2>
-          <p className="text-slate-400 mt-3">{t.homeTrustedSubtitle}</p>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { label: t.homeFilesConvertedLabel, value: filesConvertedCount.toLocaleString() },
-            { label: t.homeCountries, value: '120+' },
-            { label: t.statusMetricUptimeLabel, value: t.statusMetricUptimeValue },
-            { label: t.statusMetricProcessingLabel, value: t.statusMetricProcessingValue }
-          ].map((metric) => (
-            <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
-              <div className="text-xs uppercase tracking-widest text-slate-400">{metric.label}</div>
-              <div className="text-2xl font-semibold mt-3 text-slate-100">{metric.value}</div>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap justify-center gap-4 mt-10">
-          {TRUSTED_BY.map((name) => (
-            <div key={name} className="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-semibold text-slate-300">
-              {name}
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section id="trust" className="border-t border-white/10 reveal" data-reveal>
-        <div className="grid lg:grid-cols-[1fr_1fr] gap-8 items-center">
-          <div>
-            <Badge color="slate" variant="dark">{t.safetyTitle}</Badge>
-            <h2 className="text-3xl md:text-4xl font-semibold mt-4 text-slate-100">{t.securityCardEncryptTitle}</h2>
-            <p className="text-slate-400 mt-3">{t.securityCardEncryptDesc}</p>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {securityBadges.map((badge) => (
-              <div key={badge.title} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm">
-                <div className="font-semibold text-slate-100">{badge.title}</div>
-                <div className="text-xs text-slate-400 mt-1">{badge.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Section>
-
-      <Section id="cta" className="border-t border-white/10 reveal" data-reveal>
-        <div className="rounded-3xl bg-gradient-to-r from-slate-950 via-blue-900 to-indigo-800 text-white p-10 md:p-12 text-center">
-          <h2 className="text-3xl md:text-4xl font-semibold">{t.homeCtaTitle}</h2>
-          <p className="text-slate-200 mt-3 max-w-2xl mx-auto">{t.homeCtaSubtitle}</p>
-          <div className="flex flex-wrap justify-center gap-3 mt-6">
-            <Button variant="secondary" className="bg-white text-slate-900" onClick={() => { scrollToConverter(); openFilePicker(); }}>
-              {t.btnStartConverting}
-            </Button>
-            <Button variant="outline" className="border-white/40 text-white" onClick={() => navigate('/pricing')}>
-              {t.btnViewPricing}
-            </Button>
-          </div>
-        </div>
-      </Section>
-    </>
+    <SingularityHomePage
+      file={file}
+      files={files}
+      filesConvertedCount={filesConvertedCount}
+      status={status}
+      progress={progress}
+      pipelineStage={pipelineStage}
+      etaSeconds={etaSeconds}
+      downloadUrl={downloadUrl}
+      canOpenQuickLook={canOpenQuickLook}
+      tools={tools}
+      smartSuggestion={smartSuggestion}
+      settings={settings}
+      shareLink={shareLink}
+      shareHint={shareHint}
+      handleFilesSelected={handleFilesSelected}
+      openFilePicker={openFilePicker}
+      handleProcess={handleProcess}
+      reset={reset}
+      download={download}
+      openQuickLook={openQuickLook}
+      handleCreateShareLink={handleCreateShareLink}
+      navigate={navigate}
+      setSettings={setSettings}
+      launchAIMagic={launchAIMagic}
+      prepareMegaDrop={prepareMegaDrop}
+      trustedBy={TRUSTED_BY}
+    />
   );
+
+  const staticInfoPage = isFaq
+    ? 'faq'
+    : isPrivacy
+      ? 'privacy'
+      : isTerms
+        ? 'terms'
+        : isCookiePolicy
+          ? 'cookie-policy'
+          : isDisclaimer
+            ? 'disclaimer'
+            : isLegal
+              ? 'legal'
+              : isAbout
+                ? 'about'
+                : isMission
+                  ? 'mission'
+                  : isCareers
+                    ? 'careers'
+                    : isPress
+                      ? 'press'
+                      : isResources
+                        ? 'resources'
+                        : isBugBounty
+                          ? 'bug-bounty'
+                          : isSecurityWhitepaper
+                            ? 'security-whitepaper'
+                            : isContact
+                              ? 'contact'
+                              : null;
+
   if (isAccountBlocked) {
     return (
       <SmoothScrollProvider>
@@ -9326,6 +8827,7 @@ console.log(job.status, job.downloadUrl)`}
       <main>
         <AnimatePresence mode="wait" initial={false}>
           <PageTransition key={path} pageKey={path}>
+            <Suspense fallback={<RouteLoadingFallback />}>
             {isConvert ? (
           conversionFromSlug && !toolIds.has(conversionFromSlug.id) ? (
             <SeoPage
@@ -9384,6 +8886,8 @@ console.log(job.status, job.downloadUrl)`}
           renderForgotPasswordPage()
         ) : isResetPassword ? (
           renderResetPasswordPage()
+        ) : isAuthCallback ? (
+          renderAuthCallbackPage()
         ) : isDashboard ? (
           renderDashboardPage()
         ) : isAccount ? (
@@ -9400,39 +8904,14 @@ console.log(job.status, job.downloadUrl)`}
           renderBlogArticleFallbackPage()
         ) : isShare ? (
           renderSharePage()
-        ) : isFaq ? (
-          renderFaqPage()
-        ) : isPrivacy ? (
-          renderPrivacyPage()
-        ) : isTerms ? (
-          renderTermsPage()
-        ) : isCookiePolicy ? (
-          renderCookiePage()
-        ) : isDisclaimer ? (
-          renderDisclaimerPage()
-        ) : isLegal ? (
-          renderLegalPage()
-        ) : isAbout ? (
-          renderAboutPage()
-        ) : isMission ? (
-          renderMissionPage()
-        ) : isCareers ? (
-          renderCareersPage()
-        ) : isPress ? (
-          renderPressPage()
-        ) : isResources ? (
-          renderResourcesPage()
-        ) : isBugBounty ? (
-          renderBugBountyPage()
-        ) : isSecurityWhitepaper ? (
-          renderSecurityWhitepaperPage()
-        ) : isContact ? (
-          renderContactPage()
+        ) : staticInfoPage ? (
+          renderStaticInfoPage(staticInfoPage)
         ) : isNotFound ? (
           renderNotFoundPage()
         ) : (
           renderHomePage()
         )}
+            </Suspense>
           </PageTransition>
         </AnimatePresence>
       </main>
@@ -9444,37 +8923,159 @@ console.log(job.status, job.downloadUrl)`}
         </div>
       )}
       {showAuthModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/35 backdrop-blur-2xl transition-all duration-300 ease-out">
-          <div className="relative w-full max-w-md rounded-3xl border border-white/40 dark:border-white/10 bg-white/80 dark:bg-[#0f1117]/80 backdrop-blur-2xl shadow-[0_24px_70px_rgba(15,23,42,0.14)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.45)] p-7 md:p-8 transition-all duration-300 ease-out">
-            <button
-              onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 text-slate-500 dark:text-slate-400 h-9 w-9 rounded-xl border border-slate-200 dark:border-white/10 bg-white/85 dark:bg-white/5 flex items-center justify-center transition-all duration-300 ease-out hover:scale-[1.03]"
-            >
-              <X size={16} />
-            </button>
-            <div className="text-center">
-              <h3 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Вход в MegaConvert</h3>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Продолжите в пару кликов</p>
-            </div>
-            <div className="mt-6 space-y-3">
-              <button onClick={() => handleLogin('google')} className="w-full py-2.5 border border-slate-200 dark:border-white/10 rounded-2xl flex justify-center items-center gap-2 bg-white/90 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-white/10 transition-all duration-300 ease-out font-medium">
-                {t.authGoogle}
-              </button>
-              <button onClick={() => handleLogin('github')} className="w-full py-2.5 rounded-2xl flex justify-center items-center gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white/10 dark:hover:bg-white/15 border border-slate-900 dark:border-white/10 transition-all duration-300 ease-out">
-                <Github size={18} /> {t.authGithub}
-              </button>
-            </div>
-            <div className="my-5 text-center text-xs uppercase tracking-[0.22em] text-slate-400">{t.authOr}</div>
-            <form onSubmit={handleEmailAuth} className="space-y-3">
-              <div className="relative">
-                <Mail size={18} className="absolute left-3 top-3 text-slate-400" />
-                <input type="email" placeholder={t.authEmailPlaceholder} required className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white/90 dark:bg-white/5 text-slate-800 dark:text-slate-100" value={email} onChange={e => setEmail(e.target.value)} />
+        <div className="fixed inset-0 z-[60]">
+          <button
+            type="button"
+            aria-label="Close auth modal"
+            onClick={() => setShowAuthModal(false)}
+            className="absolute inset-0 bg-black/55 backdrop-blur-xl"
+          />
+
+          <div className="absolute inset-y-0 right-0 w-full max-w-2xl p-3 md:p-5">
+            <div className="auth-slideover h-full rounded-[2rem] border border-white/10 bg-[#05070c]/90 backdrop-blur-2xl shadow-[0_35px_120px_rgba(0,0,0,0.55)] overflow-hidden">
+              <div className="grid h-full lg:grid-cols-[0.92fr_minmax(0,1.08fr)]">
+                <div className="hidden lg:flex flex-col justify-between border-r border-white/10 bg-[linear-gradient(180deg,rgba(18,24,38,0.9),rgba(6,8,14,0.92))] p-7">
+                  <div>
+                    <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-cyan-200">
+                      <ShieldCheck size={13} />
+                      Session Layer
+                    </div>
+                    <h3 className="mt-5 text-3xl font-semibold tracking-tight text-white">Keep the workflow moving.</h3>
+                    <p className="mt-4 text-sm leading-7 text-slate-300">
+                      Sign in, recover access or create an account without leaving the same premium environment.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-white">
+                        <Zap size={15} />
+                        Continue current flow
+                      </div>
+                      <div className="mt-2 text-sm text-slate-400">After sign-in, we keep your conversion and account context intact.</div>
+                    </div>
+                    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-white">
+                        <Globe2 size={15} />
+                        Social and email access
+                      </div>
+                      <div className="mt-2 text-sm text-slate-400">Use Google, GitHub or email, then jump straight back into MegaConvert.</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative flex h-full flex-col p-5 md:p-7">
+                  <button
+                    onClick={() => setShowAuthModal(false)}
+                    className="absolute right-5 top-5 text-slate-400 h-10 w-10 rounded-2xl border border-white/10 bg-white/[0.05] flex items-center justify-center transition-all duration-300 ease-out hover:scale-[1.03] hover:bg-white/[0.08]"
+                  >
+                    <X size={16} />
+                  </button>
+
+                  <div className="pr-12">
+                    <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">{t.navLogin}</div>
+                    <h3 className="mt-3 text-3xl font-semibold tracking-tight text-white">Access MegaConvert</h3>
+                    <p className="mt-3 text-sm leading-7 text-slate-400">
+                      Choose the fastest way back into your workspace.
+                    </p>
+                  </div>
+
+                  {passkeyCapabilities.supported ? (
+                    <button
+                      type="button"
+                      onClick={() => void handlePasskeyModalLogin()}
+                      disabled={passkeyModalLoading}
+                      className="auth-primary-btn mt-6 w-full justify-center"
+                    >
+                      {passkeyModalLoading ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Checking passkey...
+                        </>
+                      ) : (
+                        <>
+                          <Fingerprint size={16} />
+                          {passkeyCapabilities.platformAuthenticator ? 'Continue with Passkey' : 'Use Passkey or Security Key'}
+                        </>
+                      )}
+                    </button>
+                  ) : null}
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <button
+                      onClick={() => handleLogin('google')}
+                      className="auth-provider-tile justify-center"
+                    >
+                      {t.authGoogle}
+                    </button>
+                    <button
+                      onClick={() => handleLogin('github')}
+                      className="auth-provider-tile justify-center"
+                    >
+                      <Github size={16} />
+                      {t.authGithub}
+                    </button>
+                  </div>
+
+                  <div className="my-5 text-center text-[11px] uppercase tracking-[0.28em] text-slate-500">{t.authOr}</div>
+
+                  <form onSubmit={handleEmailAuth} className="space-y-4">
+                    <label className="block">
+                      <span className="auth-field-label">Email</span>
+                      <div className="relative mt-2">
+                        <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="email"
+                          placeholder={t.authEmailPlaceholder}
+                          required
+                          className="auth-input pl-11"
+                          value={email}
+                          onChange={e => setEmail(e.target.value)}
+                        />
+                      </div>
+                    </label>
+                    {authError && <div className="auth-status-card auth-status-card-error">{authError}</div>}
+                    <button type="submit" className="auth-primary-btn w-full justify-center">
+                      Continue with Email
+                    </button>
+                  </form>
+
+                  <div className="mt-auto pt-6 space-y-3">
+                    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-white">
+                        <Lock size={15} />
+                        Need full password flow?
+                      </div>
+                      <div className="mt-2 text-sm text-slate-400">
+                        Open the dedicated auth screens for registration, recovery and full account setup.
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAuthModal(false);
+                          navigate('/login');
+                        }}
+                        className="auth-secondary-btn justify-center"
+                      >
+                        Open sign in
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAuthModal(false);
+                          navigate('/register');
+                        }}
+                        className="auth-secondary-btn justify-center"
+                      >
+                        Create account
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-              {authError && <p className="text-xs text-red-600 dark:text-red-300 text-center">{authError}</p>}
-              <Button type="submit" className="w-full justify-center">
-                Продолжить по Email
-              </Button>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -9503,20 +9104,22 @@ console.log(job.status, job.downloadUrl)`}
         </div>
       )}
 
-      <QuickLookModal
-        open={quickLookOpen}
-        title={downloadFileName || file?.name || 'Результат конвертации'}
-        type={quickLookType || quickLookConfig.type}
-        previewUrl={quickLookConfig.previewUrl}
-        textContent={quickLookText}
-        loading={quickLookLoading}
-        error={quickLookError}
-        onClose={() => {
-          setQuickLookOpen(false);
-          setQuickLookLoading(false);
-          setQuickLookError('');
-        }}
-      />
+      <Suspense fallback={null}>
+        <QuickLookModal
+          open={quickLookOpen}
+          title={downloadFileName || file?.name || 'Результат конвертации'}
+          type={quickLookType || quickLookConfig.type}
+          previewUrl={quickLookConfig.previewUrl}
+          textContent={quickLookText}
+          loading={quickLookLoading}
+          error={quickLookError}
+          onClose={() => {
+            setQuickLookOpen(false);
+            setQuickLookLoading(false);
+            setQuickLookError('');
+          }}
+        />
+      </Suspense>
 
       <GlassToast
         toast={toast}

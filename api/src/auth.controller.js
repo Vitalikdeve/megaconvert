@@ -3,6 +3,7 @@ const { Router } = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const { registerPasskeyRoutes } = require('./passkeys.controller');
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const ACCESS_TOKEN_TTL = '1h';
@@ -45,7 +46,11 @@ const toPublicUser = (user) => ({
   name: user.name,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
-  providers: Object.keys(user.oauthProviders || {})
+  providers: [
+    ...Object.keys(user.oauthProviders || {}),
+    ...(Array.isArray(user.passkeys) && user.passkeys.length ? ['passkey'] : [])
+  ],
+  passkeyCount: Array.isArray(user.passkeys) ? user.passkeys.length : 0
 });
 
 const createMailer = () => {
@@ -396,6 +401,7 @@ const findOrCreateOAuthUser = async ({ provider, providerUserId, email, name }) 
       passwordHash,
       passwordVersion: 1,
       oauthProviders: {},
+      passkeys: [],
       createdAt: now,
       updatedAt: now
     };
@@ -810,6 +816,8 @@ class AuthController {
       name,
       passwordHash,
       passwordVersion: 1,
+      oauthProviders: {},
+      passkeys: [],
       createdAt: now,
       updatedAt: now
     };
@@ -988,6 +996,17 @@ const createAuthRouter = () => {
   router.post('/login', (req, res) => controller.login(req, res));
   router.post('/forgot-password', (req, res) => controller.forgotPassword(req, res));
   router.post('/reset-password', (req, res) => controller.resetPassword(req, res));
+  registerPasskeyRoutes(router, {
+    users,
+    createId,
+    normalizeEmail,
+    readTurnstileToken,
+    verifyTurnstile,
+    createSessionToken,
+    setSessionCookie,
+    toPublicUser,
+    sessionJwtSecret: SESSION_JWT_SECRET
+  });
 
   return router;
 };

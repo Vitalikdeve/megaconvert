@@ -431,14 +431,28 @@ const TEST_MODE_USER_PREFIX = (
 const TEST_MODE_PLAN_TIER = String(process.env.TEST_MODE_PLAN_TIER || 'team').trim().toLowerCase() || 'team';
 const TEST_MODE_ALLOW_REMOTE = parseEnvBoolean(process.env.TEST_MODE_ALLOW_REMOTE, false);
 const TEST_MODE_ALIAS_MAX_LEN = Math.max(8, Number(process.env.TEST_MODE_ALIAS_MAX_LEN || 64));
+const MEGADROP_ROOM_CODE_LENGTH = Math.max(4, Number(process.env.MEGADROP_ROOM_CODE_LENGTH || 6));
+const MEGADROP_ROOM_TTL_MS = Math.max(10 * 60 * 1000, Number(process.env.MEGADROP_ROOM_TTL_MS || 2 * 60 * 60 * 1000));
+const MEGADROP_CLEANUP_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.MEGADROP_CLEANUP_INTERVAL_MS || 5 * 60 * 1000));
+const generateMegaDropRoomCode = customAlphabet('0123456789', MEGADROP_ROOM_CODE_LENGTH);
+const MEGAGRID_SESSION_CODE_LENGTH = Math.max(4, Number(process.env.MEGAGRID_SESSION_CODE_LENGTH || 6));
+const MEGAGRID_SESSION_TTL_MS = Math.max(10 * 60 * 1000, Number(process.env.MEGAGRID_SESSION_TTL_MS || 2 * 60 * 60 * 1000));
+const MEGAGRID_CLEANUP_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.MEGAGRID_CLEANUP_INTERVAL_MS || 5 * 60 * 1000));
+const generateMegaGridSessionCode = customAlphabet('0123456789', MEGAGRID_SESSION_CODE_LENGTH);
 
 const twofaCodes = new Map(); // email -> { code, expiresAt }
 const twofaTokens = new Map(); // token -> { email, expiresAt }
+const megaDropRooms = new Map(); // roomCode -> { code, hostSocketId, guestSocketId, createdAt, updatedAt }
+const megaDropSocketIndex = new Map(); // socketId -> { roomCode, role }
+const megaGridSessions = new Map(); // sessionCode -> { code, masterSocketId, createdAt, updatedAt, workers: Map() }
+const megaGridSocketIndex = new Map(); // socketId -> { sessionCode, role }
 let redisReady = false;
 let lastRedisError = null;
 let bucketReady = false;
 let analyticsFlushTimer = null;
 let shareCleanupTimer = null;
+let megaDropCleanupTimer = null;
+let megaGridCleanupTimer = null;
 let analyticsFlushInFlight = false;
 const analyticsBuffer = [];
 let analyticsFallbackWriteQueue = Promise.resolve();
@@ -3179,6 +3193,781 @@ function startShareCleanupLoop() {
     });
   });
 }
+
+function normalizeMegaDropRoomCode(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\D+/g, '')
+    .slice(0, MEGADROP_ROOM_CODE_LENGTH);
+}
+
+function buildMegaDropRoomState(room) {
+  if (!room) return null;
+  return {
+    roomCode: room.code,
+    hostConnected: Boolean(room.hostSocketId),
+    guestConnected: Boolean(room.guestSocketId),
+    ready: Boolean(room.hostSocketId && room.guestSocketId),
+    createdAt: room.createdAt,
+    updatedAt: room.updatedAt,
+    expiresAt: room.updatedAt + MEGADROP_ROOM_TTL_MS
+  };
+}
+
+function emitMegaDropRoomState(roomCode) {
+  const normalizedRoomCode = normalizeMegaDropRoomCode(roomCode);
+  const room = megaDropRooms.get(normalizedRoomCode);
+  if (!room) return;
+  io.to(normalizedRoomCode).emit('megadrop:room-state', buildMegaDropRoomState(room));
+}
+
+function createMegaDropRoom() {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const roomCode = generateMegaDropRoomCode();
+    if (!megaDropRooms.has(roomCode)) {
+      const now = Date.now();
+      const room = {
+        code: roomCode,
+        hostSocketId: null,
+        guestSocketId: null,
+        createdAt: now,
+        updatedAt: now
+      };
+      megaDropRooms.set(roomCode, room);
+      return room;
+    }
+  }
+  return null;
+}
+
+function closeMegaDropRoom(roomCode, reason = 'room_closed') {
+  const normalizedRoomCode = normalizeMegaDropRoomCode(roomCode);
+  const room = megaDropRooms.get(normalizedRoomCode);
+  if (!room) return false;
+
+  const participantSocketIds = [room.hostSocketId, room.guestSocketId].filter(Boolean);
+  io.to(normalizedRoomCode).emit('megadrop:room-closed', {
+    roomCode: normalizedRoomCode,
+    reason
+  });
+
+  for (const socketId of participantSocketIds) {
+    megaDropSocketIndex.delete(socketId);
+    const participantSocket = io.sockets.sockets.get(socketId);
+    if (participantSocket) {
+      participantSocket.leave(normalizedRoomCode);
+    }
+  }
+
+  megaDropRooms.delete(normalizedRoomCode);
+  log({
+    type: 'megadrop_room_closed',
+    roomCode: normalizedRoomCode,
+    reason,
+    participants: participantSocketIds.length
+  });
+  return true;
+}
+
+function removeSocketFromMegaDropRoom(socket, reason = 'left_room') {
+  if (!socket?.id) return;
+  const membership = megaDropSocketIndex.get(socket.id);
+  if (!membership) return;
+
+  megaDropSocketIndex.delete(socket.id);
+  try {
+    socket.leave(membership.roomCode);
+  } catch {
+    // ignore socket leave failures during disconnect
+  }
+
+  const room = megaDropRooms.get(membership.roomCode);
+  if (!room) return;
+
+  if (membership.role === 'host') {
+    closeMegaDropRoom(
+      membership.roomCode,
+      reason === 'disconnect' ? 'host_disconnected' : reason
+    );
+    return;
+  }
+
+  if (room.guestSocketId === socket.id) {
+    room.guestSocketId = null;
+    room.updatedAt = Date.now();
+    socket.to(room.code).emit('megadrop:peer-left', {
+      roomCode: room.code,
+      role: 'guest',
+      reason
+    });
+    emitMegaDropRoomState(room.code);
+  }
+
+  if (!room.hostSocketId && !room.guestSocketId) {
+    megaDropRooms.delete(room.code);
+  }
+}
+
+function pruneExpiredMegaDropRooms(reason = 'interval') {
+  const now = Date.now();
+  let removed = 0;
+
+  for (const [roomCode, room] of megaDropRooms.entries()) {
+    const lastActivityAt = Math.max(Number(room.updatedAt || 0), Number(room.createdAt || 0));
+    if (lastActivityAt && now - lastActivityAt < MEGADROP_ROOM_TTL_MS) continue;
+    if (closeMegaDropRoom(roomCode, `${reason}_expired`)) {
+      removed += 1;
+    }
+  }
+
+  if (removed > 0) {
+    log({
+      type: 'megadrop_room_cleanup',
+      reason,
+      removed
+    });
+  }
+
+  return { removed };
+}
+
+function startMegaDropCleanupLoop() {
+  if (SERVERLESS_RUNTIME) return;
+  if (megaDropCleanupTimer) return;
+  megaDropCleanupTimer = setInterval(() => {
+    try {
+      pruneExpiredMegaDropRooms('interval');
+    } catch (error) {
+      logError({
+        type: 'megadrop_cleanup_failed',
+        error: error?.message || 'unknown'
+      });
+    }
+  }, MEGADROP_CLEANUP_INTERVAL_MS);
+  if (typeof megaDropCleanupTimer.unref === 'function') megaDropCleanupTimer.unref();
+  pruneExpiredMegaDropRooms('startup');
+}
+
+function normalizeMegaGridSessionCode(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\D+/g, '')
+    .slice(0, MEGAGRID_SESSION_CODE_LENGTH);
+}
+
+function getMegaGridRoomName(sessionCode) {
+  return `megagrid:${normalizeMegaGridSessionCode(sessionCode)}`;
+}
+
+function buildMegaGridSessionSnapshot(session) {
+  if (!session) return null;
+  const workers = Array.from(session.workers.values())
+    .map((worker) => ({
+      socketId: worker.socketId,
+      label: worker.label || '',
+      ready: worker.ready === true,
+      status: String(worker.status || 'idle').trim().toLowerCase() || 'idle',
+      capacity: Math.max(1, Number(worker.capacity || 1)),
+      assignedTaskId: worker.assignedTaskId || null,
+      lastSeenAt: worker.lastSeenAt,
+      capabilities: worker.capabilities || null
+    }))
+    .sort((left, right) => left.socketId.localeCompare(right.socketId));
+
+  const readyWorkerCount = workers.filter((worker) => worker.ready && worker.status !== 'busy').length;
+  const busyWorkerCount = workers.filter((worker) => worker.status === 'busy').length;
+
+  return {
+    sessionCode: session.code,
+    masterSocketId: session.masterSocketId,
+    masterConnected: Boolean(session.masterSocketId),
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    workerCount: workers.length,
+    readyWorkerCount,
+    busyWorkerCount,
+    workers,
+    expiresAt: session.updatedAt + MEGAGRID_SESSION_TTL_MS
+  };
+}
+
+function emitMegaGridSessionSnapshot(sessionCode) {
+  const normalizedSessionCode = normalizeMegaGridSessionCode(sessionCode);
+  const session = megaGridSessions.get(normalizedSessionCode);
+  if (!session) return;
+  io.to(getMegaGridRoomName(normalizedSessionCode)).emit(
+    'megagrid:session-snapshot',
+    buildMegaGridSessionSnapshot(session)
+  );
+}
+
+function createMegaGridSession() {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const sessionCode = generateMegaGridSessionCode();
+    if (!megaGridSessions.has(sessionCode)) {
+      const now = Date.now();
+      const session = {
+        code: sessionCode,
+        masterSocketId: null,
+        createdAt: now,
+        updatedAt: now,
+        workers: new Map()
+      };
+      megaGridSessions.set(sessionCode, session);
+      return session;
+    }
+  }
+  return null;
+}
+
+function closeMegaGridSession(sessionCode, reason = 'session_closed') {
+  const normalizedSessionCode = normalizeMegaGridSessionCode(sessionCode);
+  const session = megaGridSessions.get(normalizedSessionCode);
+  if (!session) return false;
+
+  const roomName = getMegaGridRoomName(normalizedSessionCode);
+  io.to(roomName).emit('megagrid:session-closed', {
+    sessionCode: normalizedSessionCode,
+    reason
+  });
+
+  if (session.masterSocketId) {
+    megaGridSocketIndex.delete(session.masterSocketId);
+    io.sockets.sockets.get(session.masterSocketId)?.leave(roomName);
+  }
+
+  for (const worker of session.workers.values()) {
+    megaGridSocketIndex.delete(worker.socketId);
+    io.sockets.sockets.get(worker.socketId)?.leave(roomName);
+  }
+
+  megaGridSessions.delete(normalizedSessionCode);
+  log({
+    type: 'megagrid_session_closed',
+    sessionCode: normalizedSessionCode,
+    reason
+  });
+  return true;
+}
+
+function removeSocketFromMegaGridSession(socket, reason = 'left_session') {
+  if (!socket?.id) return;
+  const membership = megaGridSocketIndex.get(socket.id);
+  if (!membership) return;
+
+  megaGridSocketIndex.delete(socket.id);
+  const session = megaGridSessions.get(membership.sessionCode);
+  try {
+    socket.leave(getMegaGridRoomName(membership.sessionCode));
+  } catch {
+    // ignore leave failures during disconnect
+  }
+
+  if (!session) return;
+
+  if (membership.role === 'master') {
+    closeMegaGridSession(
+      membership.sessionCode,
+      reason === 'disconnect' ? 'master_disconnected' : reason
+    );
+    return;
+  }
+
+  if (session.workers.delete(socket.id)) {
+    session.updatedAt = Date.now();
+    io.to(getMegaGridRoomName(session.code)).emit('megagrid:worker-left', {
+      sessionCode: session.code,
+      workerSocketId: socket.id,
+      reason
+    });
+    emitMegaGridSessionSnapshot(session.code);
+  }
+
+  if (!session.masterSocketId && session.workers.size === 0) {
+    megaGridSessions.delete(session.code);
+  }
+}
+
+function pruneExpiredMegaGridSessions(reason = 'interval') {
+  const now = Date.now();
+  let removed = 0;
+
+  for (const [sessionCode, session] of megaGridSessions.entries()) {
+    const lastActivityAt = Math.max(Number(session.updatedAt || 0), Number(session.createdAt || 0));
+    if (lastActivityAt && now - lastActivityAt < MEGAGRID_SESSION_TTL_MS) continue;
+    if (closeMegaGridSession(sessionCode, `${reason}_expired`)) {
+      removed += 1;
+    }
+  }
+
+  if (removed > 0) {
+    log({
+      type: 'megagrid_session_cleanup',
+      reason,
+      removed
+    });
+  }
+
+  return { removed };
+}
+
+function startMegaGridCleanupLoop() {
+  if (SERVERLESS_RUNTIME) return;
+  if (megaGridCleanupTimer) return;
+  megaGridCleanupTimer = setInterval(() => {
+    try {
+      pruneExpiredMegaGridSessions('interval');
+    } catch (error) {
+      logError({
+        type: 'megagrid_cleanup_failed',
+        error: error?.message || 'unknown'
+      });
+    }
+  }, MEGAGRID_CLEANUP_INTERVAL_MS);
+  if (typeof megaGridCleanupTimer.unref === 'function') megaGridCleanupTimer.unref();
+  pruneExpiredMegaGridSessions('startup');
+}
+
+io.on('connection', (socket) => {
+  log({
+    type: 'megadrop_socket_connected',
+    socketId: socket.id
+  });
+
+  socket.on('megadrop:create-room', (_payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+
+    try {
+      removeSocketFromMegaDropRoom(socket, 'switch_room');
+      const room = createMegaDropRoom();
+      if (!room) {
+        reply({
+          ok: false,
+          code: 'ROOM_CREATE_FAILED',
+          message: 'Failed to allocate room code'
+        });
+        return;
+      }
+
+      room.hostSocketId = socket.id;
+      room.updatedAt = Date.now();
+      megaDropSocketIndex.set(socket.id, {
+        roomCode: room.code,
+        role: 'host'
+      });
+      socket.join(room.code);
+
+      const state = buildMegaDropRoomState(room);
+      reply({
+        ok: true,
+        roomCode: room.code,
+        role: 'host',
+        room: state
+      });
+      emitMegaDropRoomState(room.code);
+      log({
+        type: 'megadrop_room_created',
+        roomCode: room.code,
+        hostSocketId: socket.id
+      });
+    } catch (error) {
+      logError({
+        type: 'megadrop_create_room_failed',
+        socketId: socket.id,
+        error: error?.message || 'unknown'
+      });
+      reply({
+        ok: false,
+        code: 'ROOM_CREATE_FAILED',
+        message: 'Failed to create MegaDrop room'
+      });
+    }
+  });
+
+  socket.on('megadrop:join-room', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const roomCode = normalizeMegaDropRoomCode(payload?.roomCode);
+    if (!roomCode) {
+      reply({
+        ok: false,
+        code: 'ROOM_CODE_REQUIRED',
+        message: 'Room code is required'
+      });
+      return;
+    }
+
+    const room = megaDropRooms.get(roomCode);
+    if (!room) {
+      reply({
+        ok: false,
+        code: 'ROOM_NOT_FOUND',
+        message: 'MegaDrop room not found'
+      });
+      return;
+    }
+
+    if (room.hostSocketId === socket.id) {
+      reply({
+        ok: true,
+        roomCode,
+        role: 'host',
+        room: buildMegaDropRoomState(room)
+      });
+      return;
+    }
+
+    if (room.guestSocketId && room.guestSocketId !== socket.id) {
+      reply({
+        ok: false,
+        code: 'ROOM_FULL',
+        message: 'MegaDrop room is already full'
+      });
+      return;
+    }
+
+    removeSocketFromMegaDropRoom(socket, 'switch_room');
+
+    room.guestSocketId = socket.id;
+    room.updatedAt = Date.now();
+    megaDropSocketIndex.set(socket.id, {
+      roomCode,
+      role: 'guest'
+    });
+    socket.join(roomCode);
+
+    const state = buildMegaDropRoomState(room);
+    reply({
+      ok: true,
+      roomCode,
+      role: 'guest',
+      room: state
+    });
+    socket.to(roomCode).emit('megadrop:guest-joined', {
+      roomCode
+    });
+    emitMegaDropRoomState(roomCode);
+    log({
+      type: 'megadrop_room_joined',
+      roomCode,
+      guestSocketId: socket.id
+    });
+  });
+
+  socket.on('megadrop:signal', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const membership = megaDropSocketIndex.get(socket.id);
+    const roomCode = normalizeMegaDropRoomCode(payload?.roomCode || membership?.roomCode);
+    if (!membership || !roomCode || membership.roomCode !== roomCode) {
+      reply({
+        ok: false,
+        code: 'ROOM_MEMBERSHIP_REQUIRED',
+        message: 'Socket is not attached to this room'
+      });
+      return;
+    }
+
+    const room = megaDropRooms.get(roomCode);
+    if (!room) {
+      reply({
+        ok: false,
+        code: 'ROOM_NOT_FOUND',
+        message: 'MegaDrop room not found'
+      });
+      return;
+    }
+
+    const targetSocketId = membership.role === 'host'
+      ? room.guestSocketId
+      : room.hostSocketId;
+
+    if (!targetSocketId) {
+      reply({
+        ok: false,
+        code: 'PEER_NOT_READY',
+        message: 'Peer has not joined the room yet'
+      });
+      return;
+    }
+
+    room.updatedAt = Date.now();
+    io.to(targetSocketId).emit('megadrop:signal', {
+      roomCode,
+      fromRole: membership.role,
+      signal: payload?.signal || null
+    });
+
+    reply({ ok: true });
+  });
+
+  socket.on('megadrop:leave-room', (_payload, callback) => {
+    removeSocketFromMegaDropRoom(socket, 'left_room');
+    const reply = typeof callback === 'function' ? callback : () => {};
+    reply({ ok: true });
+  });
+
+  socket.on('disconnect', () => {
+    removeSocketFromMegaDropRoom(socket, 'disconnect');
+    log({
+      type: 'megadrop_socket_disconnected',
+      socketId: socket.id
+    });
+  });
+});
+
+io.on('connection', (socket) => {
+  socket.on('megagrid:create-session', (_payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+
+    try {
+      removeSocketFromMegaGridSession(socket, 'switch_session');
+      const session = createMegaGridSession();
+      if (!session) {
+        reply({
+          ok: false,
+          code: 'SESSION_CREATE_FAILED',
+          message: 'Failed to allocate MegaGrid session code'
+        });
+        return;
+      }
+
+      session.masterSocketId = socket.id;
+      session.updatedAt = Date.now();
+      megaGridSocketIndex.set(socket.id, {
+        sessionCode: session.code,
+        role: 'master'
+      });
+      socket.join(getMegaGridRoomName(session.code));
+
+      reply({
+        ok: true,
+        sessionCode: session.code,
+        role: 'master',
+        session: buildMegaGridSessionSnapshot(session)
+      });
+      emitMegaGridSessionSnapshot(session.code);
+      log({
+        type: 'megagrid_session_created',
+        sessionCode: session.code,
+        masterSocketId: socket.id
+      });
+    } catch (error) {
+      logError({
+        type: 'megagrid_create_session_failed',
+        socketId: socket.id,
+        error: error?.message || 'unknown'
+      });
+      reply({
+        ok: false,
+        code: 'SESSION_CREATE_FAILED',
+        message: 'Failed to create MegaGrid session'
+      });
+    }
+  });
+
+  socket.on('megagrid:join-session', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const sessionCode = normalizeMegaGridSessionCode(payload?.sessionCode);
+    if (!sessionCode) {
+      reply({
+        ok: false,
+        code: 'SESSION_CODE_REQUIRED',
+        message: 'Session code is required'
+      });
+      return;
+    }
+
+    const session = megaGridSessions.get(sessionCode);
+    if (!session) {
+      reply({
+        ok: false,
+        code: 'SESSION_NOT_FOUND',
+        message: 'MegaGrid session not found'
+      });
+      return;
+    }
+
+    if (session.masterSocketId === socket.id) {
+      reply({
+        ok: true,
+        sessionCode,
+        role: 'master',
+        session: buildMegaGridSessionSnapshot(session)
+      });
+      return;
+    }
+
+    removeSocketFromMegaGridSession(socket, 'switch_session');
+
+    const workerState = {
+      socketId: socket.id,
+      label: String(payload?.label || '').trim(),
+      ready: false,
+      status: 'idle',
+      capacity: 1,
+      assignedTaskId: null,
+      lastSeenAt: Date.now(),
+      capabilities: payload?.capabilities || null
+    };
+    session.workers.set(socket.id, workerState);
+    session.updatedAt = Date.now();
+    megaGridSocketIndex.set(socket.id, {
+      sessionCode,
+      role: 'worker'
+    });
+    socket.join(getMegaGridRoomName(sessionCode));
+
+    reply({
+      ok: true,
+      sessionCode,
+      role: 'worker',
+      workerSocketId: socket.id,
+      session: buildMegaGridSessionSnapshot(session)
+    });
+    socket.to(getMegaGridRoomName(sessionCode)).emit('megagrid:worker-joined', {
+      sessionCode,
+      workerSocketId: socket.id
+    });
+    emitMegaGridSessionSnapshot(sessionCode);
+    log({
+      type: 'megagrid_worker_joined',
+      sessionCode,
+      workerSocketId: socket.id
+    });
+  });
+
+  socket.on('megagrid:update-worker-state', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const membership = megaGridSocketIndex.get(socket.id);
+    const sessionCode = normalizeMegaGridSessionCode(payload?.sessionCode || membership?.sessionCode);
+    if (!membership || membership.role !== 'worker' || membership.sessionCode !== sessionCode) {
+      reply({
+        ok: false,
+        code: 'WORKER_MEMBERSHIP_REQUIRED',
+        message: 'Socket is not attached as a MegaGrid worker'
+      });
+      return;
+    }
+
+    const session = megaGridSessions.get(sessionCode);
+    const worker = session?.workers.get(socket.id);
+    if (!session || !worker) {
+      reply({
+        ok: false,
+        code: 'SESSION_NOT_FOUND',
+        message: 'MegaGrid session not found'
+      });
+      return;
+    }
+
+    worker.ready = payload?.ready === true;
+    worker.status = String(payload?.status || (worker.ready ? 'idle' : 'paused')).trim().toLowerCase() || 'idle';
+    worker.capacity = Math.max(1, Number(payload?.capacity || worker.capacity || 1));
+    worker.label = String(payload?.label || worker.label || '').trim();
+    worker.assignedTaskId = payload?.assignedTaskId || null;
+    worker.lastSeenAt = Date.now();
+    worker.capabilities = payload?.capabilities || worker.capabilities || null;
+    session.updatedAt = worker.lastSeenAt;
+
+    reply({
+      ok: true,
+      sessionCode,
+      worker: {
+        socketId: worker.socketId,
+        ready: worker.ready,
+        status: worker.status,
+        assignedTaskId: worker.assignedTaskId
+      }
+    });
+    emitMegaGridSessionSnapshot(sessionCode);
+  });
+
+  socket.on('megagrid:signal', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const membership = megaGridSocketIndex.get(socket.id);
+    const sessionCode = normalizeMegaGridSessionCode(payload?.sessionCode || membership?.sessionCode);
+    const targetSocketId = String(payload?.targetSocketId || '').trim();
+    if (!membership || !sessionCode || membership.sessionCode !== sessionCode) {
+      reply({
+        ok: false,
+        code: 'SESSION_MEMBERSHIP_REQUIRED',
+        message: 'Socket is not attached to this MegaGrid session'
+      });
+      return;
+    }
+    if (!targetSocketId) {
+      reply({
+        ok: false,
+        code: 'TARGET_SOCKET_REQUIRED',
+        message: 'Target socket id is required'
+      });
+      return;
+    }
+
+    const session = megaGridSessions.get(sessionCode);
+    if (!session) {
+      reply({
+        ok: false,
+        code: 'SESSION_NOT_FOUND',
+        message: 'MegaGrid session not found'
+      });
+      return;
+    }
+
+    const targetIsMaster = session.masterSocketId === targetSocketId;
+    const targetIsWorker = session.workers.has(targetSocketId);
+    if (!targetIsMaster && !targetIsWorker) {
+      reply({
+        ok: false,
+        code: 'TARGET_NOT_IN_SESSION',
+        message: 'Target socket is not attached to this session'
+      });
+      return;
+    }
+
+    session.updatedAt = Date.now();
+    if (membership.role === 'worker') {
+      const worker = session.workers.get(socket.id);
+      if (worker) worker.lastSeenAt = session.updatedAt;
+    }
+    io.to(targetSocketId).emit('megagrid:signal', {
+      sessionCode,
+      fromSocketId: socket.id,
+      fromRole: membership.role,
+      signal: payload?.signal || null
+    });
+    reply({ ok: true });
+  });
+
+  socket.on('megagrid:request-snapshot', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const membership = megaGridSocketIndex.get(socket.id);
+    const sessionCode = normalizeMegaGridSessionCode(payload?.sessionCode || membership?.sessionCode);
+    const session = megaGridSessions.get(sessionCode);
+    if (!session) {
+      reply({
+        ok: false,
+        code: 'SESSION_NOT_FOUND',
+        message: 'MegaGrid session not found'
+      });
+      return;
+    }
+    reply({
+      ok: true,
+      sessionCode,
+      session: buildMegaGridSessionSnapshot(session)
+    });
+  });
+
+  socket.on('megagrid:leave-session', (_payload, callback) => {
+    removeSocketFromMegaGridSession(socket, 'left_session');
+    const reply = typeof callback === 'function' ? callback : () => {};
+    reply({ ok: true });
+  });
+
+  socket.on('disconnect', () => {
+    removeSocketFromMegaGridSession(socket, 'disconnect');
+  });
+});
 
 function loadAuditLogsStore() {
   if (Array.isArray(auditLogsStore)) return auditLogsStore;
@@ -14085,6 +14874,8 @@ app.use((err, req, res, next) => {
 
 startAnalyticsFlushLoop();
 startShareCleanupLoop();
+startMegaDropCleanupLoop();
+startMegaGridCleanupLoop();
 if (ANALYTICS_ENABLED && !CLICKHOUSE_URL && !canUseAnalyticsFallback()) {
   logError({ type: 'analytics_disabled_no_clickhouse_url' });
 }
@@ -14135,6 +14926,14 @@ const shutdown = async (signal) => {
     if (shareCleanupTimer) {
       clearInterval(shareCleanupTimer);
       shareCleanupTimer = null;
+    }
+    if (megaDropCleanupTimer) {
+      clearInterval(megaDropCleanupTimer);
+      megaDropCleanupTimer = null;
+    }
+    if (megaGridCleanupTimer) {
+      clearInterval(megaGridCleanupTimer);
+      megaGridCleanupTimer = null;
     }
     await flushAnalyticsBuffer('shutdown');
     await Promise.allSettled([

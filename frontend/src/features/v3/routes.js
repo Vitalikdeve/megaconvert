@@ -5,6 +5,7 @@ import {
   FileStack,
   ImageIcon,
   Link2,
+  Network,
   ScanText,
   Sparkles,
   Stamp
@@ -30,6 +31,13 @@ export const WORKSPACE_V3_GROUPS = [
         subtitle: 'Таймлайн до конвертации',
         path: '/workspace/media-trimmer',
         icon: AudioLines
+      },
+      {
+        id: 'megagrid',
+        label: 'MegaGrid',
+        subtitle: 'Distributed Browser Cluster',
+        path: '/workspace/megagrid',
+        icon: Network
       }
     ]
   },
@@ -73,8 +81,8 @@ export const WORKSPACE_V3_GROUPS = [
       },
       {
         id: 'secure-share',
-        label: 'Secure Share',
-        subtitle: 'Ссылки на 24 часа',
+        label: 'MegaDrop',
+        subtitle: 'WebRTC P2P / QR Link',
         path: '/workspace/secure-share',
         icon: Link2
       }
@@ -116,4 +124,3 @@ export const getWorkspaceHeroBadges = () => ([
   { id: 'privacy', label: 'Privacy by design', icon: EyeOff },
   { id: 'wasm', label: 'WASM acceleration', icon: Clapperboard }
 ]);
-

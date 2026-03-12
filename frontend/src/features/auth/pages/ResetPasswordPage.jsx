@@ -1,42 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import PageTransition from '../../../components/PageTransition.jsx';
-
-const parsePayload = async (response) => {
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
-};
-
-const resolveApiBase = (value) => {
-  const normalized = String(value || '').trim().replace(/\/+$/g, '');
-  if (!normalized || !/^https?:\/\//i.test(normalized)) return normalized;
-  try {
-    const parsed = new URL(normalized);
-    const host = String(parsed.hostname || '').trim().toLowerCase();
-    const loopbackHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-    if (!loopbackHost && String(parsed.port || '').trim() === '5000') {
-      parsed.port = '';
-    }
-    if (!loopbackHost && typeof window !== 'undefined' && window.location.protocol === 'https:' && parsed.protocol === 'http:') {
-      parsed.protocol = 'https:';
-    }
-    parsed.pathname = parsed.pathname.replace(/\/+$/g, '');
-    return parsed.toString().replace(/\/+$/g, '');
-  } catch {
-    return normalized;
-  }
-};
-const buildAuthEndpoint = (apiBase, route) => {
-  const base = resolveApiBase(apiBase);
-  const normalizedRoute = String(route || '').replace(/^\/+/g, '');
-  return /\/api$/i.test(base)
-    ? `${base}/auth/${normalizedRoute}`
-    : `${base}/api/auth/${normalizedRoute}`;
-};
+import AuthSceneShell from '../components/AuthSceneShell.jsx';
+import { buildAuthEndpoint, parsePayload } from '../lib/authApi.js';
 
 export default function ResetPasswordPage({ apiBase, onNavigate }) {
   const { t } = useTranslation();
@@ -108,98 +74,90 @@ export default function ResetPasswordPage({ apiBase, onNavigate }) {
     }
   };
 
+  const footer = (
+    <div className="text-sm text-center">
+      <button
+        type="button"
+        onClick={() => navigate('/login')}
+        className="auth-inline-link"
+      >
+        {t('auth.backToLogin', 'Back to sign in')}
+      </button>
+    </div>
+  );
+
   return (
-    <PageTransition pageKey="auth-reset-page">
-      <section className="min-h-[calc(100vh-5rem)] pt-28 pb-16 px-4">
-        <div className="max-w-md mx-auto">
-          <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/60 dark:bg-white/10 backdrop-blur-2xl shadow-2xl p-6 md:p-8 text-slate-900 dark:text-slate-100">
-            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
-              {t('auth.resetEyebrow', 'Account recovery')}
-            </div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-              {t('auth.resetTitle', 'Set a new password')}
-            </h1>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-              {t('auth.resetSubtitle', 'Enter your new password to complete recovery.')}
-            </p>
+    <AuthSceneShell
+      pageKey="auth-reset-page"
+      eyebrow={t('auth.resetEyebrow', 'Account recovery')}
+      title={t('auth.resetTitle', 'Set a new password')}
+      subtitle={t('auth.resetSubtitle', 'Create a fresh password and return to your workspace with a clean session.')}
+      sideLabel={t('auth.sideLabelReset', 'Secure Reset')}
+      sideTitle={t('auth.sideTitleReset', 'Finish recovery with one confident step.')}
+      sideCopy={t('auth.sideCopyReset', 'This page accepts the short-lived token from your email and turns it into a new password without extra friction.')}
+      sidePoints={[
+        {
+          title: t('auth.sidePointTokenTitle', 'Time-limited token'),
+          copy: t('auth.sidePointTokenCopy', 'Reset access is temporary by design, which reduces the blast radius if a link is exposed.')
+        },
+        {
+          title: t('auth.sidePointPasswordTitle', 'Fresh secret'),
+          copy: t('auth.sidePointPasswordCopy', 'A new password replaces the old one immediately so you can continue with a clean auth state.')
+        },
+        {
+          title: t('auth.sidePointContinueTitle', 'Continue smoothly'),
+          copy: t('auth.sidePointContinueCopy', 'As soon as the password is updated, you can sign in again and resume conversions without extra setup.')
+        }
+      ]}
+      footer={footer}
+    >
+      {!token && <div className="auth-status-card auth-status-card-error mb-4">{t('auth.resetTokenMissing', 'Reset token is missing.')}</div>}
 
-            {!token && (
-              <div className="mt-5 rounded-2xl border border-red-300/60 dark:border-red-400/20 bg-red-100/70 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
-                {t('auth.resetTokenMissing', 'Reset token is missing.')}
-              </div>
-            )}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <label className="block">
+          <span className="auth-field-label">{t('auth.newPasswordLabel', 'New password')}</span>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            placeholder={t('auth.passwordPlaceholder', 'At least 8 characters')}
+            autoComplete="new-password"
+            className="auth-input mt-2"
+            required
+          />
+        </label>
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              <label className="block">
-                <span className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                  {t('auth.newPasswordLabel', 'New password')}
-                </span>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder={t('auth.passwordPlaceholder', 'At least 8 characters')}
-                  autoComplete="new-password"
-                  className="mt-2 w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2.5 text-sm"
-                  required
-                />
-              </label>
+        <label className="block">
+          <span className="auth-field-label">{t('auth.confirmPasswordLabel', 'Confirm password')}</span>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            placeholder={t('auth.confirmPasswordPlaceholder', 'Repeat your password')}
+            autoComplete="new-password"
+            className="auth-input mt-2"
+            required
+          />
+        </label>
 
-              <label className="block">
-                <span className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                  {t('auth.confirmPasswordLabel', 'Confirm password')}
-                </span>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder={t('auth.confirmPasswordPlaceholder', 'Repeat your password')}
-                  autoComplete="new-password"
-                  className="mt-2 w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2.5 text-sm"
-                  required
-                />
-              </label>
+        {error && <div className="auth-status-card auth-status-card-error">{error}</div>}
+        {success && <div className="auth-status-card auth-status-card-success">{success}</div>}
 
-              {error && (
-                <div className="rounded-2xl border border-red-300/60 dark:border-red-400/20 bg-red-100/70 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div className="rounded-2xl border border-emerald-300/60 dark:border-emerald-400/20 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-200">
-                  {success}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting || !token}
-                className="w-full rounded-2xl px-5 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02] flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    {t('auth.resetLoading', 'Updating...')}
-                  </>
-                ) : (
-                  t('auth.resetSubmit', 'Update password')
-                )}
-              </button>
-            </form>
-
-            <div className="mt-6 text-sm text-center">
-              <button
-                type="button"
-                onClick={() => navigate('/login')}
-                className="font-semibold text-blue-600 dark:text-blue-300 hover:underline"
-              >
-                {t('auth.backToLogin', 'Back to sign in')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </PageTransition>
+        <button
+          type="submit"
+          disabled={submitting || !token}
+          className="auth-primary-btn w-full justify-center"
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              {t('auth.resetLoading', 'Updating...')}
+            </>
+          ) : (
+            t('auth.resetSubmit', 'Update password')
+          )}
+        </button>
+      </form>
+    </AuthSceneShell>
   );
 }
