@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import {
   CheckCircle2, Zap, ShieldCheck, Globe2, ServerCog, Users2, Activity, Clock3, Cpu, Sparkles,
   Image as ImageIcon, FileText, Music, Video,
-  ChevronRight, ChevronDown, Crown, Box, Mail, Github, Lock, X
+  ChevronRight, ChevronDown, Crown, Box, Mail, Github, Lock, X, ArrowRight, Download, RefreshCw
 } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
@@ -21,6 +22,23 @@ import {
 import SeoPage from './SeoPage';
 import { translations, defaultLang } from './i18n';
 
+// --- Hooks ---
+const useMousePosition = (ref) => {
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (ref.current) {
+        const rect = ref.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        ref.current.style.setProperty('--mouse-x', `${x}px`);
+        ref.current.style.setProperty('--mouse-y', `${y}px`);
+      }
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [ref]);
+};
+
 // --- Firebase ---
 const firebaseConfig = {
   apiKey: 'AIzaSyDT7-w-qd3c_MhmuxUjHigi9p1ZL8iMmII',
@@ -34,174 +52,96 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-if (typeof window !== 'undefined' && window.location.hostname === '127.0.0.1') {
-  // Google OAuth in this Firebase project is allowed for localhost, not raw loopback IP.
-  const nextUrl = new URL(window.location.href);
-  nextUrl.hostname = 'localhost';
-  window.location.replace(nextUrl.toString());
-}
 
-// --- Languages ---
-const LANGUAGES = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'ru', name: 'Русский', flag: '🇷🇺' },
-  { code: 'es', name: 'Español', flag: '🇪🇸' },
-  { code: 'zh', name: '中文', flag: '🇨🇳' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
-  { code: 'pt', name: 'Português', flag: '🇵🇹' },
-  { code: 'ja', name: '日本語', flag: '🇯🇵' },
-  { code: 'hi', name: 'हिन्दी', flag: '🇮🇳' },
-  { code: 'ko', name: '한국어', flag: '🇰🇷' },
-  { code: 'be', name: 'Беларуская', flag: '🇧🇾' }
-];
+// --- Components ---
 
+const PremiumGlassCard = ({ children, className = "" }) => {
+  const cardRef = useRef(null);
+  useMousePosition(cardRef);
 
-
-const toolIcon = (type) => {
-  if (type === 'doc') return <FileText size={18} />;
-  if (type === 'image') return <ImageIcon size={18} />;
-  if (type === 'video') return <Video size={18} />;
-  if (type === 'audio') return <Music size={18} />;
-  return <Box size={18} />;
+  return (
+    <motion.div
+      ref={cardRef}
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className={`glass-pro-card hover-glow ${className}`}
+    >
+      <div className="relative z-10 p-6 md:p-10">
+        {children}
+      </div>
+    </motion.div>
+  );
 };
 
-const tools = [
-  { id: 'pdf-word', name: 'PDF to Word', type: 'doc', accept: '.pdf' },
-  { id: 'pdf-excel', name: 'PDF to Excel', type: 'doc', accept: '.pdf' },
-  { id: 'pdf-pptx', name: 'PDF to PowerPoint', type: 'doc', accept: '.pdf' },
-  { id: 'word-pdf', name: 'Word to PDF', type: 'doc', accept: '.doc,.docx' },
-  { id: 'excel-pdf', name: 'Excel to PDF', type: 'doc', accept: '.xls,.xlsx' },
-  { id: 'pptx-pdf', name: 'PowerPoint to PDF', type: 'doc', accept: '.ppt,.pptx' },
-  { id: 'pdf-txt', name: 'PDF to TXT', type: 'doc', accept: '.pdf' },
-  { id: 'txt-pdf', name: 'TXT to PDF', type: 'doc', accept: '.txt' },
-  { id: 'image-pdf', name: 'Image to PDF', type: 'image', accept: 'image/*' },
-  { id: 'pdf-images', name: 'PDF to Images', type: 'doc', accept: '.pdf' },
-  { id: 'png-jpg', name: 'PNG to JPG', type: 'image', accept: 'image/png' },
-  { id: 'jpg-png', name: 'JPG to PNG', type: 'image', accept: 'image/jpeg, image/jpg' },
-  { id: 'jpg-webp', name: 'JPG to WEBP', type: 'image', accept: 'image/jpeg, image/jpg' },
-  { id: 'png-webp', name: 'PNG to WEBP', type: 'image', accept: 'image/png' },
-  { id: 'heic-jpg', name: 'HEIC to JPG', type: 'image', accept: '.heic' },
-  { id: 'avif-jpg', name: 'AVIF to JPG', type: 'image', accept: '.avif' },
-  { id: 'avif-png', name: 'AVIF to PNG', type: 'image', accept: '.avif' },
-  { id: 'svg-png', name: 'SVG to PNG', type: 'image', accept: '.svg' },
-  { id: 'svg-jpg', name: 'SVG to JPG', type: 'image', accept: '.svg' },
-  { id: 'jpg-pdf', name: 'JPG to PDF', type: 'doc', accept: 'image/jpeg, image/jpg' },
-  { id: 'compress-pdf', name: 'Compress PDF', type: 'doc', accept: '.pdf' },
-  { id: 'mp4-mp3', name: 'MP4 to MP3', type: 'video', accept: 'video/mp4' },
-  { id: 'mp4-gif', name: 'MP4 to GIF', type: 'video', accept: 'video/mp4' },
-  { id: 'mov-mp4', name: 'MOV to MP4', type: 'video', accept: 'video/quicktime' },
-  { id: 'mkv-mp4', name: 'MKV to MP4', type: 'video', accept: '.mkv' },
-  { id: 'avi-mp4', name: 'AVI to MP4', type: 'video', accept: '.avi' },
-  { id: 'video-webm', name: 'Video to WEBM', type: 'video', accept: 'video/*' },
-  { id: 'compress-video', name: 'Compress Video', type: 'video', accept: 'video/*' },
-  { id: 'mp3-wav', name: 'MP3 to WAV', type: 'audio', accept: 'audio/mpeg' },
-  { id: 'wav-mp3', name: 'WAV to MP3', type: 'audio', accept: 'audio/wav' },
-  { id: 'm4a-mp3', name: 'M4A to MP3', type: 'audio', accept: 'audio/*' },
-  { id: 'flac-mp3', name: 'FLAC to MP3', type: 'audio', accept: 'audio/flac' },
-  { id: 'ogg-mp3', name: 'OGG to MP3', type: 'audio', accept: 'audio/ogg' },
-  { id: 'audio-aac', name: 'Audio to AAC', type: 'audio', accept: 'audio/*' },
-  { id: 'zip-rar', name: 'ZIP to RAR', type: 'archive', accept: '.zip' },
-  { id: 'rar-zip', name: 'RAR to ZIP', type: 'archive', accept: '.rar' },
-  { id: '7z-zip', name: '7Z to ZIP', type: 'archive', accept: '.7z' },
-  { id: 'zip-tar', name: 'ZIP to TAR', type: 'archive', accept: '.zip' },
-  { id: 'ocr', name: 'OCR (Image to Text)', type: 'image', accept: 'image/*' },
-  { id: 'cad-pdf', name: 'CAD to PDF', type: 'doc', accept: '.dxf,.dwg' }
-].map((t) => ({ ...t, icon: toolIcon(t.type), isPro: false }));
-
-const categories = [
-  { id: 'all', label: 'All' },
-  { id: 'doc', label: 'Documents' },
-  { id: 'image', label: 'Images' },
-  { id: 'video', label: 'Video' },
-  { id: 'audio', label: 'Audio' },
-  { id: 'archive', label: 'Archives' }
-];
-
-const topToolIds = ['pdf-word', 'mp4-mp3', 'heic-jpg', 'jpg-pdf', 'compress-pdf'];
-
-const EXT_SUGGEST_MAP = {
-  pdf: 'pdf-word',
-  doc: 'word-pdf',
-  docx: 'word-pdf',
-  xls: 'excel-pdf',
-  xlsx: 'excel-pdf',
-  ppt: 'pptx-pdf',
-  pptx: 'pptx-pdf',
-  png: 'png-jpg',
-  jpg: 'jpg-png',
-  jpeg: 'jpg-png',
-  heic: 'heic-jpg',
-  avif: 'avif-jpg',
-  svg: 'svg-png',
-  mp4: 'mp4-mp3',
-  mov: 'mov-mp4',
-  mkv: 'mkv-mp4',
-  avi: 'avi-mp4',
-  mp3: 'mp3-wav',
-  wav: 'wav-mp3',
-  m4a: 'm4a-mp3',
-  flac: 'flac-mp3',
-  ogg: 'ogg-mp3',
-  zip: 'zip-rar',
-  rar: 'rar-zip',
-  '7z': '7z-zip',
-  txt: 'txt-pdf'
-};
-
-const inferToolFromName = (name) => {
-  const ext = (name || '').toLowerCase().split('.').pop();
-  if (!ext || ext === name.toLowerCase()) return null;
-  return EXT_SUGGEST_MAP[ext] || null;
-};
+const FadeIn = ({ children, delay = 0, direction = "up" }) => (
+  <motion.div
+    initial={{ opacity: 0, y: direction === "up" ? 20 : -20 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.6, delay, ease: [0.23, 1, 0.32, 1] }}
+  >
+    {children}
+  </motion.div>
+);
 
 const GlassCard = ({ children }) => (
-  <div className="bg-white/80 backdrop-blur-2xl border border-white/50 shadow-xl shadow-blue-900/5 rounded-2xl p-2 md:p-3 relative overflow-hidden">
-    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500" />
-    <div className="bg-white/60 rounded-2xl p-8 md:p-12 border border-white/60 min-h-[400px] flex flex-col items-center justify-center transition-all">
+  <div className="bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-3xl p-2 relative overflow-hidden">
+    <div className="bg-slate-900/40 rounded-3xl p-8 md:p-12 border border-white/5 min-h-[400px] flex flex-col items-center justify-center transition-all">
       {children}
     </div>
   </div>
 );
 
 const ProcessDemo = () => (
-  <div className="relative rounded-2xl border border-slate-200 bg-white/80 p-6 overflow-hidden shadow-lg">
-    <div className="absolute -top-10 -right-10 w-40 h-40 bg-gradient-to-br from-blue-200/70 to-indigo-200/40 rounded-full blur-2xl" />
-    <div className="flex items-center justify-between text-sm text-slate-500">
-      <span className="font-semibold text-slate-700 flex items-center gap-2"><Sparkles size={16} /> Live conversion</span>
-      <span className="px-2 py-1 rounded-full bg-slate-100 text-xs">Demo</span>
+  <PremiumGlassCard className="border-blue-500/20">
+    <div className="flex items-center justify-between text-sm text-slate-400 mb-6">
+      <span className="font-semibold text-white flex items-center gap-2"><Sparkles size={16} className="text-blue-400" /> Live processing engine</span>
+      <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs border border-blue-500/20">v2.4 Stable</span>
     </div>
-    <div className="mt-5 space-y-4">
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 demo-step demo-step-1">
-        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 font-bold">PDF</div>
+    <div className="space-y-4">
+      <motion.div
+        animate={{ opacity: [0.5, 1, 0.5], scale: [0.98, 1, 0.98] }}
+        transition={{ duration: 3, repeat: Infinity }}
+        className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10"
+      >
+        <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold shadow-lg shadow-blue-500/20">PDF</div>
         <div className="flex-1">
-          <div className="font-semibold">Drop your file</div>
-          <div className="text-xs text-slate-500">Drag & drop or select</div>
+          <div className="font-semibold text-white text-sm">invoice_2026.pdf</div>
+          <div className="text-xs text-slate-500">2.4 MB • Waiting for cloud queue</div>
+        </div>
+      </motion.div>
+
+      <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden">
+        <div className="flex items-center justify-between text-sm mb-2">
+          <span className="font-semibold text-white">Converting to DOCX</span>
+          <span className="text-blue-400 font-mono">84%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+          <motion.div
+            initial={{ width: "0%" }}
+            animate={{ width: "84%" }}
+            transition={{ duration: 2, repeat: Infinity, repeatType: "reverse" }}
+            className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500"
+          />
         </div>
       </div>
 
-      <div className="p-3 rounded-xl bg-white border border-slate-200 demo-step demo-step-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold">Converting</span>
-          <span className="text-slate-500">72%</span>
-        </div>
-        <div className="mt-2 h-2 rounded-full bg-slate-100 overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 demo-progress" />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 demo-step demo-step-3">
-        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
-          <CheckCircle2 size={16} />
+      <motion.div
+        initial={{ opacity: 0.5 }}
+        whileInView={{ opacity: 1 }}
+        className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20"
+      >
+        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+          <CheckCircle2 size={20} />
         </div>
         <div className="flex-1">
-          <div className="font-semibold">File ready</div>
-          <div className="text-xs text-emerald-700">Download in one click</div>
+          <div className="font-semibold text-emerald-400 text-sm">Process complete</div>
+          <div className="text-xs text-emerald-500/70">Cleaned & Optimized</div>
         </div>
-      </div>
+      </motion.div>
     </div>
-  </div>
+  </PremiumGlassCard>
 );
 
 const Section = ({ children, id = "", className = "", ...rest }) => (
@@ -289,7 +229,34 @@ const FAQ_ITEMS = [
   { q: 'How do I report abuse?', a: 'Use the DMCA and abuse reporting forms in Support.' }
 ];
 
+const MilkaPaw = ({ isVisible }) => (
+  <AnimatePresence>
+    {isVisible && (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.5, rotate: -20, y: 20 }}
+        animate={{ opacity: 1, scale: 1, rotate: 0, y: 0 }}
+        exit={{ opacity: 0, scale: 0.5, rotate: 20, y: 20 }}
+        className="fixed bottom-8 right-8 z-[100] pointer-events-none hidden md:block"
+      >
+        <div className="relative">
+          <div className="absolute -top-12 -left-12 bg-white text-slate-900 px-3 py-1 rounded-full text-xs font-bold shadow-xl border border-slate-200 whitespace-nowrap">
+            Meow! Ready to convert? 🐾
+          </div>
+          <motion.div
+            animate={{ y: [0, -5, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="w-16 h-16 bg-[#fef3c7] rounded-full border-4 border-white shadow-2xl flex items-center justify-center text-3xl"
+          >
+            🐾
+          </motion.div>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
 export default function App() {
+  const [showMilka, setShowMilka] = useState(false);
   const [lang, setLang] = useState(defaultLang);
   const t = { ...translations.en, ...(translations[lang] || {}) };
 
@@ -1027,141 +994,345 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <nav className="fixed w-full z-50 bg-white/80 backdrop-blur-lg border-b px-4 h-20 flex justify-between items-center max-w-7xl mx-auto">
-        <div className="flex items-center gap-2 font-bold text-xl cursor-pointer" onClick={() => navigate('/')}>
-          <Zap className="text-blue-600" /> MegaConvert
-        </div>
-        <div className="flex items-center gap-4">
-          <button onClick={() => { if (path !== '/') navigate('/'); setTimeout(scrollToFormats, 50); }} className="font-medium hover:text-blue-600">{t.navTools}</button>
-          <button onClick={() => { if (path !== '/') navigate('/'); setTimeout(() => scrollToId('security'), 50); }} className="font-medium hover:text-blue-600">Security</button>
-          <button onClick={() => { if (path !== '/') navigate('/'); setTimeout(() => scrollToId('teams'), 50); }} className="font-medium hover:text-blue-600">Teams</button>
-          <button onClick={() => { if (path !== '/') navigate('/'); setTimeout(() => scrollToId('status'), 50); }} className="font-medium hover:text-blue-600">Status</button>
-          <button onClick={() => navigate('/pricing')} className="font-medium hover:text-blue-600">{t.navPricing}</button>
-          <button onClick={() => navigate('/faq')} className="font-medium hover:text-blue-600">FAQ</button>
-          <button onClick={() => navigate('/contact')} className="font-medium hover:text-blue-600">Contact</button>
-          {user && (
-            <button onClick={() => navigate('/dashboard')} className="font-medium hover:text-blue-600">Dashboard</button>
-          )}
-          <div className="relative" ref={langMenuRef}>
-            <button onClick={() => setIsLangMenuOpen(!isLangMenuOpen)} className="flex items-center gap-1 font-medium hover:text-blue-600">
-              {LANGUAGES.find(l => l.code === lang)?.flag} <ChevronDown size={14} />
-            </button>
-            {isLangMenuOpen && (
-              <div className="absolute top-full right-0 mt-2 w-40 bg-white shadow-xl rounded-xl border py-2">
-                {LANGUAGES.map(l => (
-                  <button key={l.code} onClick={() => changeLanguage(l.code)} className="w-full text-left px-4 py-2 hover:bg-slate-50 flex gap-2">
-                    {l.flag} {l.name}
-                  </button>
-                ))}
+    <div className="min-h-screen bg-[#020617] text-slate-100 font-sans selection:bg-blue-500/30">
+      {/* Premium Navbar */}
+      <nav className="fixed w-full z-50 bg-[#020617]/40 backdrop-blur-xl border-b border-white/5 px-4 h-20 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-2 font-bold text-xl cursor-pointer"
+            onClick={() => navigate('/')}
+          >
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+              <Zap className="text-white fill-white" size={20} />
+            </div>
+            <span className="tracking-tight font-display">MegaConvert</span>
+          </motion.div>
+
+          <div className="hidden lg:flex items-center gap-8">
+            {['Tools', 'Security', 'Teams', 'Pricing'].map((item, i) => (
+              <motion.button
+                key={item}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                onClick={() => {
+                  if (item === 'Pricing') navigate('/pricing');
+                  else scrollToId(item.toLowerCase());
+                }}
+                className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
+              >
+                {item}
+              </motion.button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="relative" ref={langMenuRef}>
+              <button onClick={() => setIsLangMenuOpen(!isLangMenuOpen)} className="flex items-center gap-1 font-medium hover:text-blue-400 transition-colors p-2 rounded-lg bg-white/5 border border-white/5">
+                {LANGUAGES.find(l => l.code === lang)?.flag} <ChevronDown size={14} className="text-slate-500" />
+              </button>
+              <AnimatePresence>
+                {isLangMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute top-full right-0 mt-2 w-48 glass-pro rounded-2xl border border-white/10 py-2 shadow-2xl z-50"
+                  >
+                    {LANGUAGES.map(l => (
+                      <button key={l.code} onClick={() => changeLanguage(l.code)} className="w-full text-left px-4 py-2 hover:bg-white/5 flex gap-3 items-center text-sm">
+                        <span>{l.flag}</span>
+                        <span className="text-slate-300">{l.name}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {!user ? (
+              <Button onClick={() => navigate('/login')} className="!px-5 !py-2.5 !text-xs uppercase tracking-widest">{t.navLogin}</Button>
+            ) : (
+              <div className="flex items-center gap-4 pl-4 border-l border-white/10">
+                <div className="text-right hidden md:block text-sm">
+                  <div className="font-bold text-white leading-none mb-1">{user.name}</div>
+                  {isPro && <div className="text-amber-500 text-[10px] font-bold uppercase tracking-tighter flex items-center justify-end gap-1"><Crown size={10} fill="currentColor"/> PRO Member</div>}
+                </div>
+                <button onClick={() => signOut(auth)} className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors text-slate-400">
+                  <X size={18} />
+                </button>
               </div>
             )}
           </div>
-          {!user ? (
-            <Button onClick={() => navigate('/login')}>{t.navLogin}</Button>
-          ) : (
-            <div className="flex items-center gap-3">
-              <div className="text-right hidden md:block text-sm">
-                <div className="font-bold">{user.name}</div>
-                {isPro && <div className="text-amber-600 text-xs font-bold flex justify-end items-center gap-1"><Crown size={10}/> PRO</div>}
-              </div>
-              <button onClick={() => { localStorage.removeItem('twofa_token'); signOut(auth); }} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
-            </div>
-          )}
         </div>
       </nav>
 
-      {isConvert ? (
-        <SeoPage
-          slug={path.replace('/convert/', '')}
-          onSelectTool={selectTool}
-          onNavigate={navigate}
-        />
-      ) : isPricing ? (
-        renderPricingPage()
-      ) : isLogin ? (
-        renderLoginPage()
-      ) : isDashboard ? (
-        renderDashboardPage()
-      ) : isBlog ? (
-        renderBlogPage()
-      ) : isFaq ? (
-        renderFaqPage()
-      ) : isPrivacy ? (
-        renderPrivacyPage()
-      ) : isTerms ? (
-        renderTermsPage()
-      ) : isLegal ? (
-        renderLegalPage()
-      ) : isAbout ? (
-        renderAboutPage()
-      ) : isContact ? (
-        renderContactPage()
-      ) : isNotFound ? (
-        renderNotFoundPage()
-      ) : (
-        <>
-          <input
-            type="file"
-            ref={fileInputRef}
-            data-testid="file-input"
-            onChange={e => {
-              handleFilesSelected(e.target.files);
-            }}
-            className="hidden"
-            accept={currentTool.accept}
-            multiple={batchMode}
-          />
+      <AnimatePresence mode="wait">
+        {isConvert ? (
+          <motion.div key="convert" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <SeoPage slug={path.replace('/convert/', '')} onSelectTool={selectTool} onNavigate={navigate} />
+          </motion.div>
+        ) : isPricing ? (
+          <motion.div key="pricing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {renderPricingPage()}
+          </motion.div>
+        ) : isLogin ? (
+          <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {renderLoginPage()}
+          </motion.div>
+        ) : (
+          <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {/* Hero Section */}
+            <div className="relative pt-40 pb-24 overflow-hidden">
+              {/* Background Orbs */}
+              <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-blue-600/10 rounded-full blur-[120px] -mr-96 -mt-96" />
+              <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px] -ml-48 -mb-48" />
 
-          <div className="pt-28 pb-16 px-4 relative overflow-hidden">
-            <div className="absolute -top-24 -right-24 w-72 h-72 bg-gradient-to-br from-sky-200 via-blue-200 to-indigo-200 rounded-full blur-3xl opacity-60" />
-            <div className="absolute -bottom-16 -left-24 w-80 h-80 bg-gradient-to-br from-amber-100 via-rose-100 to-pink-100 rounded-full blur-3xl opacity-60" />
-            <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-10 items-center relative">
-              <div className="relative z-10 reveal" data-reveal>
-                <Badge color="purple">Global file converter</Badge>
-                <h1 className="text-5xl md:text-6xl font-extrabold mt-6 text-slate-900 tracking-tight font-display">{t.heroTitle}</h1>
-                <p className="text-lg md:text-xl text-slate-600 mt-5 max-w-xl">{t.heroDesc}</p>
-                <div className="flex flex-wrap gap-3 mt-8">
-                  <Button size="large" onClick={() => { scrollToConverter(); openFilePicker(); }} data-testid="cta-upload">{t.btnStart}</Button>
-                  <Button size="large" variant="secondary" onClick={scrollToFormats}>{t.navTools}</Button>
-                </div>
-                <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-500">★</span>
-                    <span><span className="font-semibold">{filesConvertedCount.toLocaleString()}</span> files converted</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Globe2 size={16} className="text-slate-500" />
-                    <span>Used in 120+ countries</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck size={16} className="text-slate-500" />
-                    <span>100% private</span>
-                  </div>
-                </div>
-                <div className="mt-8">
-                  <div className="text-xs uppercase tracking-widest text-slate-500">Top conversions</div>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {topTools.map((tool) => (
-                      <button
-                        key={tool.id}
-                        onClick={() => { selectTool(tool.id); setPendingOpenToolId(tool.id); }}
-                        data-testid={`top-tool-${tool.id}`}
-                        className="px-3 py-2 rounded-xl text-sm font-semibold bg-white border border-slate-200 hover:bg-slate-50"
+              <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-2 gap-16 items-center relative z-10">
+                <div>
+                  <FadeIn>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest mb-8">
+                      <Sparkles size={14} /> Global Transformation Engine
+                    </div>
+                  </FadeIn>
+                  <FadeIn delay={0.1}>
+                    <h1 className="text-6xl md:text-7xl font-extrabold text-white tracking-tight font-display leading-[1.1] mb-8">
+                      Transform files at <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-violet-400">Light Speed.</span>
+                    </h1>
+                  </FadeIn>
+                  <FadeIn delay={0.2}>
+                    <p className="text-xl text-slate-400 max-w-xl mb-10 leading-relaxed">
+                      Experience the world's most advanced cloud conversion engine. Secure, private, and breathtakingly fast.
+                    </p>
+                  </FadeIn>
+                  <FadeIn delay={0.3}>
+                    <div className="flex flex-wrap gap-4 mb-12">
+                      <Button
+                        size="large"
+                        onClick={() => { scrollToConverter(); openFilePicker(); }}
+                        onMouseEnter={() => setShowMilka(true)}
+                        onMouseLeave={() => setShowMilka(false)}
+                        className="!rounded-2xl !px-10 group"
                       >
-                        {tool.name}
-                      </button>
-                    ))}
-                  </div>
+                        Start for Free <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+                      </Button>
+                      <Button size="large" variant="secondary" onClick={scrollToFormats} className="!bg-white/5 !text-white !border-white/10 !rounded-2xl hover:!bg-white/10">
+                        Explore Tools
+                      </Button>
+                    </div>
+                  </FadeIn>
+
+                  <FadeIn delay={0.4}>
+                    <div className="grid grid-cols-3 gap-8 pt-8 border-t border-white/5">
+                      <div>
+                        <div className="text-2xl font-bold text-white mb-1">1.2M+</div>
+                        <div className="text-xs text-slate-500 uppercase tracking-widest">Conversions</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-white mb-1">120+</div>
+                        <div className="text-xs text-slate-500 uppercase tracking-widest">Countries</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-white mb-1">24h</div>
+                        <div className="text-xs text-slate-500 uppercase tracking-widest">Auto-Delete</div>
+                      </div>
+                    </div>
+                  </FadeIn>
+                </div>
+
+                <div id="converter" className="relative">
+                  <AnimatePresence mode="wait">
+                    {status === 'idle' ? (
+                      <motion.div
+                        key="idle"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 1.05 }}
+                        transition={{ duration: 0.4 }}
+                      >
+                        <PremiumGlassCard className="!p-1 border-blue-500/20">
+                          <div
+                            className="w-full flex flex-col items-center py-16 px-6 border-2 border-dashed border-white/10 rounded-[28px] hover:border-blue-500/40 transition-colors group cursor-pointer"
+                            onDragOver={e => e.preventDefault()}
+                            onDrop={e => { e.preventDefault(); handleFilesSelected(e.dataTransfer.files); }}
+                            onClick={openFilePicker}
+                          >
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={e => handleFilesSelected(e.target.files)} multiple={batchMode} accept={currentTool.accept} />
+
+                            <motion.div
+                              whileHover={{ scale: 1.1, rotate: 5 }}
+                              className="w-20 h-20 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mb-8 border border-blue-500/20 shadow-2xl shadow-blue-500/20"
+                            >
+                              {currentTool.icon}
+                            </motion.div>
+
+                            {file ? (
+                              <div className="text-center w-full">
+                                <h3 className="text-xl font-bold text-white mb-4 truncate max-w-xs mx-auto">
+                                  {batchMode ? `${files.length} Files Selected` : file.name}
+                                </h3>
+                                <div className="flex gap-3 justify-center mb-8">
+                                  <Button onClick={(e) => { e.stopPropagation(); handleProcess(); }} className="!rounded-xl shadow-xl shadow-blue-600/20">Convert Now</Button>
+                                  <Button variant="secondary" onClick={(e) => { e.stopPropagation(); reset(); }} className="!bg-white/5 !border-white/10 !text-slate-400 !rounded-xl">Clear</Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center">
+                                <h3 className="text-2xl font-bold text-white mb-3">Drop files here</h3>
+                                <p className="text-slate-500 mb-8">or click to browse your computer</p>
+                                <div className="flex items-center justify-center gap-6 text-xs text-slate-500 mb-2">
+                                  <label className="flex items-center gap-2 cursor-pointer py-2 px-3 rounded-lg hover:bg-white/5 transition-colors">
+                                    <input type="checkbox" className="rounded border-white/10 bg-white/5" checked={batchMode} onChange={e => setBatchMode(e.target.checked)} onClick={e => e.stopPropagation()} />
+                                    <span>Batch Mode</span>
+                                  </label>
+                                  <div className="w-px h-4 bg-white/10" />
+                                  <div className="flex items-center gap-2">
+                                    <ShieldCheck size={14} className="text-emerald-500" />
+                                    <span>E2E Encrypted</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </PremiumGlassCard>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="processing"
+                        initial={{ opacity: 0, scale: 1.05 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.4 }}
+                      >
+                        <PremiumGlassCard className="border-indigo-500/20 min-h-[400px] flex flex-col items-center justify-center text-center">
+                          {status === 'processing' && (
+                            <>
+                              <div className="relative mb-10">
+                                <svg className="w-32 h-32 transform -rotate-90">
+                                  <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
+                                  <motion.circle
+                                    cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-blue-500"
+                                    strokeDasharray={377}
+                                    strokeDashoffset={377 - (377 * progress) / 100}
+                                    transition={{ duration: 0.5 }}
+                                  />
+                                </svg>
+                                <div className="absolute inset-0 flex items-center justify-center text-3xl font-bold text-white font-mono">
+                                  {Math.round(progress)}%
+                                </div>
+                              </div>
+                              <h3 className="text-2xl font-bold text-white mb-2">Processing...</h3>
+                              <p className="text-slate-500 max-w-xs mx-auto">Transforming your data using our premium edge nodes.</p>
+                              {etaSeconds !== null && <div className="mt-4 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold border border-blue-500/20 uppercase tracking-tighter">Est. Time: {etaSeconds}s</div>}
+                            </>
+                          )}
+
+                          {status === 'done' && (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                              <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-8 border border-emerald-500/30 text-emerald-400 shadow-2xl shadow-emerald-500/20">
+                                <CheckCircle2 size={48} />
+                              </div>
+                              <h3 className="text-3xl font-bold text-white mb-2">Success!</h3>
+                              <p className="text-slate-500 mb-10">Your file is ready and optimized for quality.</p>
+                              <div className="flex gap-4 justify-center">
+                                <Button variant="secondary" onClick={reset} className="!bg-white/5 !border-white/10 !text-slate-300 !rounded-xl !px-6"><RefreshCw size={18}/> New</Button>
+                                <Button onClick={download} className="!rounded-xl !px-10 shadow-xl shadow-blue-600/20"><Download size={18}/> Download</Button>
+                              </div>
+                            </motion.div>
+                          )}
+
+                          {status === 'error' && (
+                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                              <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-8 border border-red-500/30 text-red-400">
+                                <X size={40} />
+                              </div>
+                              <h3 className="text-2xl font-bold text-white mb-2">Failed</h3>
+                              <p className="text-slate-500 mb-8 max-w-xs mx-auto">{errorInfo || 'Unexpected pipeline error. Please retry.'}</p>
+                              <Button onClick={reset} variant="secondary" className="!bg-white/5 !border-white/10 !text-slate-300 !rounded-xl">Back to Start</Button>
+                            </motion.div>
+                          )}
+                        </PremiumGlassCard>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
+            </div>
 
-              <div className="relative z-10 space-y-6" id="converter">
-                <div data-reveal className="reveal">
-                  <ProcessDemo />
+            {/* Formats Section */}
+            <Section id="formats" className="relative z-10 pt-32">
+              <div className="text-center mb-16">
+                <FadeIn>
+                  <Badge color="blue">Global Toolbox</Badge>
+                  <h2 className="text-4xl md:text-5xl font-bold mt-6 text-white tracking-tight font-display">Supported Formats</h2>
+                  <p className="text-slate-400 mt-4 max-w-2xl mx-auto text-lg">Over 200+ secure conversion pathways available instantly.</p>
+                </FadeIn>
+              </div>
+
+              <FadeIn delay={0.2}>
+                <div className="max-w-4xl mx-auto mb-12">
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-blue-600/20 blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Search for a tool (e.g. PDF to Word, HEIC to JPG...)"
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-5 text-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 relative z-10 backdrop-blur-xl transition-all"
+                    />
+                  </div>
                 </div>
-                <div data-reveal className="reveal">
-                  <GlassCard>
+              </FadeIn>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {visibleTools.map((tool, i) => (
+                  <motion.button
+                    key={tool.id}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.05 }}
+                    whileHover={{ y: -5, backgroundColor: "rgba(255,255,255,0.05)" }}
+                    onClick={() => { selectTool(tool.id); scrollToConverter(); }}
+                    className="glass-pro p-6 rounded-[24px] text-left border border-white/5 group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <ArrowRight size={16} className="text-blue-500" />
+                    </div>
+                    <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center text-blue-400 mb-4 group-hover:bg-blue-500/10 group-hover:text-blue-500 transition-colors">
+                      {tool.icon}
+                    </div>
+                    <div className="font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">{tool.name}</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{tool.type}</div>
+                  </motion.button>
+                ))}
+              </div>
+            </Section>
+
+            {/* Features Section */}
+            <Section id="security" className="pt-40">
+              <div className="grid lg:grid-cols-3 gap-8">
+                <PremiumGlassCard>
+                  <ShieldCheck className="text-blue-500 mb-6" size={32} />
+                  <h3 className="text-xl font-bold text-white mb-4">Enterprise Security</h3>
+                  <p className="text-slate-400 leading-relaxed text-sm">Military-grade AES-256 encryption for all data transfers. Your privacy is our highest priority.</p>
+                </PremiumGlassCard>
+                <PremiumGlassCard>
+                  <Zap className="text-indigo-500 mb-6" size={32} />
+                  <h3 className="text-xl font-bold text-white mb-4">Edge Architecture</h3>
+                  <p className="text-slate-400 leading-relaxed text-sm">Distributed workers across 42 global regions ensure minimal latency and blazing fast processing.</p>
+                </PremiumGlassCard>
+                <PremiumGlassCard>
+                  <Globe2 className="text-violet-500 mb-6" size={32} />
+                  <h3 className="text-xl font-bold text-white mb-4">Cloud Native</h3>
+                  <p className="text-slate-400 leading-relaxed text-sm">Auto-scaling infrastructure that handles anything from single files to massive batch workloads.</p>
+                </PremiumGlassCard>
+              </div>
+            </Section>
+          </motion.div>
+        )}
+      </AnimatePresence>
                   {status === 'idle' && (
                     <div className="w-full flex flex-col items-center py-10" onDragOver={e => e.preventDefault()} onDrop={e => {
                       e.preventDefault();
@@ -1752,6 +1923,7 @@ export default function App() {
       )}
 
       <span className="sr-only" data-testid="active-tool">{activeTab}</span>
+      <MilkaPaw isVisible={showMilka} />
     </div>
   );
 }

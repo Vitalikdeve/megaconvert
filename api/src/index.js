@@ -5,7 +5,9 @@ const cors = require('cors');
 const multer = require('multer');
 const archiver = require('archiver');
 const sharp = require('sharp');
-const { Queue } = require('bullmq');
+const http = require('http');
+const { Server } = require('socket.io');
+const { Queue, QueueEvents } = require('bullmq');
 const IORedis = require('ioredis');
 const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, HeadBucketCommand, CreateBucketCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -49,6 +51,10 @@ const DATA_ROOT_DIR = String(
 ).trim() || (SERVERLESS_RUNTIME ? path.join('/tmp', 'megaconvert-data') : path.join(__dirname, '..', 'data'));
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: corsOptions
+});
 app.set('etag', false);
 app.set('trust proxy', true);
 app.use((req, res, next) => {

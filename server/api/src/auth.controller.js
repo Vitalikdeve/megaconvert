@@ -8,15 +8,31 @@ const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/sit
 const ACCESS_TOKEN_TTL = '1h';
 const RESET_TOKEN_TTL = '1h';
 const ACCESS_TOKEN_MAX_AGE_MS = 60 * 60 * 1000;
-const RESET_LINK_BASE = (process.env.APP_BASE_URL || 'https://megaconvert.com').replace(/\/+$/g, '');
+const RESET_LINK_BASE = (process.env.APP_BASE_URL || 'https://megaconvert-web.vercel.app').replace(/\/+$/g, '');
 const SESSION_JWT_SECRET = process.env.JWT_SESSION_SECRET || process.env.JWT_SECRET || 'dev-session-secret-change-me';
 const RESET_JWT_SECRET = process.env.JWT_RESET_SECRET || process.env.JWT_SECRET || 'dev-reset-secret-change-me';
+const OAUTH_API_BASE = String(
+  process.env.OAUTH_REDIRECT_BASE_URL || process.env.API_BASE_URL || 'https://35.202.253.153.nip.io'
+).trim().replace(/\/+$/g, '');
+const OAUTH_FRONTEND_CALLBACK = String(
+  process.env.OAUTH_FRONTEND_CALLBACK_URL || 'https://megaconvert-web.vercel.app/auth/callback'
+).trim();
+const OAUTH_STATE_TTL_MS = Math.max(60 * 1000, Number(process.env.OAUTH_STATE_TTL_MS || 10 * 60 * 1000));
+const OAUTH_SYNTHETIC_EMAIL_DOMAIN = String(
+  process.env.OAUTH_SYNTHETIC_EMAIL_DOMAIN || 'oauth.megaconvert.local'
+).trim() || 'oauth.megaconvert.local';
+const OAUTH_STATE = new Map();
 
 // Temporary in-memory storage until DB is connected.
 const users = [];
 const usedResetTokenIds = new Set();
 
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const normalizeOAuthProvider = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'twitter') return 'x';
+  return normalized;
+};
 
 const createId = () => {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -28,7 +44,8 @@ const toPublicUser = (user) => ({
   email: user.email,
   name: user.name,
   createdAt: user.createdAt,
-  updatedAt: user.updatedAt
+  updatedAt: user.updatedAt,
+  providers: Object.keys(user.oauthProviders || {})
 });
 
 const createMailer = () => {
@@ -171,6 +188,426 @@ const setSessionCookie = (res, sessionId) => {
   res.cookie('session_id', String(sessionId || ''), options);
 };
 
+const toBase64Url = (value) => Buffer.from(value)
+  .toString('base64')
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/g, '');
+
+const createPkceVerifier = () => toBase64Url(crypto.randomBytes(64));
+
+const createPkceChallenge = (verifier) => toBase64Url(
+  crypto.createHash('sha256').update(String(verifier || '')).digest()
+);
+
+const cleanupOAuthState = () => {
+  const now = Date.now();
+  for (const [state, payload] of OAUTH_STATE.entries()) {
+    if (!payload || (now - Number(payload.createdAt || 0)) > OAUTH_STATE_TTL_MS) {
+      OAUTH_STATE.delete(state);
+    }
+  }
+};
+
+const createOAuthState = ({ provider, codeVerifier = '' }) => {
+  cleanupOAuthState();
+  const state = createId();
+  OAUTH_STATE.set(state, {
+    provider,
+    codeVerifier,
+    createdAt: Date.now()
+  });
+  return state;
+};
+
+const consumeOAuthState = ({ state, provider }) => {
+  cleanupOAuthState();
+  const payload = OAUTH_STATE.get(state);
+  OAUTH_STATE.delete(state);
+  if (!payload) return null;
+  if (payload.provider !== provider) return null;
+  if ((Date.now() - Number(payload.createdAt || 0)) > OAUTH_STATE_TTL_MS) return null;
+  return payload;
+};
+
+const resolveOAuthCredentials = (provider) => {
+  if (provider === 'google') {
+    return {
+      label: 'Google',
+      clientId: String(process.env.GOOGLE_CLIENT_ID || '').trim(),
+      clientSecret: String(process.env.GOOGLE_CLIENT_SECRET || '').trim(),
+      clientIdEnv: 'GOOGLE_CLIENT_ID',
+      clientSecretEnv: 'GOOGLE_CLIENT_SECRET'
+    };
+  }
+  if (provider === 'github') {
+    return {
+      label: 'GitHub',
+      clientId: String(process.env.GITHUB_CLIENT_ID || '').trim(),
+      clientSecret: String(process.env.GITHUB_CLIENT_SECRET || '').trim(),
+      clientIdEnv: 'GITHUB_CLIENT_ID',
+      clientSecretEnv: 'GITHUB_CLIENT_SECRET'
+    };
+  }
+  if (provider === 'facebook') {
+    return {
+      label: 'Facebook',
+      clientId: String(process.env.FACEBOOK_CLIENT_ID || '').trim(),
+      clientSecret: String(process.env.FACEBOOK_CLIENT_SECRET || '').trim(),
+      clientIdEnv: 'FACEBOOK_CLIENT_ID',
+      clientSecretEnv: 'FACEBOOK_CLIENT_SECRET'
+    };
+  }
+  if (provider === 'x') {
+    return {
+      label: 'X',
+      clientId: String(process.env.X_CLIENT_ID || process.env.TWITTER_CLIENT_ID || '').trim(),
+      clientSecret: String(process.env.X_CLIENT_SECRET || process.env.TWITTER_CLIENT_SECRET || '').trim(),
+      clientIdEnv: 'X_CLIENT_ID (or TWITTER_CLIENT_ID)',
+      clientSecretEnv: 'X_CLIENT_SECRET (or TWITTER_CLIENT_SECRET)'
+    };
+  }
+  return null;
+};
+
+const ensureOAuthCredentials = (provider) => {
+  const config = resolveOAuthCredentials(provider);
+  if (!config) {
+    const error = new Error('Unsupported OAuth provider');
+    error.code = 'OAUTH_PROVIDER_UNSUPPORTED';
+    throw error;
+  }
+  const missing = [];
+  if (!config.clientId) missing.push(config.clientIdEnv);
+  if (!config.clientSecret) missing.push(config.clientSecretEnv);
+  if (missing.length) {
+    const error = new Error(`${config.label} OAuth is not configured: missing ${missing.join(', ')}`);
+    error.code = 'OAUTH_PROVIDER_NOT_CONFIGURED';
+    throw error;
+  }
+  return config;
+};
+
+const buildOAuthRedirectUri = (provider) => `${OAUTH_API_BASE}/api/auth/connect/${provider}/callback`;
+
+const buildFrontendOAuthCallbackUrl = ({ provider, token, email, error, message }) => {
+  const base = /^https?:\/\//i.test(OAUTH_FRONTEND_CALLBACK)
+    ? OAUTH_FRONTEND_CALLBACK
+    : `https://megaconvert-web.vercel.app${OAUTH_FRONTEND_CALLBACK.startsWith('/') ? OAUTH_FRONTEND_CALLBACK : `/${OAUTH_FRONTEND_CALLBACK}`}`;
+
+  const url = new URL(base);
+  if (provider) url.searchParams.set('provider', provider);
+  if (token) {
+    url.searchParams.set('token', token);
+    url.searchParams.set('access_token', token);
+  }
+  if (email) url.searchParams.set('email', email);
+  if (error) url.searchParams.set('error', error);
+  if (message) url.searchParams.set('message', message);
+  return url.toString();
+};
+
+const requestJson = async (url, options = {}) => {
+  if (typeof fetch !== 'function') {
+    const error = new Error('Global fetch is not available in this Node runtime');
+    error.code = 'FETCH_UNAVAILABLE';
+    throw error;
+  }
+  const response = await fetch(url, options);
+  const text = await response.text();
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { raw: text };
+  }
+  return {
+    ok: response.ok,
+    status: response.status,
+    payload
+  };
+};
+
+const expectRequestOk = (result, code, message) => {
+  if (result.ok) return result.payload;
+  const error = new Error(message);
+  error.code = code;
+  error.status = result.status;
+  error.details = result.payload;
+  throw error;
+};
+
+const ensureOAuthContainer = (user) => {
+  if (!user.oauthProviders || typeof user.oauthProviders !== 'object' || Array.isArray(user.oauthProviders)) {
+    user.oauthProviders = {};
+  }
+  return user.oauthProviders;
+};
+
+const findUserByProvider = ({ provider, providerUserId }) => {
+  const normalizedProviderId = String(providerUserId || '').trim();
+  if (!normalizedProviderId) return null;
+  return users.find((item) => String(item?.oauthProviders?.[provider]?.id || '') === normalizedProviderId) || null;
+};
+
+const resolveOAuthName = ({ provider, name, email }) => {
+  const cleanName = String(name || '').trim();
+  if (cleanName) return cleanName;
+  const cleanEmail = normalizeEmail(email);
+  if (cleanEmail.includes('@')) return cleanEmail.split('@')[0];
+  if (provider === 'google') return 'Google User';
+  if (provider === 'github') return 'GitHub User';
+  if (provider === 'facebook') return 'Facebook User';
+  if (provider === 'x') return 'X User';
+  return 'User';
+};
+
+const resolveOAuthEmail = ({ provider, providerUserId, email }) => {
+  const normalized = normalizeEmail(email);
+  if (normalized) return normalized;
+  const safeProvider = String(provider || 'oauth').replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'oauth';
+  const safeProviderId = String(providerUserId || createId()).replace(/[^a-z0-9_-]/gi, '').toLowerCase() || createId();
+  return `${safeProvider}-${safeProviderId}@${OAUTH_SYNTHETIC_EMAIL_DOMAIN}`;
+};
+
+const findOrCreateOAuthUser = async ({ provider, providerUserId, email, name }) => {
+  const normalizedProviderId = String(providerUserId || '').trim();
+  if (!normalizedProviderId) {
+    const error = new Error('OAuth provider user id is missing');
+    error.code = 'OAUTH_PROFILE_INVALID';
+    throw error;
+  }
+
+  const resolvedEmail = resolveOAuthEmail({ provider, providerUserId: normalizedProviderId, email });
+  const resolvedName = resolveOAuthName({ provider, name, email: resolvedEmail });
+  let user = findUserByProvider({ provider, providerUserId: normalizedProviderId });
+  if (!user) {
+    user = users.find((item) => item.email === resolvedEmail) || null;
+  }
+
+  const now = new Date().toISOString();
+  if (!user) {
+    const randomPassword = `${createId()}${createId()}`;
+    const passwordHash = await bcrypt.hash(randomPassword, 12);
+    user = {
+      id: createId(),
+      email: resolvedEmail,
+      name: resolvedName,
+      passwordHash,
+      passwordVersion: 1,
+      oauthProviders: {},
+      createdAt: now,
+      updatedAt: now
+    };
+    users.push(user);
+  }
+
+  if (!user.email) user.email = resolvedEmail;
+  if (!user.name || user.name === 'User') user.name = resolvedName;
+  const providers = ensureOAuthContainer(user);
+  providers[provider] = {
+    id: normalizedProviderId,
+    email: resolvedEmail,
+    connectedAt: now
+  };
+  user.updatedAt = now;
+  return user;
+};
+
+const buildOAuthAuthorizeUrl = ({ provider, state, codeChallenge = '' }) => {
+  const { clientId } = ensureOAuthCredentials(provider);
+  const redirectUri = buildOAuthRedirectUri(provider);
+
+  if (provider === 'google') {
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', 'openid email profile');
+    url.searchParams.set('state', state);
+    return url.toString();
+  }
+  if (provider === 'github') {
+    const url = new URL('https://github.com/login/oauth/authorize');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('scope', 'read:user user:email');
+    url.searchParams.set('state', state);
+    return url.toString();
+  }
+  if (provider === 'facebook') {
+    const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', 'email,public_profile');
+    url.searchParams.set('state', state);
+    return url.toString();
+  }
+  if (provider === 'x') {
+    const url = new URL('https://twitter.com/i/oauth2/authorize');
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('scope', 'tweet.read users.read users.email offline.access');
+    url.searchParams.set('state', state);
+    url.searchParams.set('code_challenge', codeChallenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+    return url.toString();
+  }
+  const error = new Error('Unsupported OAuth provider');
+  error.code = 'OAUTH_PROVIDER_UNSUPPORTED';
+  throw error;
+};
+
+const resolveGitHubEmail = (emails) => {
+  if (!Array.isArray(emails)) return '';
+  const primaryVerified = emails.find((item) => item?.primary && item?.verified);
+  const verified = emails.find((item) => item?.verified);
+  const fallback = primaryVerified || verified || emails[0];
+  return normalizeEmail(fallback?.email);
+};
+
+const exchangeOAuthCodeForProfile = async ({ provider, code, statePayload }) => {
+  const { clientId, clientSecret } = ensureOAuthCredentials(provider);
+  const redirectUri = buildOAuthRedirectUri(provider);
+
+  if (provider === 'google') {
+    const tokenBody = new URLSearchParams();
+    tokenBody.set('code', code);
+    tokenBody.set('client_id', clientId);
+    tokenBody.set('client_secret', clientSecret);
+    tokenBody.set('redirect_uri', redirectUri);
+    tokenBody.set('grant_type', 'authorization_code');
+    const tokenResult = await requestJson('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenBody.toString()
+    });
+    const tokenData = expectRequestOk(tokenResult, 'GOOGLE_TOKEN_EXCHANGE_FAILED', 'Google token exchange failed');
+    const accessToken = String(tokenData?.access_token || '').trim();
+    const profileResult = await requestJson('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const profile = expectRequestOk(profileResult, 'GOOGLE_PROFILE_FETCH_FAILED', 'Failed to fetch Google profile');
+    return {
+      provider,
+      providerUserId: String(profile?.sub || profile?.id || '').trim(),
+      email: normalizeEmail(profile?.email),
+      name: String(profile?.name || profile?.given_name || '').trim()
+    };
+  }
+
+  if (provider === 'github') {
+    const tokenBody = new URLSearchParams();
+    tokenBody.set('code', code);
+    tokenBody.set('client_id', clientId);
+    tokenBody.set('client_secret', clientSecret);
+    tokenBody.set('redirect_uri', redirectUri);
+    const tokenResult = await requestJson('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: tokenBody.toString()
+    });
+    const tokenData = expectRequestOk(tokenResult, 'GITHUB_TOKEN_EXCHANGE_FAILED', 'GitHub token exchange failed');
+    const accessToken = String(tokenData?.access_token || '').trim();
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'MegaConvert-OAuth'
+    };
+    const profileResult = await requestJson('https://api.github.com/user', { headers });
+    const profile = expectRequestOk(profileResult, 'GITHUB_PROFILE_FETCH_FAILED', 'Failed to fetch GitHub profile');
+    let email = normalizeEmail(profile?.email);
+    if (!email) {
+      const emailsResult = await requestJson('https://api.github.com/user/emails', { headers });
+      if (emailsResult.ok) {
+        email = resolveGitHubEmail(emailsResult.payload);
+      }
+    }
+    if (!email) {
+      const error = new Error('GitHub account email is not available');
+      error.code = 'GITHUB_EMAIL_MISSING';
+      throw error;
+    }
+    return {
+      provider,
+      providerUserId: String(profile?.id || '').trim(),
+      email,
+      name: String(profile?.name || profile?.login || '').trim()
+    };
+  }
+
+  if (provider === 'facebook') {
+    const tokenUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+    tokenUrl.searchParams.set('client_id', clientId);
+    tokenUrl.searchParams.set('client_secret', clientSecret);
+    tokenUrl.searchParams.set('redirect_uri', redirectUri);
+    tokenUrl.searchParams.set('code', code);
+    const tokenResult = await requestJson(tokenUrl.toString(), { method: 'GET' });
+    const tokenData = expectRequestOk(tokenResult, 'FACEBOOK_TOKEN_EXCHANGE_FAILED', 'Facebook token exchange failed');
+    const accessToken = String(tokenData?.access_token || '').trim();
+    const profileUrl = new URL('https://graph.facebook.com/me');
+    profileUrl.searchParams.set('fields', 'id,name,email');
+    profileUrl.searchParams.set('access_token', accessToken);
+    const profileResult = await requestJson(profileUrl.toString(), { method: 'GET' });
+    const profile = expectRequestOk(profileResult, 'FACEBOOK_PROFILE_FETCH_FAILED', 'Failed to fetch Facebook profile');
+    return {
+      provider,
+      providerUserId: String(profile?.id || '').trim(),
+      email: normalizeEmail(profile?.email),
+      name: String(profile?.name || '').trim()
+    };
+  }
+
+  if (provider === 'x') {
+    const codeVerifier = String(statePayload?.codeVerifier || '').trim();
+    if (!codeVerifier) {
+      const error = new Error('X OAuth verifier is missing');
+      error.code = 'X_PKCE_VERIFIER_MISSING';
+      throw error;
+    }
+
+    const tokenBody = new URLSearchParams();
+    tokenBody.set('grant_type', 'authorization_code');
+    tokenBody.set('code', code);
+    tokenBody.set('redirect_uri', redirectUri);
+    tokenBody.set('code_verifier', codeVerifier);
+    tokenBody.set('client_id', clientId);
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const tokenResult = await requestJson('https://api.twitter.com/2/oauth2/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: tokenBody.toString()
+    });
+    const tokenData = expectRequestOk(tokenResult, 'X_TOKEN_EXCHANGE_FAILED', 'X token exchange failed');
+    const accessToken = String(tokenData?.access_token || '').trim();
+    const profileResult = await requestJson('https://api.twitter.com/2/users/me?user.fields=id,name,username,profile_image_url', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+    const profileData = expectRequestOk(profileResult, 'X_PROFILE_FETCH_FAILED', 'Failed to fetch X profile');
+    const profile = profileData?.data || {};
+    return {
+      provider,
+      providerUserId: String(profile?.id || '').trim(),
+      email: normalizeEmail(profile?.email),
+      name: String(profile?.name || profile?.username || '').trim()
+    };
+  }
+
+  const error = new Error('Unsupported OAuth provider');
+  error.code = 'OAUTH_PROVIDER_UNSUPPORTED';
+  throw error;
+};
+
 const createResetToken = (user) => {
   const jti = createId();
   const token = jwt.sign(
@@ -221,6 +658,106 @@ const sendResetEmail = async ({ email, token }) => {
 };
 
 class AuthController {
+  async connectProvider(req, res) {
+    const provider = normalizeOAuthProvider(req.params?.provider);
+    if (!resolveOAuthCredentials(provider)) {
+      return res.status(404).json({
+        ok: false,
+        code: 'OAUTH_PROVIDER_UNSUPPORTED',
+        message: 'Unsupported OAuth provider'
+      });
+    }
+
+    try {
+      ensureOAuthCredentials(provider);
+      const codeVerifier = provider === 'x' ? createPkceVerifier() : '';
+      const state = createOAuthState({ provider, codeVerifier });
+      const authorizeUrl = buildOAuthAuthorizeUrl({
+        provider,
+        state,
+        codeChallenge: codeVerifier ? createPkceChallenge(codeVerifier) : ''
+      });
+      return res.redirect(authorizeUrl);
+    } catch (error) {
+      console.error('[auth][oauth] start failed:', {
+        provider,
+        code: error?.code || null,
+        message: error?.message || 'unknown',
+        details: error?.details || null
+      });
+      return res.status(500).json({
+        ok: false,
+        code: error?.code || 'OAUTH_START_FAILED',
+        message: error?.message || 'Failed to start OAuth flow'
+      });
+    }
+  }
+
+  async connectProviderCallback(req, res) {
+    const provider = normalizeOAuthProvider(req.params?.provider);
+    if (!resolveOAuthCredentials(provider)) {
+      return res.redirect(buildFrontendOAuthCallbackUrl({
+        provider,
+        error: 'OAUTH_PROVIDER_UNSUPPORTED',
+        message: 'Unsupported OAuth provider'
+      }));
+    }
+
+    const providerError = String(req.query?.error || '').trim();
+    const providerErrorDescription = String(req.query?.error_description || '').trim();
+    if (providerError) {
+      return res.redirect(buildFrontendOAuthCallbackUrl({
+        provider,
+        error: providerError,
+        message: providerErrorDescription || 'OAuth authorization failed'
+      }));
+    }
+
+    const code = String(req.query?.code || '').trim();
+    const state = String(req.query?.state || '').trim();
+    if (!code || !state) {
+      return res.redirect(buildFrontendOAuthCallbackUrl({
+        provider,
+        error: 'OAUTH_CALLBACK_INVALID',
+        message: 'Missing code or state in callback'
+      }));
+    }
+
+    const statePayload = consumeOAuthState({ state, provider });
+    if (!statePayload) {
+      return res.redirect(buildFrontendOAuthCallbackUrl({
+        provider,
+        error: 'OAUTH_STATE_INVALID',
+        message: 'OAuth state is invalid or expired'
+      }));
+    }
+
+    try {
+      const profile = await exchangeOAuthCodeForProfile({ provider, code, statePayload });
+      const user = await findOrCreateOAuthUser(profile);
+      const token = createSessionToken(user);
+      const sessionId = createId();
+      setSessionCookie(res, sessionId);
+      return res.redirect(buildFrontendOAuthCallbackUrl({
+        provider,
+        token,
+        email: user.email
+      }));
+    } catch (error) {
+      console.error('[auth][oauth] callback failed:', {
+        provider,
+        code: error?.code || null,
+        message: error?.message || 'unknown',
+        details: error?.details || null
+      });
+      return res.redirect(buildFrontendOAuthCallbackUrl({
+        provider,
+        error: error?.code || 'OAUTH_CALLBACK_FAILED',
+        message: error?.message || 'OAuth callback failed'
+      }));
+    }
+  }
+
   async register(req, res) {
     const email = normalizeEmail(req.body?.email);
     const password = String(req.body?.password || '');
@@ -445,6 +982,8 @@ const createAuthRouter = () => {
   const router = Router();
   const controller = new AuthController();
 
+  router.get('/connect/:provider', (req, res) => controller.connectProvider(req, res));
+  router.get('/connect/:provider/callback', (req, res) => controller.connectProviderCallback(req, res));
   router.post('/register', (req, res) => controller.register(req, res));
   router.post('/login', (req, res) => controller.login(req, res));
   router.post('/forgot-password', (req, res) => controller.forgotPassword(req, res));
