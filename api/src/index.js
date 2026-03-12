@@ -14107,10 +14107,9 @@ if (PROMO_CODES_ENABLED && DATABASE_URL) {
   }
 }
 
-let server = null;
 if (!SERVERLESS_RUNTIME) {
   const port = process.env.PORT || 3000;
-  server = app.listen(port, () => console.log(`API listening on ${port}`));
+  server.listen(port, () => console.log(`API listening on ${port}`));
 }
 
 let shuttingDown = false;
