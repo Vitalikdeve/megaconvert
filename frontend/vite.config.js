@@ -50,7 +50,14 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,mjs}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,mjs}'],
+        navigateFallbackDenylist: [/^\/api/],
+        runtimeCaching: [
+          {
+            urlPattern: /.*ffmpeg.*/i,
+            handler: 'NetworkOnly',
+          },
+        ],
       },
     }),
   ],

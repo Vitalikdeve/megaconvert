@@ -8,12 +8,16 @@ import React, {
 } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
+  Archive,
   ArrowRight,
   FileText,
+  Film,
   Image,
+  Music,
   Network,
   Search,
   Sparkles,
+  Stamp,
   Video,
 } from 'lucide-react';
 import {
@@ -38,6 +42,10 @@ const HomeDashboard = lazy(() => import('./components/home/HomeDashboard.jsx'));
 const ImageOptimizer = lazy(() => import('./components/tools/ImageOptimizer.jsx'));
 const PrivacyPage = lazy(() => import('./components/legal/PrivacyPage.jsx'));
 const VideoCompressor = lazy(() => import('./components/tools/VideoCompressor.jsx'));
+const AudioConverter = lazy(() => import('./components/tools/AudioConverter.jsx'));
+const VideoToGif = lazy(() => import('./components/tools/VideoToGif.jsx'));
+const ArchiveManager = lazy(() => import('./components/tools/ArchiveManager.jsx'));
+const BatchWatermark = lazy(() => import('./components/tools/BatchWatermark.jsx'));
 const TermsPage = lazy(() => import('./components/legal/TermsPage.jsx'));
 const SmartOcr = lazy(() => import('./components/tools/SmartOcr.jsx'));
 const PdfEditor = lazy(() => import('./components/tools/PdfEditor.jsx'));
@@ -70,6 +78,22 @@ const TOOL_ITEMS = [
     icon: Video,
   },
   {
+    id: 'audio-converter',
+    path: '/tools/audio-converter',
+    group: 'Медиа',
+    label: 'Audio Converter',
+    caption: 'High-fidelity engine',
+    icon: Music,
+  },
+  {
+    id: 'video-to-gif',
+    path: '/tools/video-to-gif',
+    group: 'Медиа',
+    label: 'Video to GIF',
+    caption: 'Optimized animations',
+    icon: Film,
+  },
+  {
     id: 'smart-ocr',
     path: '/tools/smart-ocr',
     group: 'Документы',
@@ -92,6 +116,22 @@ const TOOL_ITEMS = [
     label: 'MegaGrid',
     caption: 'Distributed browser cluster',
     icon: Network,
+  },
+  {
+    id: 'archive-manager',
+    path: '/tools/archive-manager',
+    group: 'Файлы',
+    label: 'Archive Manager',
+    caption: 'ZIP and RAR workflows',
+    icon: Archive,
+  },
+  {
+    id: 'batch-watermark',
+    path: '/tools/batch-watermark',
+    group: 'Медиа',
+    label: 'Batch Watermark',
+    caption: 'Bulk overlays',
+    icon: Stamp,
   },
 ];
 
@@ -249,9 +289,13 @@ export default function App() {
               <Route path="/tools" element={<Navigate to="/tools/image-optimizer" replace />} />
               <Route path="/tools/image-optimizer" element={<ImageOptimizer />} />
               <Route path="/tools/video-compressor" element={<VideoCompressor />} />
+              <Route path="/tools/audio-converter" element={<AudioConverter />} />
+              <Route path="/tools/video-to-gif" element={<VideoToGif />} />
               <Route path="/tools/smart-ocr" element={<SmartOcr />} />
               <Route path="/tools/pdf-editor" element={<PdfEditor />} />
               <Route path="/tools/megagrid" element={<MegaGrid />} />
+              <Route path="/tools/archive-manager" element={<ArchiveManager />} />
+              <Route path="/tools/batch-watermark" element={<BatchWatermark />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route

@@ -1,11 +1,15 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
+  Archive,
   ArrowRight,
   FileText,
+  Film,
+  Music,
   Search,
   Smartphone,
   Sparkles,
+  Stamp,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -44,7 +48,7 @@ export default function HomeDashboard() {
       to: '/tools/pdf-editor',
       icon: FileText,
       cta: t('dashboardCardPdfCta'),
-      className: 'lg:row-span-2',
+      className: 'md:col-span-2 lg:col-span-1 lg:row-span-2',
       glow: 'radial-gradient(circle at top left, rgba(255,255,255,0.18), transparent 42%), radial-gradient(circle at bottom right, rgba(99,102,241,0.18), transparent 54%)',
     },
     {
@@ -69,6 +73,48 @@ export default function HomeDashboard() {
       icon: Smartphone,
       cta: t('dashboardCardMegaDropCta'),
       glow: 'radial-gradient(circle at top left, rgba(96,165,250,0.22), transparent 44%), radial-gradient(circle at bottom right, rgba(129,140,248,0.18), transparent 58%)',
+    },
+    {
+      id: 'audio-converter',
+      title: `🎵 ${t('dashboardCardAudioTitle')}`,
+      eyebrow: t('dashboardCardAudioEyebrow'),
+      description: t('dashboardCardAudioDescription'),
+      to: '/tools/audio-converter',
+      icon: Music,
+      cta: t('dashboardCardAudioCta'),
+      glow: 'radial-gradient(circle at top right, rgba(250,204,21,0.18), transparent 42%), radial-gradient(circle at bottom left, rgba(255,255,255,0.14), transparent 56%)',
+    },
+    {
+      id: 'video-to-gif',
+      title: `🎞️ ${t('dashboardCardGifTitle')}`,
+      eyebrow: t('dashboardCardGifEyebrow'),
+      description: t('dashboardCardGifDescription'),
+      to: '/tools/video-to-gif',
+      icon: Film,
+      cta: t('dashboardCardGifCta'),
+      className: 'md:col-span-2 lg:col-span-2',
+      glow: 'radial-gradient(circle at top left, rgba(244,114,182,0.18), transparent 40%), radial-gradient(circle at bottom right, rgba(56,189,248,0.18), transparent 56%)',
+    },
+    {
+      id: 'archive-manager',
+      title: `🗃️ ${t('dashboardCardArchiveTitle')}`,
+      eyebrow: t('dashboardCardArchiveEyebrow'),
+      description: t('dashboardCardArchiveDescription'),
+      to: '/tools/archive-manager',
+      icon: Archive,
+      cta: t('dashboardCardArchiveCta'),
+      glow: 'radial-gradient(circle at top right, rgba(148,163,184,0.2), transparent 42%), radial-gradient(circle at bottom left, rgba(255,255,255,0.12), transparent 56%)',
+    },
+    {
+      id: 'batch-watermark',
+      title: `🌊 ${t('dashboardCardWatermarkTitle')}`,
+      eyebrow: t('dashboardCardWatermarkEyebrow'),
+      description: t('dashboardCardWatermarkDescription'),
+      to: '/tools/batch-watermark',
+      icon: Stamp,
+      cta: t('dashboardCardWatermarkCta'),
+      className: 'md:col-span-2 lg:col-span-2',
+      glow: 'radial-gradient(circle at top left, rgba(45,212,191,0.18), transparent 42%), radial-gradient(circle at bottom right, rgba(129,140,248,0.18), transparent 58%)',
     },
   ], [t]);
 
@@ -141,7 +187,7 @@ export default function HomeDashboard() {
             </p>
           </div>
 
-          <div className="grid auto-rows-[minmax(220px,1fr)] grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="grid auto-rows-[minmax(220px,1fr)] grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {toolCards.map((card, index) => {
               const Icon = card.icon;
 

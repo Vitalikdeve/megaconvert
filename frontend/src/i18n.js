@@ -19,6 +19,15 @@ import ja from './i18n/ja.json';
 import hi from './i18n/hi.json';
 import ko from './i18n/ko.json';
 
+export const HEADER_LANGUAGE_OPTIONS = [
+  { code: 'en', nativeLabel: 'English' },
+  { code: 'ru', nativeLabel: 'Русский' },
+  { code: 'de', nativeLabel: 'Deutsch' },
+  { code: 'es', nativeLabel: 'Español' },
+  { code: 'fr', nativeLabel: 'Français' },
+  { code: 'zh', nativeLabel: '中文' },
+];
+
 const resources = {
   en: { translation: en },
   ru: { translation: ru },
@@ -112,6 +121,9 @@ if (!i18n.isInitialized) {
       resources,
       lng: detectInitialLanguage(),
       fallbackLng: 'en',
+      supportedLngs: Object.keys(resources),
+      nonExplicitSupportedLngs: true,
+      load: 'languageOnly',
       interpolation: { escapeValue: false }
     });
 

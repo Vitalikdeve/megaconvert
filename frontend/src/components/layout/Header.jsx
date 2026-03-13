@@ -4,6 +4,7 @@ import { Check, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthModal } from '../../features/auth/components/AuthModalProvider.jsx';
+import { HEADER_LANGUAGE_OPTIONS, normalizeLang } from '../../i18n.js';
 import GlassPanel from '../ui/GlassPanel.jsx';
 
 const NAV_ITEMS = [
@@ -24,23 +25,15 @@ const NAV_ITEMS = [
   },
 ];
 
-const LANGUAGE_OPTIONS = [
-  { code: 'en', labelKey: 'headerLanguageEnglish' },
-  { code: 'ru', labelKey: 'headerLanguageRussian' },
-];
-
 export default function Header() {
   const location = useLocation();
   const { openAuthModal } = useAuthModal();
   const { t, i18n } = useTranslation();
   const menuRef = useRef(null);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-  const currentLanguage = String(i18n.resolvedLanguage || i18n.language || 'en')
-    .trim()
-    .toLowerCase()
-    .startsWith('ru')
-    ? 'ru'
-    : 'en';
+  const currentLanguage = normalizeLang(i18n.resolvedLanguage || i18n.language || 'en');
+  const currentLanguageOption = HEADER_LANGUAGE_OPTIONS.find((option) => option.code === currentLanguage)
+    || HEADER_LANGUAGE_OPTIONS[0];
 
   useEffect(() => {
     setIsLanguageMenuOpen(false);
@@ -102,12 +95,14 @@ export default function Header() {
           <button
             type="button"
             onClick={() => setIsLanguageMenuOpen((current) => !current)}
-            className="inline-flex h-10 min-w-[3rem] items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white sm:min-w-[9rem] sm:justify-between"
+            aria-expanded={isLanguageMenuOpen}
+            aria-haspopup="menu"
+            className="inline-flex h-10 min-w-[3rem] items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white sm:min-w-[10rem] sm:justify-between lg:min-w-[11.25rem]"
           >
             <span className="inline-flex items-center gap-2 truncate">
               <Globe className="h-4 w-4 shrink-0" strokeWidth={1.8} />
               <span className="hidden truncate text-sm sm:inline">
-                {currentLanguage === 'ru' ? t('headerLanguageRussian') : t('headerLanguageEnglish')}
+                {currentLanguageOption.nativeLabel}
               </span>
             </span>
             <span className="hidden text-[10px] uppercase tracking-[0.22em] text-white/34 lg:inline">
@@ -124,7 +119,7 @@ export default function Header() {
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                 className="absolute right-0 top-[calc(100%+0.75rem)] z-10 w-[210px] rounded-[28px] border-white/[0.1] bg-[#0a0a0a]/92 p-2 shadow-[0_34px_120px_-48px_rgba(0,0,0,0.92)]"
               >
-                {LANGUAGE_OPTIONS.map((option) => {
+                {HEADER_LANGUAGE_OPTIONS.map((option) => {
                   const isSelected = option.code === currentLanguage;
 
                   return (
@@ -142,7 +137,7 @@ export default function Header() {
                           : 'text-white/64 hover:bg-white/[0.05] hover:text-white',
                       ].join(' ')}
                     >
-                      <span className="truncate">{t(option.labelKey)}</span>
+                      <span className="truncate">{option.nativeLabel}</span>
                       {isSelected ? <Check className="h-4 w-4 shrink-0" strokeWidth={1.8} /> : null}
                     </button>
                   );
@@ -155,7 +150,7 @@ export default function Header() {
         <button
           type="button"
           onClick={() => openAuthModal('login')}
-          className="inline-flex min-w-[7rem] items-center justify-center rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-transform hover:scale-105 hover:bg-white/90"
+          className="inline-flex min-w-[7.5rem] items-center justify-center whitespace-nowrap rounded-full bg-white px-6 py-2 text-sm font-semibold text-black shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-105 hover:bg-gray-200"
         >
           {t('headerSignIn')}
         </button>
