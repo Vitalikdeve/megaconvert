@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   resolve: {
@@ -7,8 +8,54 @@ export default defineConfig({
       '@xenova/transformers': '@huggingface/transformers',
     },
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      includeAssets: [
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+        'icons/apple-touch-icon.png',
+      ],
+      manifest: {
+        name: 'MegaConvert OS',
+        short_name: 'MegaConvert',
+        theme_color: '#030303',
+        background_color: '#030303',
+        display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          {
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
+            src: '/icons/apple-touch-icon.png',
+            sizes: '180x180',
+            type: 'image/png',
+          },
+        ],
+      },
+      workbox: {
+        cleanupOutdatedCaches: true,
+        navigateFallback: '/index.html',
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,mjs}'],
+      },
+    }),
+  ],
   build: {
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -59,6 +106,23 @@ export default defineConfig({
             id.includes('qrcode')
           ) {
             return 'p2p-stack';
+          }
+
+          if (
+            id.includes('react-router-dom') ||
+            id.includes('@remix-run/router') ||
+            id.includes('cmdk') ||
+            id.includes('@radix-ui/react-dialog')
+          ) {
+            return 'os-shell';
+          }
+
+          if (id.includes('framer-motion')) {
+            return 'motion-stack';
+          }
+
+          if (id.includes('lucide-react')) {
+            return 'icon-stack';
           }
 
           return 'vendor';
