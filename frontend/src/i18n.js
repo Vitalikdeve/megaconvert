@@ -88,6 +88,23 @@ const detectInitialLanguage = () => {
   return normalizeLang(window.navigator?.language || 'en');
 };
 
+const syncLanguageState = (value) => {
+  const nextLanguage = normalizeLang(value);
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('lang', nextLanguage);
+    } catch {
+      // ignore storage access errors
+    }
+  }
+
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = nextLanguage;
+    document.documentElement.dir = nextLanguage === 'ar' ? 'rtl' : 'ltr';
+  }
+};
+
 if (!i18n.isInitialized) {
   i18n
     .use(initReactI18next)
@@ -97,7 +114,11 @@ if (!i18n.isInitialized) {
       fallbackLng: 'en',
       interpolation: { escapeValue: false }
     });
+
+  i18n.on('languageChanged', syncLanguageState);
 }
+
+syncLanguageState(i18n.language);
 
 export { resources, normalizeLang };
 export default i18n;

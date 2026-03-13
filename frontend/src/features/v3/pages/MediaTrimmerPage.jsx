@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
+import coreURL from '@ffmpeg/core?url';
+import wasmURL from '@ffmpeg/core/wasm?url';
 import { AlertTriangle, Download, Loader2, Scissors, Upload } from 'lucide-react';
-
-const FFMPEG_CORE_BASE_URL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
 const UNSUPPORTED_SAB_MESSAGE = 'Ваш браузер не поддерживает локальную обработку FFmpeg. Откройте сайт в современной версии Chrome/Edge/Firefox.';
 
 const clamp = (value, min, max) => {
@@ -134,10 +134,7 @@ export default function MediaTrimmerPage() {
     }
 
     try {
-      const coreURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm');
-      const workerURL = await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.worker.js`, 'text/javascript');
-      await ffmpegRef.current.load({ coreURL, wasmURL, workerURL });
+      await ffmpegRef.current.load({ coreURL, wasmURL });
       ffmpegLoadedRef.current = true;
       setFfmpegReady(true);
       if (!silent) setStatusText('FFmpeg готов. Запускаем обрезку...');

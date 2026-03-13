@@ -13,7 +13,11 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import Tesseract from 'tesseract.js';
 import GlassPanel from '../ui/GlassPanel.jsx';
-import { OCR_SESSION_KEY } from '../../lib/osMemory.js';
+import {
+  consumeTempMemory,
+  OCR_FILE_HANDOFF_KEY,
+  OCR_SESSION_KEY,
+} from '../../lib/osMemory.js';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -485,7 +489,11 @@ export default function SmartOcr() {
 
   useEffect(() => {
     const state = location.state;
-    if (!state?.clipboardRequestId && !state?.ocrImport) {
+    if (
+      !state?.clipboardRequestId
+      && !state?.ocrImport
+      && state?.ocrFileImportKey !== OCR_FILE_HANDOFF_KEY
+    ) {
       return undefined;
     }
 
@@ -509,6 +517,20 @@ export default function SmartOcr() {
 
           if (isActive) {
             await handleExtractText(file, state.ocrImport.origin || 'pdf-editor');
+          }
+          return;
+        }
+
+        if (state.ocrFileImportKey === OCR_FILE_HANDOFF_KEY) {
+          const handoff = consumeTempMemory(OCR_FILE_HANDOFF_KEY, null);
+          const file = handoff?.file;
+
+          if (!file) {
+            throw new Error('Временный файл для OCR уже недоступен. Перетащите PDF снова.');
+          }
+
+          if (isActive) {
+            await handleExtractText(file, handoff.origin || 'zen-portal');
           }
         }
       } catch (importError) {

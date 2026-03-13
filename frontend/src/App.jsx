@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
+  ArrowRight,
   FileText,
   Image,
   Network,
@@ -23,12 +24,21 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import CommandPalette from './components/CommandPalette.jsx';
+import MainLayout from './components/layout/MainLayout.jsx';
 import GlassPanel from './components/ui/GlassPanel.jsx';
+import AuthCallbackPage from './features/auth/pages/AuthCallbackPage.jsx';
+import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage.jsx';
+import LoginPage from './features/auth/pages/LoginPage.jsx';
+import RegisterPage from './features/auth/pages/RegisterPage.jsx';
+import ResetPasswordPage from './features/auth/pages/ResetPasswordPage.jsx';
 import { LAST_TOOL_KEY, writeStoredJson } from './lib/osMemory.js';
 
 const ZenPortal = lazy(() => import('./components/ZenPortal.jsx'));
+const HomeDashboard = lazy(() => import('./components/home/HomeDashboard.jsx'));
 const ImageOptimizer = lazy(() => import('./components/tools/ImageOptimizer.jsx'));
+const PrivacyPage = lazy(() => import('./components/legal/PrivacyPage.jsx'));
 const VideoCompressor = lazy(() => import('./components/tools/VideoCompressor.jsx'));
+const TermsPage = lazy(() => import('./components/legal/TermsPage.jsx'));
 const SmartOcr = lazy(() => import('./components/tools/SmartOcr.jsx'));
 const PdfEditor = lazy(() => import('./components/tools/PdfEditor.jsx'));
 const MegaGrid = lazy(() => import('./components/tools/MegaGrid.jsx'));
@@ -40,7 +50,7 @@ const TOOL_ITEMS = [
     aliases: ['/receive'],
     group: 'Главная',
     label: 'Магический Портал',
-    caption: 'Zero-UI entry point',
+    caption: 'Dashboard and smart portal',
     icon: Sparkles,
   },
   {
@@ -87,11 +97,62 @@ const TOOL_ITEMS = [
 
 function RouteFallback() {
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-[#030303] px-4 text-white">
+    <div className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-[#030303] px-4 text-white">
       <GlassPanel className="flex h-[320px] w-[min(620px,calc(100vw-2rem))] flex-col items-center justify-center gap-5 px-8 text-center">
         <div className="h-16 w-16 animate-pulse rounded-full border border-white/[0.08] bg-white/[0.04]" />
         <div className="text-sm uppercase tracking-[0.28em] text-white/28">
           Loading Module
+        </div>
+      </GlassPanel>
+    </div>
+  );
+}
+
+function SpotlightPage({
+  eyebrow,
+  title,
+  description,
+  primaryAction,
+  secondaryAction,
+  onNavigate,
+}) {
+  return (
+    <div className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-[#030303] px-4 text-white">
+      <GlassPanel className="flex w-[min(780px,calc(100vw-2rem))] flex-col gap-8 px-8 py-10 text-center sm:px-10">
+        <div className="mx-auto inline-flex rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-white/42">
+          {eyebrow}
+        </div>
+
+        <div className="space-y-4">
+          <h1 className="text-3xl font-medium tracking-tight text-white sm:text-4xl">
+            {title}
+          </h1>
+          <p className="mx-auto max-w-2xl text-sm leading-7 text-white/58 sm:text-base">
+            {description}
+          </p>
+        </div>
+
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
+          {primaryAction ? (
+            <button
+              type="button"
+              onClick={() => onNavigate(primaryAction.to)}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition-transform hover:scale-[1.02] hover:bg-white/90"
+            >
+              {primaryAction.label}
+              <ArrowRight className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+          ) : null}
+
+          {secondaryAction ? (
+            <button
+              type="button"
+              onClick={() => onNavigate(secondaryAction.to)}
+              className="inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white"
+            >
+              {secondaryAction.label}
+            </button>
+          ) : null}
         </div>
       </GlassPanel>
     </div>
@@ -103,6 +164,10 @@ export default function App() {
   const navigate = useNavigate();
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const apiBase = useMemo(
+    () => String(import.meta.env.VITE_API_BASE || '/api').trim() || '/api',
+    [],
+  );
 
   const activeToolMeta = useMemo(
     () => TOOL_ITEMS.find((item) => item.path === location.pathname || item.aliases?.includes(location.pathname)) || TOOL_ITEMS[0],
@@ -175,20 +240,71 @@ export default function App() {
 
   return (
     <>
-      <AnimatePresence mode="wait">
-        <Suspense fallback={<RouteFallback />}>
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<ZenPortal />} />
-            <Route path="/receive" element={<ZenPortal />} />
-            <Route path="/tools/image-optimizer" element={<ImageOptimizer />} />
-            <Route path="/tools/video-compressor" element={<VideoCompressor />} />
-            <Route path="/tools/smart-ocr" element={<SmartOcr />} />
-            <Route path="/tools/pdf-editor" element={<PdfEditor />} />
-            <Route path="/tools/megagrid" element={<MegaGrid />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-      </AnimatePresence>
+      <MainLayout>
+        <AnimatePresence mode="wait">
+          <Suspense fallback={<RouteFallback />}>
+            <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<HomeDashboard />} />
+              <Route path="/receive" element={<ZenPortal />} />
+              <Route path="/tools" element={<Navigate to="/tools/image-optimizer" replace />} />
+              <Route path="/tools/image-optimizer" element={<ImageOptimizer />} />
+              <Route path="/tools/video-compressor" element={<VideoCompressor />} />
+              <Route path="/tools/smart-ocr" element={<SmartOcr />} />
+              <Route path="/tools/pdf-editor" element={<PdfEditor />} />
+              <Route path="/tools/megagrid" element={<MegaGrid />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route
+                path="/api-overview"
+                element={(
+                  <SpotlightPage
+                    eyebrow="Developer Surface"
+                    title="API experience is being shaped into a premium control plane."
+                    description="Upload signing, conversion jobs, auth and observability are already in the platform. This route becomes the polished developer surface while the product shell keeps the same Apple-tier visual system."
+                    primaryAction={{ label: 'Войти', to: '/login' }}
+                    secondaryAction={{ label: 'На главную', to: '/' }}
+                    onNavigate={navigate}
+                  />
+                )}
+              />
+              <Route
+                path="/pricing"
+                element={(
+                  <SpotlightPage
+                    eyebrow="Commercial Layer"
+                    title="Pricing is moving toward a clearer premium structure."
+                    description="We are packaging personal workflows, professional conversion throughput and future API access into a cleaner pricing surface without compromising the local-first product feeling."
+                    primaryAction={{ label: 'Создать аккаунт', to: '/register' }}
+                    secondaryAction={{ label: 'Посмотреть инструменты', to: '/tools' }}
+                    onNavigate={navigate}
+                  />
+                )}
+              />
+              <Route
+                path="/login"
+                element={<LoginPage apiBase={apiBase} onNavigate={navigate} />}
+              />
+              <Route
+                path="/register"
+                element={<RegisterPage apiBase={apiBase} onNavigate={navigate} />}
+              />
+              <Route
+                path="/forgot-password"
+                element={<ForgotPasswordPage apiBase={apiBase} onNavigate={navigate} />}
+              />
+              <Route
+                path="/reset-password"
+                element={<ResetPasswordPage apiBase={apiBase} onNavigate={navigate} />}
+              />
+              <Route
+                path="/auth/callback"
+                element={<AuthCallbackPage onNavigate={navigate} />}
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </AnimatePresence>
+      </MainLayout>
 
       <CommandPalette
         open={isPaletteOpen}

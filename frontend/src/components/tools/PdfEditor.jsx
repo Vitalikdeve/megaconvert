@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, Reorder } from 'framer-motion';
 import {
   ArrowLeft,
@@ -12,8 +12,9 @@ import {
 import { PDFDocument } from 'pdf-lib';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import GlassPanel from '../ui/GlassPanel.jsx';
+import { consumeTempMemory, PDF_EDITOR_HANDOFF_KEY } from '../../lib/osMemory.js';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -108,6 +109,7 @@ async function unpackPdfFile(file) {
 }
 
 export default function PdfEditor() {
+  const location = useLocation();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
@@ -245,6 +247,47 @@ export default function PdfEditor() {
       setProgressLabel('');
     }
   }, [pages, pdfFiles]);
+
+  useEffect(() => {
+    const state = location.state;
+    if (state?.pdfEditorImportKey !== PDF_EDITOR_HANDOFF_KEY) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    const handleExternalImport = async () => {
+      try {
+        const handoff = consumeTempMemory(PDF_EDITOR_HANDOFF_KEY, null);
+        const file = handoff?.file;
+
+        if (!file) {
+          if (isActive) {
+            setError('Временный PDF уже недоступен. Перетащите документ в редактор еще раз.');
+          }
+          return;
+        }
+
+        if (isActive) {
+          await handleImportPdfs([file]);
+        }
+      } catch (importError) {
+        if (isActive) {
+          setError(String(importError?.message || 'Не удалось импортировать PDF из Zen Portal.'));
+        }
+      } finally {
+        if (isActive) {
+          navigate(location.pathname, { replace: true, state: null });
+        }
+      }
+    };
+
+    void handleExternalImport();
+
+    return () => {
+      isActive = false;
+    };
+  }, [handleImportPdfs, location.pathname, location.state, navigate]);
 
   return (
     <MotionToolScene

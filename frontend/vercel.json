@@ -29,7 +29,7 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "/api/entry?path=$1"
+      "destination": "https://35.202.253.153.nip.io/api/$1"
     },
     {
       "source": "/((?!api(?:/|$)).*)",

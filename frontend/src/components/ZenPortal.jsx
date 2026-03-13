@@ -5,6 +5,7 @@ import {
   ChevronsLeftRight,
   Check,
   Download,
+  FileText,
   Image as ImageIcon,
   Minimize2,
   Music,
@@ -12,16 +13,24 @@ import {
   QrCode,
   Radio,
   RefreshCw,
+  Search,
   Sparkles,
   Smartphone,
   Trash2,
   Video,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import useAI from '../hooks/useAI.js';
 import useFFmpeg from '../hooks/useFFmpeg.js';
 import useMegaDrop from '../hooks/useMegaDrop.js';
 import useSoundDesign from '../hooks/useSoundDesign.js';
+import {
+  OCR_FILE_HANDOFF_KEY,
+  PDF_EDITOR_HANDOFF_KEY,
+  writeTempMemory,
+} from '../lib/osMemory.js';
 
 const baseGlow = '0 0 80px -20px rgba(120, 119, 198, 0.30), inset 0 0 40px rgba(79, 70, 229, 0.08)';
 const hoverGlow = '0 0 110px -16px rgba(120, 119, 198, 0.48), inset 0 0 56px rgba(79, 70, 229, 0.16)';
@@ -58,43 +67,54 @@ function formatFileSize(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function getSmartActions(file) {
+function getSmartActions(file, t) {
   if (!file) {
     return [];
+  }
+
+  if (isPdfLikeFile(file)) {
+    return [
+      { label: t('portalActionOpenPdfEditor'), icon: FileText, actionType: 'open_pdf_editor' },
+      { label: t('portalActionOpenPdfOcr'), icon: Search, actionType: 'open_pdf_ocr' },
+    ];
   }
 
   const type = String(file.type || '').toLowerCase();
 
   if (type.startsWith('image/')) {
     return [
-      { label: 'Сконвертировать в JPG', icon: ImageIcon, actionType: 'image_to_jpg' },
-      { label: 'Удалить фон (AI)', icon: Sparkles, actionType: 'remove_background_ai' },
+      { label: t('portalActionImageToJpg'), icon: ImageIcon, actionType: 'image_to_jpg' },
+      { label: t('portalActionRemoveBackground'), icon: Sparkles, actionType: 'remove_background_ai' },
     ];
   }
 
   if (type.startsWith('video/')) {
     return [
-      { label: 'Сжать в MP4', icon: Video, actionType: 'compress_mp4' },
-      { label: 'Извлечь аудио', icon: Music, actionType: 'extract_audio' },
+      { label: t('portalActionCompressMp4'), icon: Video, actionType: 'compress_mp4' },
+      { label: t('portalActionExtractAudio'), icon: Music, actionType: 'extract_audio' },
     ];
   }
 
   if (type.startsWith('audio/')) {
     return [
-      { label: 'Конвертировать в MP3', icon: Music, actionType: 'audio_to_mp3' },
-      { label: 'Сжать аудио', icon: Minimize2, actionType: 'compress_audio' },
+      { label: t('portalActionAudioToMp3'), icon: Music, actionType: 'audio_to_mp3' },
+      { label: t('portalActionCompressAudio'), icon: Minimize2, actionType: 'compress_audio' },
     ];
   }
 
   return [
-    { label: 'Сконвертировать', icon: RefreshCw, actionType: 'generic_convert' },
-    { label: 'Сжать', icon: Minimize2, actionType: 'generic_compress' },
+    { label: t('portalActionGenericConvert'), icon: RefreshCw, actionType: 'generic_convert' },
+    { label: t('portalActionGenericCompress'), icon: Minimize2, actionType: 'generic_compress' },
   ];
 }
 
 function detectPrimaryActionType(file) {
   if (!file) {
     return null;
+  }
+
+  if (isPdfLikeFile(file)) {
+    return 'open_pdf_editor';
   }
 
   const type = String(file.type || '').toLowerCase();
@@ -114,6 +134,17 @@ function detectPrimaryActionType(file) {
   }
 
   return 'generic_convert';
+}
+
+function isPdfLikeFile(file) {
+  if (!file) {
+    return false;
+  }
+
+  const type = String(file.type || '').toLowerCase();
+  const name = String(file.name || '').toLowerCase();
+
+  return type === 'application/pdf' || name.endsWith('.pdf');
 }
 
 function isHeicLikeFile(file) {
@@ -169,6 +200,7 @@ function CompareSlider({
   afterAlt,
   showTransparencyGrid = false,
 }) {
+  const { t } = useTranslation();
   const containerRef = useRef(null);
   const [sliderPosition, setSliderPosition] = useState(58);
   const [isPointerDown, setIsPointerDown] = useState(false);
@@ -218,11 +250,11 @@ function CompareSlider({
       }}
     >
       <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-white/70 opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover:opacity-100">
-        До
+        {t('portalCompareBefore')}
       </div>
 
       <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-white/70 opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover:opacity-100">
-        После
+        {t('portalCompareAfter')}
       </div>
 
       <img
@@ -268,7 +300,9 @@ function CompareSlider({
   );
 }
 
-export default function ZenPortal() {
+export default function ZenPortal({ variant = 'standalone' }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const receiveContext = useMemo(() => getInitialReceiveContext(), []);
   const fileInputRef = useRef(null);
   const aiResultUrlRef = useRef(null);
@@ -346,11 +380,13 @@ export default function ZenPortal() {
     resetMegaDrop,
   } = useMegaDrop();
 
-  const actionItems = useMemo(() => getSmartActions(activeFile), [activeFile]);
+  const actionItems = useMemo(() => getSmartActions(activeFile, t), [activeFile, t]);
   const finalResult = aiResult || result;
   const isNeuralBusy = isModelLoading || isProcessing;
   const isBusy = isConverting || isNeuralBusy;
-  const effectiveProgressMessageOverride = finalResult || (!isBusy && activeFile) ? '' : progressMessageOverride;
+  const effectiveProgressMessageOverride = finalResult || (!isBusy && activeFile)
+    ? ''
+    : (progressMessageOverride ? t(progressMessageOverride) : '');
   const hasForcedProgressState = Boolean(effectiveProgressMessageOverride);
   const isImagePreview = isImageLikeResult(finalResult);
   const showCompareSlider = Boolean(
@@ -381,13 +417,29 @@ export default function ZenPortal() {
         ? 0.02
         : 1;
   const statusLabel = effectiveProgressMessageOverride || (isModelLoading
-    ? `Пробуждение нейросети... ${Math.round(modelProgress)}%`
+    ? t('portalStatusAiWaking', { progress: Math.round(modelProgress) })
     : isProcessing
-      ? 'Обработка...'
-      : `Конвертация... ${Math.round(progress)}%`);
+      ? t('portalStatusProcessing')
+      : t('portalStatusConverting', { progress: Math.round(progress) }));
   const indicatorLabel = isProcessing && !isModelLoading ? 'AI' : `${Math.round(progressRatio * 100)}%`;
   const surfaceError = aiError || error;
   const showTransparencyGrid = Boolean(aiResult) && String(finalResult?.mimeType || '').toLowerCase() === 'image/png';
+  const isEmbedded = variant === 'embedded';
+  const footerLabel = portalMode === 'megadrop'
+    ? (megaDropRoomId
+      ? t('portalFooterMegaDropWithRoom', { roomCode: megaDropRoomId })
+      : t('portalFooterMegaDrop'))
+    : isModelLoading || isProcessing
+      ? (modelDevice
+        ? t('portalFooterNeuralEdgeDevice', { device: String(modelDevice).toUpperCase() })
+        : t('portalFooterNeuralEdge'))
+      : isPdfLikeFile(activeFile)
+        ? t('portalFooterSmartHandoff')
+      : isReady
+        ? (activeActionType === 'image_to_jpg' && isHeicLikeFile(activeFile) && !finalResult
+          ? t('portalFooterZeroClick')
+          : t('portalFooterFfmpeg'))
+        : '';
 
   const clearAiResult = useCallback(() => {
     if (aiResultUrlRef.current) {
@@ -546,9 +598,8 @@ export default function ZenPortal() {
       }
       const detectedPrimaryAction = detectPrimaryActionType(file);
       setPrimaryActionType(detectedPrimaryAction);
-      console.log('File dropped:', file.name);
 
-      if (isSupported) {
+      if (isSupported && !isPdfLikeFile(file)) {
         void loadFFmpeg({ silent: true }).catch(() => {
           // Defer error display until the user starts processing.
         });
@@ -557,7 +608,7 @@ export default function ZenPortal() {
       if (isHeicLikeFile(file)) {
         setPrimaryActionType('image_to_jpg');
         setActiveActionType('image_to_jpg');
-        setProgressMessageOverride('HEIC распознан. Мгновенная конвертация в JPG...');
+        setProgressMessageOverride('portalStatusHeicAuto');
 
         try {
           await processMedia(file, 'image_to_jpg');
@@ -689,6 +740,32 @@ export default function ZenPortal() {
       setActiveActionType(actionType);
 
       try {
+        if (actionType === 'open_pdf_editor') {
+          writeTempMemory(PDF_EDITOR_HANDOFF_KEY, {
+            file: activeFile,
+            origin: 'zen-portal',
+          });
+          navigate('/tools/pdf-editor', {
+            state: {
+              pdfEditorImportKey: PDF_EDITOR_HANDOFF_KEY,
+            },
+          });
+          return;
+        }
+
+        if (actionType === 'open_pdf_ocr') {
+          writeTempMemory(OCR_FILE_HANDOFF_KEY, {
+            file: activeFile,
+            origin: 'zen-portal',
+          });
+          navigate('/tools/smart-ocr', {
+            state: {
+              ocrFileImportKey: OCR_FILE_HANDOFF_KEY,
+            },
+          });
+          return;
+        }
+
         if (actionType === 'remove_background_ai') {
           const nextResult = await removeBackground(activeFile);
           const url = URL.createObjectURL(nextResult.blob);
@@ -705,7 +782,7 @@ export default function ZenPortal() {
         // The hooks already store a subtle inline error state.
       }
     },
-    [activeFile, clearAiError, clearAiResult, clearError, isBusy, primeAudio, processMedia, removeBackground, resetSession],
+    [activeFile, clearAiError, clearAiResult, clearError, isBusy, navigate, primeAudio, processMedia, removeBackground, resetSession],
   );
 
   const handleOpenMegaDrop = useCallback(async () => {
@@ -738,14 +815,19 @@ export default function ZenPortal() {
     void resetMegaDrop();
     setIsMegaDropOpen(false);
 
-    if (isReceiverMode && typeof window !== 'undefined') {
-      window.location.href = '/';
+    if (isReceiverMode) {
+      navigate('/');
     }
-  }, [isReceiverMode, resetMegaDrop]);
+  }, [isReceiverMode, navigate, resetMegaDrop]);
 
   return (
     <div
-      className="relative flex h-screen w-screen flex-col items-center justify-center overflow-hidden bg-[#030303] text-white"
+      className={[
+        'relative flex flex-col items-center justify-center text-white',
+        isEmbedded
+          ? 'w-full overflow-visible'
+          : 'min-h-[calc(100vh-4rem)] w-full overflow-hidden bg-[#030303] px-4',
+      ].join(' ')}
       onDragOver={handleScreenDragOver}
       onDragEnter={handleScreenDragOver}
       onDragLeave={handleScreenDragLeave}
@@ -759,19 +841,6 @@ export default function ZenPortal() {
         resetMagneticOrbit();
       }}
     >
-      <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-6 py-5 sm:px-8 md:px-10">
-        <div className="text-[15px] font-semibold tracking-tight text-white/80 sm:text-base">
-          MegaConvert
-        </div>
-
-        <button
-          type="button"
-          className="rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-2 text-sm font-medium text-white/80 backdrop-blur-3xl transition-colors duration-300 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-        >
-          Войти
-        </button>
-      </header>
-
       <input
         ref={fileInputRef}
         type="file"
@@ -784,15 +853,20 @@ export default function ZenPortal() {
         layout
         role={portalMode === 'drop' ? 'button' : 'region'}
         tabIndex={portalMode === 'drop' ? 0 : -1}
-        aria-label={portalMode === 'drop' ? 'Drop anything here' : undefined}
+        aria-label={portalMode === 'drop' ? t('portalDropPrompt') : undefined}
         className={[
-          'flex max-w-[calc(100vw-2rem)] overflow-hidden rounded-[40px] border border-white/[0.08] bg-white/[0.02] backdrop-blur-3xl',
+          'flex overflow-hidden rounded-[40px] border border-white/[0.08] bg-white/[0.02] backdrop-blur-3xl',
           'shadow-[0_0_80px_-20px_rgba(120,119,198,0.3)]',
-          portalMode === 'drop' ? 'h-[300px] w-[600px] items-center justify-center' : '',
-          portalMode === 'actions' ? 'min-h-[400px] w-[700px] p-8' : '',
-          portalMode === 'progress' ? 'min-h-[320px] w-[620px] p-8' : '',
-          portalMode === 'megadrop' ? 'min-h-[440px] w-[700px] p-8' : '',
-          portalMode === 'success' ? (isImagePreview ? 'min-h-[560px] w-[760px] p-8' : 'min-h-[320px] w-[620px] p-8') : '',
+          isEmbedded ? 'w-full max-w-[760px]' : 'max-w-[calc(100vw-2rem)]',
+          portalMode === 'drop' ? (isEmbedded ? 'min-h-[320px] items-center justify-center p-6 sm:p-8' : 'h-[300px] w-[600px] items-center justify-center') : '',
+          portalMode === 'actions' ? (isEmbedded ? 'min-h-[400px] p-6 sm:p-8' : 'min-h-[400px] w-[700px] p-8') : '',
+          portalMode === 'progress' ? (isEmbedded ? 'min-h-[320px] p-6 sm:p-8' : 'min-h-[320px] w-[620px] p-8') : '',
+          portalMode === 'megadrop' ? (isEmbedded ? 'min-h-[440px] p-6 sm:p-8' : 'min-h-[440px] w-[700px] p-8') : '',
+          portalMode === 'success' ? (
+            isEmbedded
+              ? (isImagePreview ? 'min-h-[560px] p-6 sm:p-8' : 'min-h-[320px] p-6 sm:p-8')
+              : (isImagePreview ? 'min-h-[560px] w-[760px] p-8' : 'min-h-[320px] w-[620px] p-8')
+          ) : '',
           portalMode === 'drop' ? 'cursor-pointer' : 'cursor-default',
           isDragging ? 'border-white/[0.16] bg-white/[0.035]' : '',
         ].join(' ')}
@@ -857,7 +931,7 @@ export default function ZenPortal() {
               </div>
 
               <p className="text-2xl font-medium tracking-wide text-white/60">
-                Drop anything here
+                {t('portalDropPrompt')}
               </p>
             </MotionSection>
           )}
@@ -884,7 +958,7 @@ export default function ZenPortal() {
 
                 <button
                   type="button"
-                  aria-label="Сбросить файл"
+                  aria-label={t('portalResetFileAria')}
                   onClick={handleReset}
                   className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-white/68 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                 >
@@ -898,7 +972,7 @@ export default function ZenPortal() {
 
                   return (
                     <MotionButton
-                      key={label}
+                      key={actionType}
                       type="button"
                       whileHover={{ scale: 1.01 }}
                       whileTap={{ scale: 0.985 }}
@@ -941,7 +1015,7 @@ export default function ZenPortal() {
                       }}
                       className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs text-white/60 transition-colors duration-300 hover:text-white"
                     >
-                      Скрыть
+                      {t('portalHideError')}
                     </button>
                   </div>
                 </div>
@@ -1031,7 +1105,7 @@ export default function ZenPortal() {
 
               {!webRtcSupported ? (
                 <div className="w-full max-w-[520px] rounded-[28px] border border-red-400/20 bg-red-500/8 px-5 py-5 text-sm text-red-100/80">
-                  Текущий браузер не поддерживает WebRTC Data Channels.
+                  {t('portalMegaDropUnsupported')}
                 </div>
               ) : megaDropComplete ? (
                 <>
@@ -1041,7 +1115,7 @@ export default function ZenPortal() {
 
                   <div className="space-y-2">
                     <div className="text-3xl font-medium tracking-tight text-white/88">
-                      {isReceiverMode ? 'Файл получен' : 'MegaDrop завершен'}
+                      {isReceiverMode ? t('portalMegaDropReceived') : t('portalMegaDropComplete')}
                     </div>
                     <div className="text-sm text-white/46">
                       {megaDropStatusText}
@@ -1056,7 +1130,7 @@ export default function ZenPortal() {
                         className="flex min-h-[60px] flex-1 items-center justify-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.06] px-5 text-base font-medium text-white/84 transition-colors duration-300 hover:bg-white/10"
                       >
                         <Download className="h-5 w-5" strokeWidth={1.8} />
-                        Скачать
+                        {t('portalDownload')}
                       </a>
                     )}
 
@@ -1066,7 +1140,7 @@ export default function ZenPortal() {
                       className="flex min-h-[60px] flex-1 items-center justify-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] px-5 text-base font-medium text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white"
                     >
                       <Plus className="h-5 w-5" strokeWidth={1.8} />
-                      Вернуться
+                      {t('portalBack')}
                     </button>
                   </div>
                 </>
@@ -1089,7 +1163,7 @@ export default function ZenPortal() {
 
                   <div className="space-y-2">
                     <div className="text-2xl font-medium tracking-tight text-white/82">
-                      Передача напрямую...
+                      {t('portalDirectTransfer')}
                     </div>
                     <div className="text-sm text-white/44">
                       {megaDropStatusText}
@@ -1120,7 +1194,7 @@ export default function ZenPortal() {
                     <div className="space-y-2">
                       <div className="inline-flex items-center gap-2 text-lg font-medium text-white/82">
                         <Smartphone className="h-5 w-5" strokeWidth={1.8} />
-                        Наведите камеру телефона
+                        {t('portalPointCamera')}
                       </div>
                       <div className="text-sm text-white/44">
                         {megaDropStatusText}
@@ -1141,7 +1215,7 @@ export default function ZenPortal() {
                     className="flex min-h-[54px] items-center justify-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] px-6 text-sm font-medium text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white"
                   >
                     <ArrowLeft className="h-4.5 w-4.5" strokeWidth={1.8} />
-                    Вернуться
+                    {t('portalBack')}
                   </button>
                 </>
               ) : (
@@ -1152,10 +1226,10 @@ export default function ZenPortal() {
 
                   <div className="space-y-2">
                     <div className="text-3xl font-medium tracking-tight text-white/88">
-                      {megaDropJoining ? 'Подключаемся...' : 'Ожидаем отправку'}
+                      {megaDropJoining ? t('portalConnecting') : t('portalWaitingTransfer')}
                     </div>
                     <div className="text-sm text-white/44">
-                      {receiveRoomCode ? megaDropStatusText : 'Комната MegaDrop не указана.'}
+                      {receiveRoomCode ? megaDropStatusText : t('portalMegaDropRoomMissing')}
                     </div>
                   </div>
 
@@ -1172,7 +1246,7 @@ export default function ZenPortal() {
                     className="flex min-h-[54px] items-center justify-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] px-6 text-sm font-medium text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white"
                   >
                     <ArrowLeft className="h-4.5 w-4.5" strokeWidth={1.8} />
-                    Вернуться
+                    {t('portalBack')}
                   </button>
                 </>
               )}
@@ -1202,8 +1276,12 @@ export default function ZenPortal() {
                       <CompareSlider
                         beforeSrc={sourcePreviewUrl}
                         afterSrc={finalResult.url}
-                        beforeAlt={`${activeFile?.name || 'Source'} before`}
-                        afterAlt={finalResult.fileName}
+                        beforeAlt={t('portalCompareBeforeAlt', {
+                          name: activeFile?.name || t('portalCompareSource'),
+                        })}
+                        afterAlt={t('portalCompareAfterAlt', {
+                          name: finalResult.fileName,
+                        })}
                         showTransparencyGrid={showTransparencyGrid}
                       />
                     ) : (
@@ -1244,7 +1322,7 @@ export default function ZenPortal() {
 
                   <div className="space-y-2">
                     <div className="text-3xl font-medium tracking-tight text-white/88">
-                      Готово
+                      {t('portalDone')}
                     </div>
                     <div className="max-w-[460px] truncate text-sm text-white/44">
                       {finalResult.fileName}
@@ -1260,7 +1338,7 @@ export default function ZenPortal() {
                   className="flex min-h-[60px] flex-1 items-center justify-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.06] px-5 text-base font-medium text-white/84 transition-colors duration-300 hover:bg-white/10"
                 >
                   <Download className="h-5 w-5" strokeWidth={1.8} />
-                  Скачать
+                  {t('portalDownload')}
                 </a>
 
                 <button
@@ -1269,7 +1347,7 @@ export default function ZenPortal() {
                   className="flex min-h-[60px] flex-1 items-center justify-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.03] px-5 text-base font-medium text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white"
                 >
                   <Plus className="h-5 w-5" strokeWidth={1.8} />
-                  Новый файл
+                  {t('portalNewFile')}
                 </button>
 
                 <button
@@ -1287,16 +1365,13 @@ export default function ZenPortal() {
       </MotionPortal>
 
       {portalMode !== 'drop' && (
-        <div className="pointer-events-none absolute bottom-8 text-xs tracking-[0.24em] text-white/18">
-          {portalMode === 'megadrop'
-            ? `MegaDrop / P2P${megaDropRoomId ? ` / ${megaDropRoomId}` : ''}`
-            : isModelLoading || isProcessing
-              ? `Neural Edge${modelDevice ? ` / ${String(modelDevice).toUpperCase()}` : ''}`
-              : isReady
-                ? (activeActionType === 'image_to_jpg' && isHeicLikeFile(activeFile) && !finalResult
-                  ? 'Zero-Click / HEIC -> JPG'
-                  : 'FFmpeg.wasm')
-                : ''}
+        <div
+          className={[
+            'pointer-events-none text-xs tracking-[0.24em] text-white/18',
+            isEmbedded ? 'mt-6' : 'absolute bottom-8',
+          ].join(' ')}
+        >
+          {footerLabel}
         </div>
       )}
     </div>
