@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { LAST_TOOL_KEY, OCR_SESSION_KEY, readStoredJson } from '../lib/osMemory.js';
 
@@ -20,6 +21,7 @@ export default function CommandPalette({
   onSelect,
 }) {
   const location = useLocation();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -48,12 +50,12 @@ export default function CommandPalette({
 
     if (installAvailable) {
       nextSections.push({
-        heading: '✨ Система',
+        heading: t('commandPalette.sections.system'),
         items: [
           {
             id: 'install-os',
-            label: 'Установить MegaConvert OS на устройство',
-            caption: 'Install offline-ready app shell',
+            label: t('commandPalette.install.label'),
+            caption: t('commandPalette.install.caption'),
             icon: Download,
             action: 'install-os',
           },
@@ -66,17 +68,17 @@ export default function CommandPalette({
         {
           id: 'resume-smart-ocr',
           path: '/tools/smart-ocr',
-          label: 'Возобновить Smart OCR',
+          label: t('commandPalette.quick.resumeLabel'),
           caption: lastOcrSession?.sourceMeta?.name
-            ? `Последняя сессия: ${lastOcrSession.sourceMeta.name}`
-            : 'Открыть сохраненную OCR-сессию',
+            ? t('commandPalette.quick.resumeCaptionWithName', { name: lastOcrSession.sourceMeta.name })
+            : t('commandPalette.quick.resumeCaptionFallback'),
           icon: RotateCcw,
         },
         {
           id: 'ocr-paste',
           path: '/tools/smart-ocr',
-          label: 'Вставить из буфера обмена',
-          caption: 'Clipboard → Smart OCR',
+          label: t('commandPalette.quick.clipboardLabel'),
+          caption: t('commandPalette.quick.clipboardCaption'),
           icon: Clipboard,
           action: 'ocr-paste',
         },
@@ -86,27 +88,27 @@ export default function CommandPalette({
         quickItems.push({
           id: 'open-last-tool',
           path: lastTool.path,
-          label: 'Открыть последний инструмент',
+          label: t('commandPalette.quick.lastToolLabel'),
           caption: lastTool.label || lastTool.path,
           icon: History,
         });
       }
 
       nextSections.push({
-        heading: '⚡ Быстрые действия',
+        heading: t('commandPalette.sections.quickActions'),
         items: quickItems,
       });
     }
 
     if (location.pathname !== '/') {
       nextSections.push({
-        heading: 'Текущий инструмент',
+        heading: t('commandPalette.sections.currentTool'),
         items: [
           {
             id: 'return-home',
             path: '/',
-            label: 'Вернуться на Главную (Zen Portal)',
-            caption: 'Back to MegaConvert',
+            label: t('commandPalette.currentTool.returnHomeLabel'),
+            caption: t('commandPalette.currentTool.returnHomeCaption'),
             icon: ArrowLeft,
           },
         ],
@@ -114,7 +116,7 @@ export default function CommandPalette({
     }
 
     const groupedItems = items.reduce((accumulator, item) => {
-      const groupKey = item.group || 'Навигация';
+      const groupKey = item.group || t('appShell.toolGroups.navigation');
       if (!accumulator[groupKey]) {
         accumulator[groupKey] = [];
       }
@@ -130,13 +132,13 @@ export default function CommandPalette({
     });
 
     return nextSections;
-  }, [installAvailable, items, lastOcrSession, lastTool, location.pathname]);
+  }, [installAvailable, items, lastOcrSession, lastTool, location.pathname, t]);
 
   return (
     <Command.Dialog
       open={open}
       onOpenChange={onOpenChange}
-      label="MegaConvert command menu"
+      label={t('commandPalette.label')}
       overlayClassName="fixed inset-0 z-50 bg-black/40 backdrop-blur-md"
       contentClassName="fixed left-1/2 top-[14vh] z-[60] w-[min(720px,calc(100vw-1.5rem))] -translate-x-1/2 overflow-hidden rounded-[32px] border border-white/[0.08] bg-[#090909]/85 shadow-[0_0_80px_-20px_rgba(120,119,198,0.3)] backdrop-blur-3xl outline-none"
       className="overflow-hidden"
@@ -155,14 +157,14 @@ export default function CommandPalette({
       <div className="border-b border-white/[0.08] px-5 py-4">
         <Command.Input
           autoFocus
-          placeholder="Jump anywhere..."
+          placeholder={t('commandPalette.searchPlaceholder')}
           className="h-12 w-full bg-transparent text-base text-white placeholder:text-white/30 focus:outline-none"
         />
       </div>
 
       <Command.List className="max-h-[60vh] overflow-y-auto px-3 py-3">
         <Command.Empty className="px-3 py-10 text-center text-sm text-white/40">
-          Ничего не найдено.
+          {t('commandPalette.empty')}
         </Command.Empty>
 
         {sections.map(({ heading, items: groupItems }) => (
@@ -209,7 +211,7 @@ export default function CommandPalette({
 
                   {isActive ? (
                     <div className="rounded-full border border-indigo-300/20 bg-white/[0.08] px-2.5 py-1 text-[10px] uppercase tracking-[0.24em] text-white/70">
-                      Active
+                      {t('commandPalette.active')}
                     </div>
                   ) : null}
                 </Command.Item>

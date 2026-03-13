@@ -14178,10 +14178,11 @@ app.post('/api/convert', conversionRateLimitMiddleware, async (req, res) => {
       }
     }
     const requestedTool = String(body.tool || '').trim();
-    let tool = requestedTool;
+    let tool = requestedTool.toLowerCase() === 'convert' ? '' : requestedTool;
     let inputKey = String(body.input_key || body.inputKey || '').trim();
     let originalName = String(body.original_name || body.originalName || 'input.bin').trim();
     let inputFormat = String(body.input_format || body.inputFormat || '').trim().toLowerCase();
+    const requestedTargetFormat = String(body.target_format || body.targetFormat || body.to_format || body.toFormat || '').trim().toLowerCase();
     let inputSize = Number(body.input_size || body.inputSize || 0);
 
     if (!inputKey && body.file_url && body.to_format) {
@@ -14214,6 +14215,17 @@ app.post('/api/convert', conversionRateLimitMiddleware, async (req, res) => {
       inputSize = buffer.length;
     }
 
+    if (!tool && requestedTargetFormat) {
+      const inferredInputFormat = String(
+        inputFormat || path.extname(originalName || '').replace('.', '').toLowerCase(),
+      ).trim().toLowerCase();
+
+      if (inferredInputFormat) {
+        tool = resolveToolByFormats(inferredInputFormat, requestedTargetFormat) || '';
+        inputFormat = inputFormat || inferredInputFormat;
+      }
+    }
+
     if (!tool || !TOOL_IDS.has(tool)) {
       return res.status(400).json({ status: 'error', code: 'UNSUPPORTED_TOOL', message: 'Unsupported tool', requestId: req.requestId });
     }
@@ -14227,7 +14239,7 @@ app.post('/api/convert', conversionRateLimitMiddleware, async (req, res) => {
         requestId: req.requestId
       });
     }
-    const requestedToolId = tool;
+    const requestedToolId = requestedTool || tool;
     tool = availability.tool;
     if (!inputKey || !String(inputKey).startsWith('inputs/')) {
       return res.status(400).json({ status: 'error', code: 'MISSING_INPUT_KEY', message: 'Missing input key', requestId: req.requestId });

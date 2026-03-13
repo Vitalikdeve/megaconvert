@@ -1,19 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-
-export const authInputClassName = [
-  'w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white',
-  'placeholder:text-white/28 focus:border-indigo-500/50 outline-none transition-colors',
-].join(' ');
-
-export const authLabelClassName = 'mb-2 block text-sm font-medium text-white/68';
-export const authPrimaryButtonClassName = [
-  'inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3',
-  'text-sm font-medium text-black transition-transform duration-300 hover:scale-[1.01] hover:bg-white/90',
-  'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100',
-].join(' ');
-export const authInlineLinkClassName = 'text-sm text-white/58 transition-colors duration-300 hover:text-white';
+import { useTranslation } from 'react-i18next';
 
 const overlayTransition = {
   duration: 0.2,
@@ -25,6 +13,8 @@ const panelTransition = {
   ease: [0.22, 1, 0.36, 1],
 };
 
+const MotionDiv = motion.div;
+
 export default function AuthModalShell({
   eyebrow,
   title,
@@ -33,8 +23,10 @@ export default function AuthModalShell({
   children,
   footer,
 }) {
+  const { t } = useTranslation();
+
   return (
-    <motion.div
+    <MotionDiv
       className="fixed inset-0 z-[90] flex items-center justify-center px-4 py-10"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -43,12 +35,12 @@ export default function AuthModalShell({
     >
       <button
         type="button"
-        aria-label="Close auth modal"
+        aria-label={t('authModal.closeOverlayAria')}
         className="absolute inset-0 bg-black/60 backdrop-blur-md"
         onClick={onClose}
       />
 
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, scale: 0.95, y: 18 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -75,7 +67,7 @@ export default function AuthModalShell({
 
             <button
               type="button"
-              aria-label="Close"
+              aria-label={t('authModal.closeButtonAria')}
               onClick={onClose}
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/62 transition-colors duration-300 hover:text-white"
             >
@@ -93,7 +85,7 @@ export default function AuthModalShell({
             </div>
           ) : null}
         </div>
-      </motion.div>
-    </motion.div>
+      </MotionDiv>
+    </MotionDiv>
   );
 }

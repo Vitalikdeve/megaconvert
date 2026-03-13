@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Video } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import GlassPanel from '../ui/GlassPanel.jsx';
 
@@ -8,6 +9,7 @@ const MotionToolScene = motion.div;
 
 export default function VideoCompressor() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <MotionToolScene
@@ -21,14 +23,14 @@ export default function VideoCompressor() {
         <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/80">
           <Video className="h-7 w-7" strokeWidth={1.8} />
         </div>
-        <h2 className="text-2xl font-medium text-white/80">Video Compressor</h2>
+        <h2 className="text-2xl font-medium text-white/80">{t('appShell.tools.videoCompressor.label')}</h2>
         <button
           type="button"
           onClick={() => navigate('/')}
           className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.05] px-5 py-3 text-sm text-white/72 transition-colors duration-300 hover:bg-white/[0.1] hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={1.8} />
-          Назад
+          {t('toolPlaceholderBack')}
         </button>
       </GlassPanel>
     </MotionToolScene>

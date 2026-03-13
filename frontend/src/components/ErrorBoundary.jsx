@@ -1,6 +1,7 @@
 import React from 'react';
+import { withTranslation } from 'react-i18next';
 
-export default class ErrorBoundary extends React.Component {
+class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, message: '' };
@@ -9,7 +10,7 @@ export default class ErrorBoundary extends React.Component {
   static getDerivedStateFromError(error) {
     return {
       hasError: true,
-      message: error?.message || 'Unexpected error'
+      message: error?.message || ''
     };
   }
 
@@ -18,11 +19,15 @@ export default class ErrorBoundary extends React.Component {
   }
 
   render() {
+    const { t } = this.props;
+
     if (this.state.hasError) {
       return (
         <div style={{ minHeight: '100vh', padding: 24, background: '#020617', color: '#e2e8f0' }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700 }}>Something went wrong</h1>
-          <p style={{ marginTop: 12, opacity: 0.9 }}>{this.state.message}</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700 }}>{t('errorBoundary.title')}</h1>
+          <p style={{ marginTop: 12, opacity: 0.9 }}>
+            {this.state.message || t('errorBoundary.unexpected')}
+          </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -36,7 +41,7 @@ export default class ErrorBoundary extends React.Component {
               cursor: 'pointer'
             }}
           >
-            Reload
+            {t('errorBoundary.reload')}
           </button>
         </div>
       );
@@ -46,3 +51,6 @@ export default class ErrorBoundary extends React.Component {
   }
 }
 
+const TranslatedErrorBoundary = withTranslation()(ErrorBoundary);
+
+export default TranslatedErrorBoundary;

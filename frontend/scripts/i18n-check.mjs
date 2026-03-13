@@ -17,6 +17,23 @@ function readJson(filePath) {
   return JSON.parse(raw);
 }
 
+function flattenDict(input, prefix = '') {
+  const output = {};
+
+  for (const [key, value] of Object.entries(input || {})) {
+    const nextKey = prefix ? `${prefix}.${key}` : key;
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      Object.assign(output, flattenDict(value, nextKey));
+      continue;
+    }
+
+    output[nextKey] = value;
+  }
+
+  return output;
+}
+
 function getPlaceholders(value) {
   const text = String(value ?? '');
   const matches = text.match(/\{[a-zA-Z0-9_]+\}/g) || [];
@@ -39,7 +56,7 @@ function run() {
     process.exit(1);
   }
 
-  const base = readJson(basePath);
+  const base = flattenDict(readJson(basePath));
   const baseKeys = Object.keys(base).sort();
   const localeFiles = fs
     .readdirSync(i18nDir)
@@ -52,7 +69,7 @@ function run() {
   for (const file of localeFiles) {
     const localeCode = file.replace('.json', '');
     const localePath = path.join(i18nDir, file);
-    const dict = readJson(localePath);
+    const dict = flattenDict(readJson(localePath));
     const localeKeys = Object.keys(dict).sort();
 
     const missing = baseKeys.filter((key) => !Object.prototype.hasOwnProperty.call(dict, key));

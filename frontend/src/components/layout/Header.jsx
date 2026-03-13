@@ -30,14 +30,11 @@ export default function Header() {
   const { openAuthModal } = useAuthModal();
   const { t, i18n } = useTranslation();
   const menuRef = useRef(null);
-  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+  const [languageMenuPath, setLanguageMenuPath] = useState(null);
+  const isLanguageMenuOpen = languageMenuPath === location.pathname;
   const currentLanguage = normalizeLang(i18n.resolvedLanguage || i18n.language || 'en');
   const currentLanguageOption = HEADER_LANGUAGE_OPTIONS.find((option) => option.code === currentLanguage)
     || HEADER_LANGUAGE_OPTIONS[0];
-
-  useEffect(() => {
-    setIsLanguageMenuOpen(false);
-  }, [location.pathname]);
 
   useEffect(() => {
     if (!isLanguageMenuOpen) {
@@ -46,7 +43,7 @@ export default function Header() {
 
     const handlePointerDown = (event) => {
       if (!menuRef.current?.contains(event.target)) {
-        setIsLanguageMenuOpen(false);
+        setLanguageMenuPath(null);
       }
     };
 
@@ -94,7 +91,9 @@ export default function Header() {
         >
           <button
             type="button"
-            onClick={() => setIsLanguageMenuOpen((current) => !current)}
+            onClick={() => setLanguageMenuPath((current) => (
+              current === location.pathname ? null : location.pathname
+            ))}
             aria-expanded={isLanguageMenuOpen}
             aria-haspopup="menu"
             className="inline-flex h-10 min-w-[3rem] items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white sm:min-w-[10rem] sm:justify-between lg:min-w-[11.25rem]"
@@ -128,7 +127,7 @@ export default function Header() {
                       type="button"
                       onClick={() => {
                         void i18n.changeLanguage(option.code);
-                        setIsLanguageMenuOpen(false);
+                        setLanguageMenuPath(null);
                       }}
                       className={[
                         'flex h-12 w-full items-center justify-between rounded-[20px] px-4 text-sm transition-colors duration-300',
@@ -150,7 +149,7 @@ export default function Header() {
         <button
           type="button"
           onClick={() => openAuthModal('login')}
-          className="inline-flex min-w-[7.5rem] items-center justify-center whitespace-nowrap rounded-full bg-white px-6 py-2 text-sm font-semibold text-black shadow-[0_0_20px_rgba(255,255,255,0.2)] transition-all duration-300 hover:scale-105 hover:bg-gray-200"
+          className="inline-flex min-w-[7.75rem] items-center justify-center whitespace-nowrap rounded-full border border-white/65 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(226,232,240,0.94))] px-6 py-2 text-sm font-semibold tracking-[0.01em] text-slate-950 shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_18px_44px_rgba(255,255,255,0.18)] transition-all duration-300 hover:scale-105 hover:border-white hover:bg-[linear-gradient(135deg,rgba(255,255,255,1),rgba(241,245,249,0.96))] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.22),0_20px_52px_rgba(255,255,255,0.24)]"
         >
           {t('headerSignIn')}
         </button>

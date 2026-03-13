@@ -8,6 +8,7 @@ import {
   Search,
   Upload,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -18,6 +19,7 @@ import {
   OCR_FILE_HANDOFF_KEY,
   OCR_SESSION_KEY,
 } from '../../lib/osMemory.js';
+import i18n from '../../i18n.js';
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -73,7 +75,7 @@ function canvasToBlob(canvas, type = 'image/png', quality = 0.92) {
         return;
       }
 
-      reject(new Error('Не удалось собрать превью страницы.'));
+      reject(new Error(i18n.t('smartOcr.errors.pagePreviewFailed')));
     }, type, quality);
   });
 }
@@ -102,7 +104,7 @@ async function buildImagePreviewDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Не удалось подготовить превью изображения.'));
+    reader.onerror = () => reject(new Error(i18n.t('smartOcr.errors.imagePreviewFailed')));
     reader.readAsDataURL(file);
   });
 }
@@ -151,7 +153,7 @@ async function dataUrlToFile(dataUrl, fileName) {
 
 async function readClipboardImport() {
   if (!navigator.clipboard?.read) {
-    throw new Error('Браузер не разрешил прямое чтение буфера обмена. Используйте Ctrl+V внутри окна OCR.');
+    throw new Error(i18n.t('smartOcr.errors.clipboardDirectReadUnavailable'));
   }
 
   const clipboardItems = await navigator.clipboard.read();
@@ -175,12 +177,13 @@ async function readClipboardImport() {
     }
   }
 
-  throw new Error('В буфере обмена не найдено изображение или PDF.');
+  throw new Error(i18n.t('smartOcr.errors.clipboardEmpty'));
 }
 
 export default function SmartOcr() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const fileInputRef = useRef(null);
   const copyResetTimeoutRef = useRef(null);
 
@@ -246,9 +249,9 @@ export default function SmartOcr() {
         setIsCopied(false);
       }, 2000);
     } catch {
-      setError('Не удалось скопировать текст в буфер обмена.');
+      setError(t('smartOcr.errors.copyFailed'));
     }
-  }, [extractedText]);
+  }, [extractedText, t]);
 
   const runImageOcr = useCallback(async (file, nextMeta) => {
     const previewUrl = await buildImagePreviewDataUrl(file);
@@ -372,11 +375,11 @@ export default function SmartOcr() {
       setExtractedText(result.text || '');
       setProgress(100);
     } catch (ocrError) {
-      setError(String(ocrError?.message || 'Не удалось распознать текст локально.'));
+      setError(String(ocrError?.message || t('smartOcr.errors.recognitionFailed')));
     } finally {
       setIsProcessing(false);
     }
-  }, [resetCopyState, runImageOcr, runPdfOcr]);
+  }, [resetCopyState, runImageOcr, runPdfOcr, t]);
 
   const handleDrop = useCallback(async (event) => {
     event.preventDefault();
@@ -526,7 +529,7 @@ export default function SmartOcr() {
           const file = handoff?.file;
 
           if (!file) {
-            throw new Error('Временный файл для OCR уже недоступен. Перетащите PDF снова.');
+            throw new Error(t('smartOcr.errors.handoffExpired'));
           }
 
           if (isActive) {
@@ -535,7 +538,7 @@ export default function SmartOcr() {
         }
       } catch (importError) {
         if (isActive) {
-          setError(String(importError?.message || 'Не удалось импортировать внешний источник в OCR.'));
+          setError(String(importError?.message || t('smartOcr.errors.externalImportFailed')));
         }
       } finally {
         if (isActive) {
@@ -549,12 +552,12 @@ export default function SmartOcr() {
     return () => {
       isActive = false;
     };
-  }, [handleExtractText, location.pathname, location.state, navigate]);
+  }, [handleExtractText, location.pathname, location.state, navigate, t]);
 
-  const sourceKindLabel = sourceMeta.kind === 'pdf' ? 'PDF OCR' : 'Image OCR';
+  const sourceKindLabel = sourceMeta.kind === 'pdf' ? t('smartOcr.sourceKindPdf') : t('smartOcr.sourceKindImage');
   const progressLabel = sourceMeta.kind === 'pdf'
-    ? `Чтение PDF... ${Math.round(progress)}%`
-    : `Чтение документа... ${Math.round(progress)}%`;
+    ? t('smartOcr.progress.pdf', { progress: Math.round(progress) })
+    : t('smartOcr.progress.document', { progress: Math.round(progress) });
   const hasSession = Boolean(selectedImage || extractedText || sourceMeta.name);
 
   return (
@@ -584,12 +587,12 @@ export default function SmartOcr() {
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[0.32em] text-white/28">
-                Local Smart OCR
+                {t('smartOcr.eyebrow')}
               </div>
-              <h2 className="mt-1 text-xl font-medium text-white/82">Умный OCR</h2>
+              <h2 className="mt-1 text-xl font-medium text-white/82">{t('smartOcr.title')}</h2>
               {sourceMeta.restored ? (
                 <div className="mt-2 inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-[10px] uppercase tracking-[0.28em] text-white/48">
-                  Сессия восстановлена
+                  {t('smartOcr.sessionRestored')}
                 </div>
               ) : null}
             </div>
@@ -604,7 +607,7 @@ export default function SmartOcr() {
                 className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.05] px-4 py-2.5 text-sm text-white/72 transition-colors duration-300 hover:bg-white/[0.1] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCcw className="h-4 w-4" strokeWidth={1.8} />
-                Новый файл
+                {t('portalNewFile')}
               </button>
             ) : null}
 
@@ -614,7 +617,7 @@ export default function SmartOcr() {
               className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.05] px-4 py-2.5 text-sm text-white/72 transition-colors duration-300 hover:bg-white/[0.1] hover:text-white"
             >
               <ArrowLeft className="h-4 w-4" strokeWidth={1.8} />
-              Назад
+              {t('portalBack')}
             </button>
           </div>
         </div>
@@ -660,22 +663,22 @@ export default function SmartOcr() {
 
                   <div className="space-y-3">
                     <div className="text-xl font-medium tracking-tight text-white/78">
-                      Перетащите скан, фото или PDF сюда
+                      {t('smartOcr.dropTitle')}
                     </div>
                     <div className="text-sm leading-7 text-white/38">
-                      Или просто нажмите Ctrl+V. OCR полностью работает в браузере и ничего не отправляет на сервер.
+                      {t('smartOcr.dropBody')}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
                     <div className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[10px] uppercase tracking-[0.28em] text-white/46">
-                      Clipboard
+                      {t('smartOcr.capabilityClipboard')}
                     </div>
                     <div className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[10px] uppercase tracking-[0.28em] text-white/46">
                       PDF
                     </div>
                     <div className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[10px] uppercase tracking-[0.28em] text-white/46">
-                      rus + eng
+                      {t('smartOcr.capabilityLanguages')}
                     </div>
                   </div>
                 </div>
@@ -749,12 +752,12 @@ export default function SmartOcr() {
                   {selectedImage ? (
                     <img
                       src={selectedImage}
-                      alt="OCR source"
+                      alt={t('smartOcr.sourceAlt')}
                       className="h-full w-full object-contain"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center px-6 text-center text-sm leading-7 text-white/34">
-                      Превью не сохранилось в памяти браузера, но текст и метаданные сессии восстановлены.
+                      {t('smartOcr.previewMissing')}
                     </div>
                   )}
                 </div>
@@ -770,10 +773,10 @@ export default function SmartOcr() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[10px] uppercase tracking-[0.32em] text-white/28">
-                      Extracted Text
+                      {t('smartOcr.extractedTitle')}
                     </div>
                     <div className="mt-1 text-sm text-white/36">
-                      Локально распознанный текст можно поправить, сохранить или сразу скопировать.
+                      {t('smartOcr.extractedSubtitle')}
                     </div>
                   </div>
 
@@ -787,7 +790,7 @@ export default function SmartOcr() {
                     ) : (
                       <Copy className="h-4 w-4" strokeWidth={1.8} />
                     )}
-                    {isCopied ? 'Скопировано' : 'Скопировать текст'}
+                    {isCopied ? t('smartOcr.copied') : t('smartOcr.copy')}
                   </button>
                 </div>
 
@@ -795,7 +798,7 @@ export default function SmartOcr() {
                   value={extractedText}
                   onChange={(event) => setExtractedText(event.target.value)}
                   className="min-h-0 flex-1 resize-none rounded-2xl border border-white/[0.08] bg-white/[0.05] px-4 py-4 text-sm leading-7 text-white/76 outline-none placeholder:text-white/24"
-                  placeholder="Распознанный текст появится здесь..."
+                  placeholder={t('smartOcr.placeholder')}
                 />
               </div>
             </MotionSection>

@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import AuthModalShell, {
+import AuthModalShell from './AuthModalShell.jsx';
+import {
   authInlineLinkClassName,
   authInputClassName,
   authLabelClassName,
   authPrimaryButtonClassName,
-} from './AuthModalShell.jsx';
+} from './authModalStyles.js';
 import { buildAuthEndpoint, parsePayload } from '../lib/authApi.js';
 
 function persistAuthSession({ token, email, user }) {

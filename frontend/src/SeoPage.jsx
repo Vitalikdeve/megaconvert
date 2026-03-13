@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CONVERSIONS, getConversionBySlug, getRelatedConversions } from './seo/conversions';
 
 const upsertMeta = (name, content) => {
@@ -50,23 +51,30 @@ const upsertJsonLd = (data) => {
   tag.textContent = JSON.stringify(data);
 };
 
+const setDocumentTitle = (value) => {
+  if (typeof document !== 'undefined') {
+    document.title = value;
+  }
+};
+
 export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailable }) {
+  const { t } = useTranslation();
   const conversion = getConversionBySlug(slug);
   const related = conversion ? getRelatedConversions(conversion.category, conversion.slug, 8) : [];
   const toolAvailable = conversion ? (isToolAvailable ? isToolAvailable(conversion.id) : true) : false;
 
   useEffect(() => {
     if (!conversion) {
-      document.title = 'Convert files online | MegaConvert';
-      upsertMeta('description', 'Convert files online with MegaConvert. Fast, secure, and free.');
+      setDocumentTitle(t('seoPage.defaultMetaTitle'));
+      upsertMeta('description', t('seoPage.defaultMetaDescription'));
       return;
     }
     const origin = window.location.origin;
     const canonicalUrl = `${origin}/convert/${conversion.slug}`;
     const localeAlternates = ['en', 'es', 'de'];
-    const title = `${conversion.from} to ${conversion.to} Converter | MegaConvert`;
-    const desc = `Convert ${conversion.from} to ${conversion.to} online in seconds. Fast, secure, and high-quality conversions.`;
-    document.title = title;
+    const title = t('seoPage.metaTitle', { from: conversion.from, to: conversion.to });
+    const desc = t('seoPage.metaDescription', { from: conversion.from, to: conversion.to });
+    setDocumentTitle(title);
     upsertMeta('description', desc);
     upsertMeta('robots', 'index,follow,max-image-preview:large');
     upsertProperty('og:title', title);
@@ -82,7 +90,7 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
       {
         '@context': 'https://schema.org',
         '@type': 'SoftwareApplication',
-        name: `${conversion.from} to ${conversion.to} Converter`,
+        name: t('seoPage.metaTitle', { from: conversion.from, to: conversion.to }),
         applicationCategory: 'UtilityApplication',
         operatingSystem: 'Web',
         description: desc,
@@ -95,11 +103,11 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
       {
         '@context': 'https://schema.org',
         '@type': 'HowTo',
-        name: `How to convert ${conversion.from} to ${conversion.to}`,
+        name: t('seoPage.howToTitle', { from: conversion.from, to: conversion.to }),
         step: [
-          { '@type': 'HowToStep', name: `Upload your ${conversion.from} file` },
-          { '@type': 'HowToStep', name: `Convert to ${conversion.to}` },
-          { '@type': 'HowToStep', name: `Download the result file` }
+          { '@type': 'HowToStep', name: t('seoPage.howToUpload', { from: conversion.from }) },
+          { '@type': 'HowToStep', name: t('seoPage.howToConvert', { to: conversion.to }) },
+          { '@type': 'HowToStep', name: t('seoPage.howToDownload') }
         ]
       },
       {
@@ -108,38 +116,38 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
         mainEntity: [
           {
             '@type': 'Question',
-            name: `Is ${conversion.from} to ${conversion.to} conversion free?`,
+            name: t('seoPage.faqFreeQuestion', { from: conversion.from, to: conversion.to }),
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Yes, free conversion is available with optional PRO capabilities.'
+              text: t('seoPage.faqFreeAnswer')
             }
           },
           {
             '@type': 'Question',
-            name: 'How long does conversion take?',
+            name: t('seoPage.faqSpeedQuestion'),
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Most files finish in seconds. Large files may take longer depending on size and format.'
+              text: t('seoPage.faqSpeedAnswer')
             }
           },
           {
             '@type': 'Question',
-            name: 'Are my files secure?',
+            name: t('seoPage.faqSafetyQuestion'),
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Files are processed over secure channels and are not published publicly.'
+              text: t('seoPage.faqSafetyAnswer')
             }
           }
         ]
       }
     ]);
-  }, [conversion]);
+  }, [conversion, t]);
 
   if (!conversion) {
     return (
       <div className="pt-32 pb-20 px-4 max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold mb-4">Conversion not found</h1>
-        <p className="text-slate-600 mb-6">Try one of our popular conversions:</p>
+        <h1 className="text-4xl font-bold mb-4">{t('seoPage.notFoundTitle')}</h1>
+        <p className="text-slate-600 mb-6">{t('seoPage.notFoundSubtitle')}</p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {CONVERSIONS.slice(0, 12).map((c) => (
             <button
@@ -148,7 +156,7 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
               className="bg-white border rounded-2xl p-4 text-left hover:shadow-md transition"
             >
               <div className="font-semibold">{c.from} → {c.to}</div>
-              <div className="text-xs text-slate-500 mt-1">Open converter</div>
+              <div className="text-xs text-slate-500 mt-1">{t('seoPage.openConverter')}</div>
             </button>
           ))}
         </div>
@@ -160,10 +168,10 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
     <div className="pt-32 pb-20 px-4">
       <div className="max-w-5xl mx-auto">
         <div className="mb-10">
-          <p className="text-sm uppercase tracking-widest text-slate-500">MegaConvert</p>
-          <h1 className="text-5xl font-extrabold mt-2">{conversion.from} to {conversion.to} Converter</h1>
+          <p className="text-sm uppercase tracking-widest text-slate-500">{t('seoPage.brand')}</p>
+          <h1 className="text-5xl font-extrabold mt-2">{t('seoPage.heroTitle', { from: conversion.from, to: conversion.to })}</h1>
           <p className="text-slate-600 text-lg mt-4">
-            Convert {conversion.from} files to {conversion.to} in seconds. High quality, fast processing, and secure uploads.
+            {t('seoPage.heroSubtitle', { from: conversion.from, to: conversion.to })}
           </p>
           <div className="flex flex-wrap gap-3 mt-6">
             <button
@@ -177,41 +185,41 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
               }}
               className="px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold"
             >
-              {toolAvailable ? 'Convert Now' : 'Browse Available Converters'}
+              {toolAvailable ? t('seoPage.convertNow') : t('seoPage.browseConverters')}
             </button>
             <button
               onClick={() => onNavigate('/')}
               className="px-6 py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold"
             >
-              Back to Home
+              {t('seoPage.backHome')}
             </button>
           </div>
           {!toolAvailable && (
             <div className="mt-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              This conversion page is live for discovery and SEO. Runtime processing for this exact format is being expanded.
+              {t('seoPage.toolAvailabilityNote')}
             </div>
           )}
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 mb-12">
           <div className="bg-white border rounded-2xl p-5">
-            <div className="font-semibold mb-2">How it works</div>
+            <div className="font-semibold mb-2">{t('seoPage.howItWorksTitle')}</div>
             <ol className="text-sm text-slate-600 list-decimal pl-5 space-y-1">
-              <li>Upload your {conversion.from} file.</li>
-              <li>Pick settings (optional).</li>
-              <li>Download your {conversion.to} file.</li>
+              <li>{t('seoPage.stepUpload', { from: conversion.from })}</li>
+              <li>{t('seoPage.stepSettings')}</li>
+              <li>{t('seoPage.stepDownload', { to: conversion.to })}</li>
             </ol>
           </div>
           <div className="bg-white border rounded-2xl p-5">
-            <div className="font-semibold mb-2">Why MegaConvert</div>
+            <div className="font-semibold mb-2">{t('seoPage.whyTitle')}</div>
             <ul className="text-sm text-slate-600 list-disc pl-5 space-y-1">
-              <li>Fast conversions at scale</li>
-              <li>Secure processing</li>
-              <li>Batch conversion supported</li>
+              <li>{t('seoPage.whyItem1')}</li>
+              <li>{t('seoPage.whyItem2')}</li>
+              <li>{t('seoPage.whyItem3')}</li>
             </ul>
           </div>
           <div className="bg-white border rounded-2xl p-5">
-            <div className="font-semibold mb-2">Supported formats</div>
+            <div className="font-semibold mb-2">{t('seoPage.supportedFormatsTitle')}</div>
             <div className="text-sm text-slate-600">
               {conversion.from} → {conversion.to}
             </div>
@@ -219,26 +227,26 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
         </div>
 
         <div className="bg-slate-50 border rounded-2xl p-6 mb-12">
-          <h2 className="text-2xl font-bold mb-3">FAQ</h2>
+          <h2 className="text-2xl font-bold mb-3">{t('seoPage.faqTitle')}</h2>
           <div className="space-y-4 text-sm text-slate-700">
             <div>
-              <div className="font-semibold">Is it free?</div>
-              <div>Yes. Free conversions with optional PRO features.</div>
+              <div className="font-semibold">{t('seoPage.faqCardFreeQuestion')}</div>
+              <div>{t('seoPage.faqCardFreeAnswer')}</div>
             </div>
             <div>
-              <div className="font-semibold">How fast is it?</div>
-              <div>Most files finish in seconds. Large files can take longer.</div>
+              <div className="font-semibold">{t('seoPage.faqCardSpeedQuestion')}</div>
+              <div>{t('seoPage.faqCardSpeedAnswer')}</div>
             </div>
             <div>
-              <div className="font-semibold">Are my files safe?</div>
-              <div>We process files securely and don’t expose them publicly.</div>
+              <div className="font-semibold">{t('seoPage.faqCardSafetyQuestion')}</div>
+              <div>{t('seoPage.faqCardSafetyAnswer')}</div>
             </div>
           </div>
         </div>
 
         {related.length > 0 && (
           <div>
-            <h2 className="text-2xl font-bold mb-4">Related conversions</h2>
+            <h2 className="text-2xl font-bold mb-4">{t('seoPage.relatedTitle')}</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {related.map((c) => (
                 <button
@@ -247,7 +255,7 @@ export default function SeoPage({ slug, onSelectTool, onNavigate, isToolAvailabl
                   className="bg-white border rounded-2xl p-4 text-left hover:shadow-md transition"
                 >
                   <div className="font-semibold">{c.from} → {c.to}</div>
-                  <div className="text-xs text-slate-500 mt-1">Open converter</div>
+                  <div className="text-xs text-slate-500 mt-1">{t('seoPage.openConverter')}</div>
                 </button>
               ))}
             </div>

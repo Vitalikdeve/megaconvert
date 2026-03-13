@@ -27,6 +27,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import CommandPalette from './components/CommandPalette.jsx';
 import MainLayout from './components/layout/MainLayout.jsx';
 import GlassPanel from './components/ui/GlassPanel.jsx';
@@ -40,7 +41,9 @@ import { LAST_TOOL_KEY, writeStoredJson } from './lib/osMemory.js';
 const ZenPortal = lazy(() => import('./components/ZenPortal.jsx'));
 const HomeDashboard = lazy(() => import('./components/home/HomeDashboard.jsx'));
 const ImageOptimizer = lazy(() => import('./components/tools/ImageOptimizer.jsx'));
+const SecurityPage = lazy(() => import('./components/legal/SecurityPage.jsx'));
 const PrivacyPage = lazy(() => import('./components/legal/PrivacyPage.jsx'));
+const CookiesPage = lazy(() => import('./components/legal/CookiesPage.jsx'));
 const VideoCompressor = lazy(() => import('./components/tools/VideoCompressor.jsx'));
 const AudioConverter = lazy(() => import('./components/tools/AudioConverter.jsx'));
 const VideoToGif = lazy(() => import('./components/tools/VideoToGif.jsx'));
@@ -51,97 +54,15 @@ const SmartOcr = lazy(() => import('./components/tools/SmartOcr.jsx'));
 const PdfEditor = lazy(() => import('./components/tools/PdfEditor.jsx'));
 const MegaGrid = lazy(() => import('./components/tools/MegaGrid.jsx'));
 
-const TOOL_ITEMS = [
-  {
-    id: 'zen',
-    path: '/',
-    aliases: ['/receive'],
-    group: 'Главная',
-    label: 'Магический Портал',
-    caption: 'Dashboard and smart portal',
-    icon: Sparkles,
-  },
-  {
-    id: 'image-optimizer',
-    path: '/tools/image-optimizer',
-    group: 'Медиа',
-    label: 'Image Optimizer',
-    caption: 'Frame refinement',
-    icon: Image,
-  },
-  {
-    id: 'video-compressor',
-    path: '/tools/video-compressor',
-    group: 'Медиа',
-    label: 'Video Compressor',
-    caption: 'Motion shaping',
-    icon: Video,
-  },
-  {
-    id: 'audio-converter',
-    path: '/tools/audio-converter',
-    group: 'Медиа',
-    label: 'Audio Converter',
-    caption: 'High-fidelity engine',
-    icon: Music,
-  },
-  {
-    id: 'video-to-gif',
-    path: '/tools/video-to-gif',
-    group: 'Медиа',
-    label: 'Video to GIF',
-    caption: 'Optimized animations',
-    icon: Film,
-  },
-  {
-    id: 'smart-ocr',
-    path: '/tools/smart-ocr',
-    group: 'Документы',
-    label: 'Умный OCR',
-    caption: 'Text extraction',
-    icon: Search,
-  },
-  {
-    id: 'pdf-editor',
-    path: '/tools/pdf-editor',
-    group: 'Документы',
-    label: 'PDF Редактор',
-    caption: 'Document assembly',
-    icon: FileText,
-  },
-  {
-    id: 'megagrid',
-    path: '/tools/megagrid',
-    group: 'Сеть',
-    label: 'MegaGrid',
-    caption: 'Distributed browser cluster',
-    icon: Network,
-  },
-  {
-    id: 'archive-manager',
-    path: '/tools/archive-manager',
-    group: 'Файлы',
-    label: 'Archive Manager',
-    caption: 'ZIP and RAR workflows',
-    icon: Archive,
-  },
-  {
-    id: 'batch-watermark',
-    path: '/tools/batch-watermark',
-    group: 'Медиа',
-    label: 'Batch Watermark',
-    caption: 'Bulk overlays',
-    icon: Stamp,
-  },
-];
-
 function RouteFallback() {
+  const { t } = useTranslation();
+
   return (
     <div className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-[#030303] px-4 text-white">
       <GlassPanel className="flex h-[320px] w-[min(620px,calc(100vw-2rem))] flex-col items-center justify-center gap-5 px-8 text-center">
         <div className="h-16 w-16 animate-pulse rounded-full border border-white/[0.08] bg-white/[0.04]" />
         <div className="text-sm uppercase tracking-[0.28em] text-white/28">
-          Loading Module
+          {t('appShell.loadingModule')}
         </div>
       </GlassPanel>
     </div>
@@ -202,16 +123,100 @@ function SpotlightPage({
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
   const apiBase = useMemo(
     () => String(import.meta.env.VITE_API_BASE || '/api').trim() || '/api',
     [],
   );
+  const toolItems = useMemo(() => [
+    {
+      id: 'zen',
+      path: '/',
+      aliases: ['/receive'],
+      group: t('appShell.toolGroups.home'),
+      label: t('appShell.tools.zen.label'),
+      caption: t('appShell.tools.zen.caption'),
+      icon: Sparkles,
+    },
+    {
+      id: 'image-optimizer',
+      path: '/tools/image-optimizer',
+      group: t('appShell.toolGroups.media'),
+      label: t('appShell.tools.imageOptimizer.label'),
+      caption: t('appShell.tools.imageOptimizer.caption'),
+      icon: Image,
+    },
+    {
+      id: 'video-compressor',
+      path: '/tools/video-compressor',
+      group: t('appShell.toolGroups.media'),
+      label: t('appShell.tools.videoCompressor.label'),
+      caption: t('appShell.tools.videoCompressor.caption'),
+      icon: Video,
+    },
+    {
+      id: 'audio-converter',
+      path: '/tools/audio-converter',
+      group: t('appShell.toolGroups.media'),
+      label: t('toolAudioConverterTitle'),
+      caption: t('appShell.tools.audioConverter.caption'),
+      icon: Music,
+    },
+    {
+      id: 'video-to-gif',
+      path: '/tools/video-to-gif',
+      group: t('appShell.toolGroups.media'),
+      label: t('toolVideoToGifTitle'),
+      caption: t('appShell.tools.videoToGif.caption'),
+      icon: Film,
+    },
+    {
+      id: 'smart-ocr',
+      path: '/tools/smart-ocr',
+      group: t('appShell.toolGroups.documents'),
+      label: t('dashboardCardOcrTitle'),
+      caption: t('appShell.tools.smartOcr.caption'),
+      icon: Search,
+    },
+    {
+      id: 'pdf-editor',
+      path: '/tools/pdf-editor',
+      group: t('appShell.toolGroups.documents'),
+      label: t('dashboardCardPdfTitle'),
+      caption: t('appShell.tools.pdfEditor.caption'),
+      icon: FileText,
+    },
+    {
+      id: 'megagrid',
+      path: '/tools/megagrid',
+      group: t('appShell.toolGroups.network'),
+      label: t('appShell.tools.megaGrid.label'),
+      caption: t('appShell.tools.megaGrid.caption'),
+      icon: Network,
+    },
+    {
+      id: 'archive-manager',
+      path: '/tools/archive-manager',
+      group: t('appShell.toolGroups.files'),
+      label: t('toolArchiveManagerTitle'),
+      caption: t('appShell.tools.archiveManager.caption'),
+      icon: Archive,
+    },
+    {
+      id: 'batch-watermark',
+      path: '/tools/batch-watermark',
+      group: t('appShell.toolGroups.media'),
+      label: t('toolBatchWatermarkTitle'),
+      caption: t('appShell.tools.batchWatermark.caption'),
+      icon: Stamp,
+    },
+  ], [t]);
 
   const activeToolMeta = useMemo(
-    () => TOOL_ITEMS.find((item) => item.path === location.pathname || item.aliases?.includes(location.pathname)) || TOOL_ITEMS[0],
-    [location.pathname],
+    () => toolItems.find((item) => item.path === location.pathname || item.aliases?.includes(location.pathname)) || toolItems[0],
+    [location.pathname, toolItems],
   );
 
   useEffect(() => {
@@ -298,15 +303,17 @@ export default function App() {
               <Route path="/tools/batch-watermark" element={<BatchWatermark />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/security" element={<SecurityPage />} />
+              <Route path="/cookies" element={<CookiesPage />} />
               <Route
                 path="/api-overview"
                 element={(
                   <SpotlightPage
-                    eyebrow="Developer Surface"
-                    title="API experience is being shaped into a premium control plane."
-                    description="Upload signing, conversion jobs, auth and observability are already in the platform. This route becomes the polished developer surface while the product shell keeps the same Apple-tier visual system."
-                    primaryAction={{ label: 'Войти', to: '/login' }}
-                    secondaryAction={{ label: 'На главную', to: '/' }}
+                    eyebrow={t('appShell.apiSpotlight.eyebrow')}
+                    title={t('appShell.apiSpotlight.title')}
+                    description={t('appShell.apiSpotlight.description')}
+                    primaryAction={{ label: t('appShell.apiSpotlight.primaryAction'), to: '/login' }}
+                    secondaryAction={{ label: t('appShell.apiSpotlight.secondaryAction'), to: '/' }}
                     onNavigate={navigate}
                   />
                 )}
@@ -315,11 +322,11 @@ export default function App() {
                 path="/pricing"
                 element={(
                   <SpotlightPage
-                    eyebrow="Commercial Layer"
-                    title="Pricing is moving toward a clearer premium structure."
-                    description="We are packaging personal workflows, professional conversion throughput and future API access into a cleaner pricing surface without compromising the local-first product feeling."
-                    primaryAction={{ label: 'Создать аккаунт', to: '/register' }}
-                    secondaryAction={{ label: 'Посмотреть инструменты', to: '/tools' }}
+                    eyebrow={t('appShell.pricingSpotlight.eyebrow')}
+                    title={t('appShell.pricingSpotlight.title')}
+                    description={t('appShell.pricingSpotlight.description')}
+                    primaryAction={{ label: t('appShell.pricingSpotlight.primaryAction'), to: '/register' }}
+                    secondaryAction={{ label: t('appShell.pricingSpotlight.secondaryAction'), to: '/tools' }}
                     onNavigate={navigate}
                   />
                 )}
@@ -353,7 +360,7 @@ export default function App() {
       <CommandPalette
         open={isPaletteOpen}
         onOpenChange={setIsPaletteOpen}
-        items={TOOL_ITEMS}
+        items={toolItems}
         activeTool={activeToolMeta.id}
         installAvailable={Boolean(deferredInstallPrompt)}
         onSelect={handleSelectTool}

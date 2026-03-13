@@ -12,6 +12,7 @@ import {
 import { PDFDocument } from 'pdf-lib';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import GlassPanel from '../ui/GlassPanel.jsx';
 import { consumeTempMemory, PDF_EDITOR_HANDOFF_KEY } from '../../lib/osMemory.js';
@@ -111,6 +112,7 @@ async function unpackPdfFile(file) {
 export default function PdfEditor() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const fileInputRef = useRef(null);
 
   const [pdfFiles, setPdfFiles] = useState([]);
@@ -129,7 +131,7 @@ export default function PdfEditor() {
   const handleImportPdfs = useCallback(async (incomingFiles) => {
     const pdfOnly = Array.from(incomingFiles || []).filter(isPdfFile);
     if (!pdfOnly.length) {
-      setError('Нужны PDF-файлы. Изображения и другие форматы сюда не подойдут.');
+      setError(t('pdfEditor.errors.invalidFiles'));
       return;
     }
 
@@ -142,7 +144,7 @@ export default function PdfEditor() {
 
       for (let index = 0; index < pdfOnly.length; index += 1) {
         const file = pdfOnly[index];
-        setProgressLabel(`Подготавливаем ${file.name}...`);
+        setProgressLabel(t('pdfEditor.progress.preparingFile', { name: file.name }));
         const unpacked = await unpackPdfFile(file);
         nextSources.push(unpacked.source);
         nextPages.push(...unpacked.pages);
@@ -155,12 +157,12 @@ export default function PdfEditor() {
         setSelectedPageId(nextPages[0].id);
       }
     } catch (pdfError) {
-      setError(String(pdfError?.message || 'Не удалось открыть PDF локально.'));
+      setError(String(pdfError?.message || t('pdfEditor.errors.openFailed')));
     } finally {
       setIsLoading(false);
       setProgressLabel('');
     }
-  }, [selectedPageId]);
+  }, [selectedPageId, t]);
 
   const handleDrop = useCallback(async (event) => {
     event.preventDefault();
@@ -212,7 +214,7 @@ export default function PdfEditor() {
 
     setError('');
     setIsLoading(true);
-    setProgressLabel('Собираем новый PDF...');
+    setProgressLabel(t('pdfEditor.progress.buildingPdf'));
 
     try {
       const output = await PDFDocument.create();
@@ -241,12 +243,12 @@ export default function PdfEditor() {
         `megaconvert-assembled-${Date.now()}.pdf`,
       );
     } catch (exportError) {
-      setError(String(exportError?.message || 'Не удалось собрать PDF локально.'));
+      setError(String(exportError?.message || t('pdfEditor.errors.buildFailed')));
     } finally {
       setIsLoading(false);
       setProgressLabel('');
     }
-  }, [pages, pdfFiles]);
+  }, [pages, pdfFiles, t]);
 
   useEffect(() => {
     const state = location.state;
@@ -263,7 +265,7 @@ export default function PdfEditor() {
 
         if (!file) {
           if (isActive) {
-            setError('Временный PDF уже недоступен. Перетащите документ в редактор еще раз.');
+            setError(t('pdfEditor.errors.handoffExpired'));
           }
           return;
         }
@@ -273,7 +275,7 @@ export default function PdfEditor() {
         }
       } catch (importError) {
         if (isActive) {
-          setError(String(importError?.message || 'Не удалось импортировать PDF из Zen Portal.'));
+          setError(String(importError?.message || t('pdfEditor.errors.handoffImportFailed')));
         }
       } finally {
         if (isActive) {
@@ -287,7 +289,7 @@ export default function PdfEditor() {
     return () => {
       isActive = false;
     };
-  }, [handleImportPdfs, location.pathname, location.state, navigate]);
+  }, [handleImportPdfs, location.pathname, location.state, navigate, t]);
 
   return (
     <MotionToolScene
@@ -314,9 +316,9 @@ export default function PdfEditor() {
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[0.32em] text-white/28">
-                Visual PDF Editor
+                {t('pdfEditor.eyebrow')}
               </div>
-              <h2 className="mt-1 text-xl font-medium text-white/82">PDF Редактор</h2>
+              <h2 className="mt-1 text-xl font-medium text-white/82">{t('pdfEditor.title')}</h2>
             </div>
           </div>
 
@@ -326,7 +328,7 @@ export default function PdfEditor() {
             className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.05] px-4 py-2.5 text-sm text-white/72 transition-colors duration-300 hover:bg-white/[0.1] hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" strokeWidth={1.8} />
-            Назад
+            {t('pdfEditor.back')}
           </button>
         </div>
 
@@ -361,10 +363,10 @@ export default function PdfEditor() {
 
               <div className="space-y-3">
                 <div className="text-xl font-medium tracking-tight text-white/78">
-                  Перетащите один или несколько PDF файлов
+                  {t('pdfEditor.dropTitle')}
                 </div>
                 <div className="text-sm leading-7 text-white/38">
-                  Страницы разложатся в визуальную ленту прямо в браузере. Никакой серверной обработки.
+                  {t('pdfEditor.dropBody')}
                 </div>
               </div>
             </div>
@@ -373,14 +375,14 @@ export default function PdfEditor() {
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="mb-5 flex flex-wrap items-center gap-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-[10px] uppercase tracking-[0.28em] text-white/46">
-                {pages.length} стр.
+                {t('pdfEditor.pagesBadge', { count: pages.length })}
               </div>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-[10px] uppercase tracking-[0.28em] text-white/46">
-                {pdfFiles.length} PDF
+                {t('pdfEditor.pdfBadge', { count: pdfFiles.length })}
               </div>
               {selectedPage ? (
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-[10px] uppercase tracking-[0.28em] text-white/46">
-                  Выбрана стр. {selectedPage.pageNumber}
+                  {t('pdfEditor.selectedPageBadge', { pageNumber: selectedPage.pageNumber })}
                 </div>
               ) : null}
             </div>
@@ -468,7 +470,7 @@ export default function PdfEditor() {
                           <div className="overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#060606]">
                             <img
                               src={page.previewUrl}
-                              alt={`${page.sourceName} page ${page.pageNumber}`}
+                              alt={t('pdfEditor.pageAlt', { name: page.sourceName, pageNumber: page.pageNumber })}
                               className="h-[260px] w-full object-contain"
                             />
                           </div>
@@ -478,7 +480,7 @@ export default function PdfEditor() {
                               {page.sourceName}
                             </div>
                             <div className="text-xs text-white/34">
-                              Страница {page.pageNumber}
+                              {t('pdfEditor.pageLabel', { pageNumber: page.pageNumber })}
                             </div>
                           </div>
                         </div>
@@ -497,7 +499,7 @@ export default function PdfEditor() {
                   className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.05] px-4 py-2.5 text-sm text-white/72 transition-colors duration-300 hover:bg-white/[0.1] hover:text-white"
                 >
                   <Plus className="h-4 w-4" strokeWidth={1.8} />
-                  Добавить PDF
+                  {t('pdfEditor.addPdf')}
                 </button>
 
                 <button
@@ -507,7 +509,7 @@ export default function PdfEditor() {
                   className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.05] px-4 py-2.5 text-sm text-white/72 transition-colors duration-300 hover:bg-white/[0.1] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Search className="h-4 w-4" strokeWidth={1.8} />
-                  Экспорт в OCR
+                  {t('pdfEditor.exportToOcr')}
                 </button>
               </div>
 
@@ -518,7 +520,7 @@ export default function PdfEditor() {
                 className="inline-flex items-center gap-2 rounded-full border border-transparent bg-[linear-gradient(135deg,rgba(99,102,241,0.92),rgba(56,189,248,0.9))] px-5 py-2.5 text-sm font-medium text-white shadow-[0_0_40px_-18px_rgba(99,102,241,0.75)] transition-transform duration-300 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download className="h-4 w-4" strokeWidth={1.8} />
-                Скачать PDF
+                {t('pdfEditor.downloadPdf')}
               </button>
             </div>
           </div>
@@ -526,7 +528,7 @@ export default function PdfEditor() {
 
         {isLoading ? (
           <div className="mt-5 rounded-[22px] border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-white/64">
-            {progressLabel || 'Подготавливаем документ...'}
+            {progressLabel || t('pdfEditor.progress.preparingDocument')}
           </div>
         ) : null}
 

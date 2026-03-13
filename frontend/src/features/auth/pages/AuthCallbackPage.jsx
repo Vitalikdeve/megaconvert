@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import AuthSceneShell from '../components/AuthSceneShell.jsx';
 
 export default function AuthCallbackPage({ onNavigate, onAuthSuccess }) {
+  const { t } = useTranslation();
   const params = useMemo(() => {
     if (typeof window === 'undefined') return new URLSearchParams();
     return new URLSearchParams(window.location.search);
@@ -21,7 +23,7 @@ export default function AuthCallbackPage({ onNavigate, onAuthSuccess }) {
         token: '',
         email,
         provider,
-        message: message || error || 'OAuth callback did not return a valid session.'
+        message: message || error || t('authCallback.defaultError')
       };
     }
 
@@ -30,9 +32,9 @@ export default function AuthCallbackPage({ onNavigate, onAuthSuccess }) {
       token,
       email,
       provider,
-      message: 'Completing secure sign-in...'
+      message: t('authCallback.progress')
     };
-  }, [params]);
+  }, [params, t]);
 
   useEffect(() => {
     if (callbackState.status !== 'success') {
@@ -44,7 +46,7 @@ export default function AuthCallbackPage({ onNavigate, onAuthSuccess }) {
       if (callbackState.email) localStorage.setItem('mc_auth_email', callbackState.email);
       const user = {
         email: callbackState.email,
-        name: callbackState.email ? callbackState.email.split('@')[0] : 'User',
+        name: callbackState.email ? callbackState.email.split('@')[0] : t('userDefaultName'),
         provider: callbackState.provider
       };
       localStorage.setItem('mc_auth_user', JSON.stringify(user));
@@ -60,25 +62,25 @@ export default function AuthCallbackPage({ onNavigate, onAuthSuccess }) {
     } catch {
       // If localStorage is unavailable, keep rendering the callback state and let the user retry.
     }
-  }, [callbackState, onAuthSuccess, onNavigate]);
+  }, [callbackState, onAuthSuccess, onNavigate, t]);
 
   return (
     <AuthSceneShell
       pageKey="auth-callback-page"
-      eyebrow="Identity Callback"
-      title={callbackState.status === 'error' ? 'Sign-in failed' : 'Finishing secure access'}
-      subtitle={callbackState.status === 'error' ? callbackState.message : 'Signed in successfully. Redirecting to MegaConvert...'}
-      sideLabel="Auth Bridge"
-      sideTitle="We are reconnecting your identity to the workspace."
-      sideCopy="This callback route finalizes social or external auth and restores the same local-first product session."
+      eyebrow={t('authCallback.eyebrow')}
+      title={callbackState.status === 'error' ? t('authCallback.errorTitle') : t('authCallback.successTitle')}
+      subtitle={callbackState.status === 'error' ? callbackState.message : t('authCallback.successSubtitle')}
+      sideLabel={t('authCallback.sideLabel')}
+      sideTitle={t('authCallback.sideTitle')}
+      sideCopy={t('authCallback.sideCopy')}
       sidePoints={[
         {
-          title: 'Session continuity',
-          copy: 'The callback writes your session locally, then returns you to the main product flow.'
+          title: t('authCallback.point1Title'),
+          copy: t('authCallback.point1Copy')
         },
         {
-          title: 'One secure handoff',
-          copy: 'OAuth, passkeys and classic auth now converge into the same post-login experience.'
+          title: t('authCallback.point2Title'),
+          copy: t('authCallback.point2Copy')
         }
       ]}
     >
@@ -89,7 +91,7 @@ export default function AuthCallbackPage({ onNavigate, onAuthSuccess }) {
           ) : (
             <>
               <Loader2 size={18} className="animate-spin" />
-              <span className="text-sm font-medium">Completing secure sign-in...</span>
+              <span className="text-sm font-medium">{t('authCallback.progress')}</span>
             </>
           )}
         </div>
