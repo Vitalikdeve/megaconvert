@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Activity,
   ArrowRight,
@@ -205,6 +206,7 @@ export default function WorkspaceV3Page({
   onConsumeMegadropPreparedFile = null,
   recentJobs = []
 }) {
+  const { t } = useTranslation();
   const { isRussian, pick } = useWorkspaceLocale();
   const normalizedPath = normalizeWorkspacePath(path);
   const groups = useMemo(() => getWorkspaceRouteGroups(isRussian), [isRussian]);
@@ -272,7 +274,7 @@ export default function WorkspaceV3Page({
                 <FolderKanban size={18} />
               </span>
               <div>
-                <div className="text-sm font-semibold text-white">Workspace 3.0</div>
+                <div className="text-sm font-semibold text-white">{t('workspaceV3.title')}</div>
                 <div className="text-xs text-slate-400">
                   {pick('Пространственная панель управления', 'Spatial control room')}
                 </div>
@@ -463,7 +465,7 @@ export default function WorkspaceV3Page({
               </section>
 
               <section className="workspace-v3-surface rounded-[2rem] p-5 md:p-6">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">MegaDrop</div>
+                <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{t('legacyV3.megaDrop.title')}</div>
                 <div className="mt-2 text-xl font-semibold text-white">
                   {pick('Прямая передача между устройствами', 'Direct device handoff')}
                 </div>

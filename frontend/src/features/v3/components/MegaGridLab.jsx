@@ -34,14 +34,14 @@ const ICE_SERVERS = [
 const GRID_FORMAT_OPTIONS = [
   {
     id: 'mp4',
-    label: 'Distributed MP4',
+    label: 'distributed-mp4',
     ext: 'mp4',
     mime: 'video/mp4',
     args: ['-i', '{input}', '-movflags', '+faststart', '{output}']
   },
   {
     id: 'webm',
-    label: 'Distributed WebM',
+    label: 'distributed-webm',
     ext: 'webm',
     mime: 'video/webm',
     args: ['-i', '{input}', '{output}']
@@ -1072,6 +1072,7 @@ export default function MegaGridLab() {
   const connectedWorkerCount = Array.from(masterPeersRef.current.values()).filter((peer) => peer?.connected).length;
   const selectedFormatMeta = getSelectedFormat();
   const peerStateTone = buildPeerStateTone(role === 'master' ? connectedWorkerCount > 0 : Boolean(workerPeerRef.current?.connected));
+  const localizedSocketState = t(`legacyV3.megaGrid.socketStates.${socketState}`, { defaultValue: socketState });
 
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8 overflow-hidden">
@@ -1080,7 +1081,7 @@ export default function MegaGridLab() {
         <div className="relative">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/70 dark:border-emerald-400/20 bg-emerald-50/80 dark:bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700 dark:text-emerald-100">
             <Network size={13} />
-            MegaGrid / Distributed FFmpeg
+            {t('legacyV3.megaGrid.eyebrow')}
           </div>
           <h2 className="mt-4 text-3xl md:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             {t('legacyV3.megaGrid.title')}
@@ -1100,7 +1101,7 @@ export default function MegaGridLab() {
         </span>
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
           <ServerCog size={14} />
-          {t('legacyV3.megaGrid.socketLabel')}: {socketState}
+          {t('legacyV3.megaGrid.socketLabel')}: {localizedSocketState}
         </span>
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
           <ShieldCheck size={14} />
@@ -1296,7 +1297,7 @@ export default function MegaGridLab() {
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {(sessionSnapshot?.workers || []).map((worker) => (
                 <div key={worker.socketId} className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{worker.label || `Worker ${worker.socketId.slice(-4)}`}</div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{worker.label || t('legacyV3.megaGrid.workerFallback', { id: worker.socketId.slice(-4) })}</div>
                   <div className="mt-1 text-xs text-slate-500 dark:text-slate-400 break-all">{worker.socketId}</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${worker.ready ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-100' : 'border-slate-200/70 bg-white/80 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'}`}>
@@ -1304,7 +1305,7 @@ export default function MegaGridLab() {
                       {worker.ready ? t('legacyV3.megaGrid.ready') : t('legacyV3.megaGrid.paused')}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      {t('legacyV3.megaGrid.statusLabel')}: {worker.status}
+                      {t('legacyV3.megaGrid.statusLabel')}: {t(`legacyV3.megaGrid.workerStatuses.${worker.status}`, { defaultValue: worker.status })}
                     </span>
                   </div>
                 </div>
@@ -1340,7 +1341,7 @@ export default function MegaGridLab() {
                 </div>
                 {qrCodeUrl ? (
                   <div className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/85 dark:bg-slate-950/40 p-4">
-                    <img src={qrCodeUrl} alt="MegaGrid QR" className="mx-auto h-48 w-48 rounded-2xl" />
+                    <img src={qrCodeUrl} alt={t('legacyV3.megaGrid.qrAlt')} className="mx-auto h-48 w-48 rounded-2xl" />
                     <div className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
                       {t('legacyV3.megaGrid.qrHint')}
                     </div>

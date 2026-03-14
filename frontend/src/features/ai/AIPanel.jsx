@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function AIPanel({
   entry,
@@ -8,10 +9,12 @@ export default function AIPanel({
   predictiveActions = [],
   onAction
 }) {
+  const { t } = useTranslation();
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="text-xs uppercase tracking-widest text-slate-500">AI Panel</div>
-      <h3 className="mt-2 text-lg font-semibold text-slate-900">{entry || 'AI suggestions'}</h3>
+      <div className="text-xs uppercase tracking-widest text-slate-500">{t('sharedUi.aiPanel.label')}</div>
+      <h3 className="mt-2 text-lg font-semibold text-slate-900">{entry || t('sharedUi.aiPanel.emptyTitle')}</h3>
 
       <div className="mt-4 grid gap-2">
         {insights.slice(0, 4).map((item) => (

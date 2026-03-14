@@ -320,7 +320,7 @@ export default function MediaTrimmerPage() {
     <section className="mc-card rounded-3xl p-6 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / Timeline</div>
+          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.eyebrow')}</div>
           <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             {t('legacyTools.mediaTrimmer.title')}
           </h2>
@@ -329,7 +329,7 @@ export default function MediaTrimmerPage() {
           </p>
         </div>
         <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3 text-right min-w-[190px]">
-          <div className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">FFmpeg</div>
+          <div className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.engineLabel')}</div>
           <div className={`mt-1 text-sm font-semibold ${ffmpegReady ? 'text-emerald-700 dark:text-emerald-200' : 'text-slate-700 dark:text-slate-200'}`}>
             {ffmpegReady ? t('legacyTools.mediaTrimmer.engineReady') : t('legacyTools.mediaTrimmer.engineLoading')}
           </div>

@@ -147,7 +147,7 @@ export default function CommandPalette({
         <div className="border-b border-white/[0.08] px-5 pt-4">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] uppercase tracking-[0.28em] text-white/52">
             <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
-            MegaConvert
+            {t('brand.name')}
             <span className="text-white/28">➔</span>
             {currentItem.label}
           </div>

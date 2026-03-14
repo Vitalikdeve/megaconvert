@@ -17,46 +17,7 @@ import it from './i18n/it.json';
 import tr from './i18n/tr.json';
 import vi from './i18n/vi.json';
 import be from './i18n/be.json';
-
-export const SUPPORTED_LANGUAGE_CODES = [
-  'en',
-  'zh',
-  'es',
-  'ar',
-  'pt',
-  'ja',
-  'fr',
-  'de',
-  'ru',
-  'ko',
-  'hi',
-  'id',
-  'it',
-  'tr',
-  'vi',
-  'be',
-];
-
-export const RTL_LANGUAGE_CODES = ['ar'];
-
-export const HEADER_LANGUAGE_OPTIONS = [
-  { code: 'en', nativeLabel: 'English' },
-  { code: 'zh', nativeLabel: '中文' },
-  { code: 'es', nativeLabel: 'Español' },
-  { code: 'ar', nativeLabel: 'العربية' },
-  { code: 'pt', nativeLabel: 'Português' },
-  { code: 'ja', nativeLabel: '日本語' },
-  { code: 'fr', nativeLabel: 'Français' },
-  { code: 'de', nativeLabel: 'Deutsch' },
-  { code: 'ru', nativeLabel: 'Русский' },
-  { code: 'ko', nativeLabel: '한국어' },
-  { code: 'hi', nativeLabel: 'हिन्दी' },
-  { code: 'id', nativeLabel: 'Bahasa Indonesia' },
-  { code: 'it', nativeLabel: 'Italiano' },
-  { code: 'tr', nativeLabel: 'Türkçe' },
-  { code: 'vi', nativeLabel: 'Tiếng Việt' },
-  { code: 'be', nativeLabel: 'Беларуская' },
-];
+import { RTL_LANGUAGE_CODES, SUPPORTED_LANGUAGE_CODES } from './lib/languages.js';
 
 const resources = {
   en: { translation: en },
@@ -138,6 +99,18 @@ const detectInitialLanguage = () => {
   } catch {
     // ignore storage access errors
   }
+  try {
+    const cookieValue = document.cookie
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith('i18nextLng='))
+      ?.slice('i18nextLng='.length);
+    if (cookieValue) {
+      return normalizeLang(decodeURIComponent(cookieValue));
+    }
+  } catch {
+    // ignore cookie access errors
+  }
   return normalizeLang(window.navigator?.language || 'en');
 };
 
@@ -149,6 +122,12 @@ const syncLanguageState = (value) => {
       localStorage.setItem('lang', nextLanguage);
     } catch {
       // ignore storage access errors
+    }
+
+    try {
+      document.cookie = `i18nextLng=${encodeURIComponent(nextLanguage)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    } catch {
+      // ignore cookie access errors
     }
   }
 };
@@ -171,5 +150,5 @@ if (!i18n.isInitialized) {
 
 syncLanguageState(i18n.language);
 
-export { resources, normalizeLang };
+export { resources, normalizeLang, RTL_LANGUAGE_CODES, SUPPORTED_LANGUAGE_CODES };
 export default i18n;

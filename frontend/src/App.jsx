@@ -10,6 +10,7 @@ import { AnimatePresence } from 'framer-motion';
 import {
   Archive,
   ArrowRight,
+  Code2,
   FileText,
   Film,
   Image,
@@ -36,6 +37,7 @@ import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage.jsx';
 import LoginPage from './features/auth/pages/LoginPage.jsx';
 import RegisterPage from './features/auth/pages/RegisterPage.jsx';
 import ResetPasswordPage from './features/auth/pages/ResetPasswordPage.jsx';
+import { BUSINESS_WORKFLOW_CATALOG } from './lib/businessWorkflowCatalog.js';
 import { LAST_TOOL_KEY, writeStoredJson } from './lib/osMemory.js';
 
 const ZenPortal = lazy(() => import('./components/ZenPortal.jsx'));
@@ -53,6 +55,9 @@ const TermsPage = lazy(() => import('./components/legal/TermsPage.jsx'));
 const SmartOcr = lazy(() => import('./components/tools/SmartOcr.jsx'));
 const PdfEditor = lazy(() => import('./components/tools/PdfEditor.jsx'));
 const MegaGrid = lazy(() => import('./components/tools/MegaGrid.jsx'));
+const ToolsPortalPage = lazy(() => import('./pages/ToolsPortalPage.jsx'));
+const BusinessWorkflowPage = lazy(() => import('./pages/BusinessWorkflowPage.jsx'));
+const ApiDashboard = lazy(() => import('./pages/ApiDashboard.jsx'));
 
 function RouteFallback() {
   const { t } = useTranslation();
@@ -197,6 +202,15 @@ export default function App() {
       icon: Network,
     },
     {
+      id: 'api-dashboard',
+      path: '/developers',
+      aliases: ['/api-dashboard', '/api-overview'],
+      group: t('appShell.toolGroups.developers'),
+      label: t('appShell.tools.apiDashboard.label'),
+      caption: t('appShell.tools.apiDashboard.caption'),
+      icon: Code2,
+    },
+    {
       id: 'archive-manager',
       path: '/tools/archive-manager',
       group: t('appShell.toolGroups.files'),
@@ -212,11 +226,30 @@ export default function App() {
       caption: t('appShell.tools.batchWatermark.caption'),
       icon: Stamp,
     },
+    ...BUSINESS_WORKFLOW_CATALOG.map((workflow) => ({
+      id: workflow.id,
+      path: workflow.route,
+      group: workflow.recommendedGroup === 'document'
+        ? t('appShell.toolGroups.documents')
+        : t('appShell.toolGroups.media'),
+      label: t(`${workflow.translationBase}.title`),
+      caption: t(`${workflow.translationBase}.paletteCaption`),
+      icon: workflow.icon,
+    })),
   ], [t]);
 
   const activeToolMeta = useMemo(
-    () => toolItems.find((item) => item.path === location.pathname || item.aliases?.includes(location.pathname)) || toolItems[0],
-    [location.pathname, toolItems],
+    () => (
+      toolItems.find((item) => item.path === location.pathname || item.aliases?.includes(location.pathname))
+      || (location.pathname === '/tools'
+        ? {
+          id: 'tools-portal',
+          path: '/tools',
+          label: t('toolsPortal.eyebrow'),
+        }
+        : toolItems[0])
+    ),
+    [location.pathname, t, toolItems],
   );
 
   useEffect(() => {
@@ -291,7 +324,9 @@ export default function App() {
             <Routes location={location} key={location.pathname}>
               <Route path="/" element={<HomeDashboard />} />
               <Route path="/receive" element={<ZenPortal />} />
-              <Route path="/tools" element={<Navigate to="/tools/image-optimizer" replace />} />
+              <Route path="/tools" element={<ToolsPortalPage />} />
+              <Route path="/developers" element={<ApiDashboard />} />
+              <Route path="/api-dashboard" element={<ApiDashboard />} />
               <Route path="/tools/image-optimizer" element={<ImageOptimizer />} />
               <Route path="/tools/video-compressor" element={<VideoCompressor />} />
               <Route path="/tools/audio-converter" element={<AudioConverter />} />
@@ -301,22 +336,37 @@ export default function App() {
               <Route path="/tools/megagrid" element={<MegaGrid />} />
               <Route path="/tools/archive-manager" element={<ArchiveManager />} />
               <Route path="/tools/batch-watermark" element={<BatchWatermark />} />
+              <Route
+                path="/tools/ai-invoice-scanner"
+                element={<BusinessWorkflowPage workflowId="invoiceScanner" />}
+              />
+              <Route
+                path="/tools/strict-pdfa"
+                element={<BusinessWorkflowPage workflowId="strictPdfA" />}
+              />
+              <Route
+                path="/tools/redact-sensitive-data"
+                element={<BusinessWorkflowPage workflowId="redactSensitiveData" />}
+              />
+              <Route
+                path="/tools/auto-subtitle-generator"
+                element={<BusinessWorkflowPage workflowId="autoSubtitleGenerator" />}
+              />
+              <Route
+                path="/tools/exif-metadata-stripper"
+                element={<BusinessWorkflowPage workflowId="exifMetadataStripper" />}
+              />
+              <Route
+                path="/tools/smart-brand-watermark"
+                element={<BusinessWorkflowPage workflowId="smartBrandWatermark" />}
+              />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/security" element={<SecurityPage />} />
               <Route path="/cookies" element={<CookiesPage />} />
               <Route
                 path="/api-overview"
-                element={(
-                  <SpotlightPage
-                    eyebrow={t('appShell.apiSpotlight.eyebrow')}
-                    title={t('appShell.apiSpotlight.title')}
-                    description={t('appShell.apiSpotlight.description')}
-                    primaryAction={{ label: t('appShell.apiSpotlight.primaryAction'), to: '/login' }}
-                    secondaryAction={{ label: t('appShell.apiSpotlight.secondaryAction'), to: '/' }}
-                    onNavigate={navigate}
-                  />
-                )}
+                element={<Navigate to="/developers" replace />}
               />
               <Route
                 path="/pricing"

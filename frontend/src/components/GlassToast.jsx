@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const ICONS = {
   error: AlertTriangle,
@@ -14,6 +15,7 @@ const CLASSES = {
 };
 
 export default function GlassToast({ toast = null, onClose }) {
+  const { t } = useTranslation();
   if (!toast) return null;
   const tone = toast.type && CLASSES[toast.type] ? toast.type : 'info';
   const Icon = ICONS[tone];
@@ -29,7 +31,7 @@ export default function GlassToast({ toast = null, onClose }) {
             onClick={onClose}
             className="ml-auto text-xs font-semibold opacity-70 hover:opacity-100 transition-all duration-300 ease-out"
           >
-            Закрыть
+            {t('sharedUi.glassToast.close')}
           </button>
         </div>
       </div>

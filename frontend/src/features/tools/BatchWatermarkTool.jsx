@@ -81,7 +81,7 @@ export default function BatchWatermarkTool() {
   ]), [t]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [files, setFiles] = useState([]);
-  const [watermarkText, setWatermarkText] = useState('MegaConvert');
+  const [watermarkText, setWatermarkText] = useState(() => t('legacyTools.batchWatermark.defaultWatermark'));
   const [watermarkColor, setWatermarkColor] = useState('#ffffff');
   const [watermarkPosition, setWatermarkPosition] = useState('center');
   const [status, setStatus] = useState('idle');
@@ -140,7 +140,7 @@ export default function BatchWatermarkTool() {
       resultUrlRef.current = null;
     }
     setFiles([]);
-    setWatermarkText('MegaConvert');
+    setWatermarkText(t('legacyTools.batchWatermark.defaultWatermark'));
     setWatermarkColor('#ffffff');
     setWatermarkPosition('center');
     setStatus('idle');
@@ -248,7 +248,7 @@ export default function BatchWatermarkTool() {
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8">
       <div>
-        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / Batch Watermark</div>
+        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.batchWatermark.eyebrow')}</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
           {t('legacyTools.batchWatermark.title')}
         </h2>

@@ -30,14 +30,14 @@ export default function SmartAssistantPanel({
     <section className="rounded-2xl border border-slate-200 bg-white p-6 ai-panel">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-widest text-slate-500">AI Assistant</div>
+          <div className="text-xs uppercase tracking-widest text-slate-500">{t('legacyAi.smartAssistant.label')}</div>
           <h3 className="mt-2 text-xl font-semibold text-slate-900">{t('legacyAi.smartAssistant.title')}</h3>
           <p className="mt-1 text-sm text-slate-600">
             {t('legacyAi.smartAssistant.description')}
           </p>
         </div>
         <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-          Groq Router
+          {t('legacyAi.smartAssistant.providerBadge')}
         </span>
       </div>
 

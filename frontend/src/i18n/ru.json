@@ -916,7 +916,8 @@
       "documents": "Documents",
       "network": "Network",
       "files": "Files",
-      "navigation": "Navigation"
+      "navigation": "Navigation",
+      "developers": "Разработчики"
     },
     "tools": {
       "zen": {
@@ -952,6 +953,10 @@
       },
       "batchWatermark": {
         "caption": "Bulk overlays"
+      },
+      "apiDashboard": {
+        "label": "API Dashboard",
+        "caption": "Ключи, usage и контроль монетизации"
       }
     },
     "apiSpotlight": {
@@ -1213,5 +1218,731 @@
       "handoffExpired": "The temporary OCR file is no longer available. Drop the PDF again.",
       "externalImportFailed": "Could not import external source into OCR."
     }
+  },
+  "toolsPortal": {
+    "title": "Пространственный портал инструментов для файлов высокой важности.",
+    "fileMeta": {
+      "change": "Сменить файл",
+      "mediaSummary": "Этот медиа-ассет готов к транскрибации, очистке приватных метаданных и брендированному распространению.",
+      "recognized": "Распознано:",
+      "ready": "Файл готов к маршрутизации",
+      "size": "Размер:",
+      "documentSummary": "Этот файл лучше всего подходит для комплаенса, архивирования и структурированного извлечения данных.",
+      "reset": "Начать заново",
+      "genericSummary": "Мы можем направить этот файл в самый подходящий бизнес-workflow с безопасным handoff."
+    },
+    "types": {
+      "video": "Видео",
+      "image": "Изображение",
+      "audio": "Аудио",
+      "file": "Файл",
+      "document": "Документ",
+      "media": "Медиа-ассет"
+    },
+    "description": "Загрузите файл в премиальный intake-слой и откройте бизнес-инструменты для финансов, комплаенса, приватности и бренд-операций.",
+    "actions": {
+      "openWorkflow": "Открыть workflow"
+    },
+    "dropzone": {
+      "description": "Мы локально анализируем файл, сохраняем безопасный handoff и показываем самые релевантные премиальные инструменты без перегруза интерфейса.",
+      "title": "Перетащите файл, чтобы открыть следующий workflow",
+      "button": "Выбрать файл",
+      "hint": "Поддерживаются PDF, офисные документы, изображения, аудио и видео.",
+      "badge": "Премиальный intake-портал"
+    },
+    "eyebrow": "Бизнес-пайплайны",
+    "relevance": {
+      "mediaPriority": "Оптимизировано для изображений, видео и аудио",
+      "complementary": "Также доступно",
+      "documentPriority": "Оптимизировано для PDF и офисных документов",
+      "bestMatch": "Лучшее совпадение"
+    }
+  },
+  "businessWorkflowPage": {
+    "sizeLabel": "Размер:",
+    "noFile": "Загрузите файл в портале инструментов, чтобы прикрепить его к этому workflow.",
+    "handoffReady": "Безопасный handoff готов для этого workflow.",
+    "back": "Назад в портал инструментов",
+    "fileLabel": "Прикрепленный файл",
+    "note": "Этот маршрут уже полностью подготовлен для навигации, локализации и безопасного intake-потока. Дальше можно подключить backend-процессор без переработки UX.",
+    "fileTypeLabel": "Определенный тип:",
+    "badge": "Премиальная оболочка workflow"
+  },
+  "businessWorkflows": {
+    "strictPdfA": {
+      "description": "Нормализует сложные документы в архивные пакеты PDF/A для судов, регуляторов и закупочных команд.",
+      "paletteCaption": "Комплаенс-конвертация в PDF/A",
+      "title": "Convert to Strict PDF/A",
+      "badge": "Архивный комплаенс"
+    },
+    "exifMetadataStripper": {
+      "description": "Удаляет геометки, отпечатки устройства и скрытые метаданные до того, как файлы покинут вашу организацию.",
+      "paletteCaption": "Удаление метаданных перед отправкой",
+      "title": "EXIF/Metadata Stripper",
+      "badge": "Щит приватности"
+    },
+    "redactSensitiveData": {
+      "description": "Находит имена, суммы и конфиденциальные сущности, а затем подготавливает AI-редактирование для безопасного обмена.",
+      "paletteCaption": "ИИ-редактирование чувствительных данных",
+      "title": "Redact Sensitive Data",
+      "badge": "Чувствительные данные"
+    },
+    "autoSubtitleGenerator": {
+      "description": "Транскрибирует аудио или видео в аккуратные субтитры и текст, готовый для глобального распространения.",
+      "paletteCaption": "Создание субтитров и транскриптов",
+      "title": "Auto-Subtitle Generator",
+      "badge": "Речь в текст"
+    },
+    "smartBrandWatermark": {
+      "description": "Накладывает единые логотипы на пакеты медиафайлов, сохраняя презентационное качество для клиентской выдачи.",
+      "paletteCaption": "Пакетное брендирование медиа",
+      "title": "Smart Brand Watermark",
+      "badge": "Бренд-операции"
+    },
+    "invoiceScanner": {
+      "description": "Извлекает поставщиков, суммы, налоговые поля и позиции счета в JSON, готовый для аудита и финансовых операций.",
+      "paletteCaption": "Извлечение данных из инвойсов в JSON",
+      "title": "AI Invoice Scanner",
+      "badge": "Финансовый ИИ"
+    }
+  },
+  "apiDashboard": {
+    "eyebrow": "Платформа для разработчиков",
+    "title": "Встраивайте MegaConvert прямо в свой продукт.",
+    "description": "Генерируйте API-ключи, отслеживайте использование и готовьте монетизацию для local-first и cloud-fallback сценариев конвертации.",
+    "accessBadge": "B2B API-доступ",
+    "currentPlan": "Текущий план",
+    "gatewayStatus": "Cloud-first gateway",
+    "gatewayTitle": "Готово к production-интеграциям",
+    "gatewayDescription": "Выпускайте scoped-ключи, измеряйте объём запросов и ограничивайте доступ платными тарифами до публичного запуска API.",
+    "usageWindow": "Окно использования",
+    "plans": {
+      "free": "Free",
+      "pro": "Pro",
+      "enterprise": "Enterprise"
+    },
+    "actions": {
+      "upgrade": "Перейти на Pro",
+      "generate": "Сгенерировать новый ключ"
+    },
+    "keys": {
+      "title": "Ваши API-ключи",
+      "subtitle": "Управляйте токенами доступа для серверной конвертации, webhook-оркестрации и встроенной автоматизации workflow.",
+      "generate": "Сгенерировать новый ключ",
+      "emptyTitle": "API-ключи ещё не выпущены",
+      "emptyBody": "Создайте защищённый ключ, чтобы подключить ваше приложение к движку конвертации MegaConvert. Выпуск API-ключей доступен на планах Pro и Enterprise.",
+      "columns": {
+        "key": "Ключ",
+        "scope": "Область",
+        "created": "Создан",
+        "lastUsed": "Последнее использование",
+        "status": "Статус"
+      },
+      "scopeGlobal": "Глобальный",
+      "neverUsed": "Никогда",
+      "active": "Активен",
+      "copy": "Скопировать ключ"
+    },
+    "usage": {
+      "eyebrow": "Использование",
+      "title": "Обзор usage",
+      "subtitle": "Просматривайте объём запросов, успешность и задержку ещё до включения live-биллинга.",
+      "metrics": {
+        "requests": "Запросы",
+        "successRate": "Успешность",
+        "avgLatency": "Средняя задержка"
+      },
+      "chartLabel": "Паттерн запросов за 7 дней",
+      "chartHint": "Предпросмотр данных"
+    },
+    "paywall": {
+      "title": "Откройте доступ к MegaConvert API",
+      "description": "Интегрируйте наш local-first и cloud-fallback движок конвертации в свои приложения. Доступно на планах Pro и Enterprise.",
+      "cta": "Перейти на Pro",
+      "dismiss": "Позже"
+    },
+    "toasts": {
+      "generated": "Новый API-ключ создан.",
+      "copied": "API-ключ скопирован в буфер обмена.",
+      "copyFailed": "Не удалось скопировать API-ключ.",
+      "paywall": "Генерация API-ключей доступна на планах Pro и Enterprise."
+    },
+    "usageWindowValue": "30 дн"
+  },
+  "complianceGuard": {
+    "code": "403 - Регион ограничен",
+    "title": "Доступ запрещён для этого региона устройства.",
+    "description": "MegaConvert недоступен в текущем контексте устройства из-за экспортного контроля, санкционного скрининга или региональных compliance-ограничений.",
+    "detectedTimezone": "Определённая таймзона",
+    "unknownTimezone": "Недоступно",
+    "statusLabel": "Статус compliance",
+    "statusValue": "Заблокировано по таймзоне устройства",
+    "explainer": "Таймзона устройства используется как дополнительный compliance-сигнал и сейчас соответствует ограниченной юрисдикции."
+  },
+  "brand": {
+    "name": "MegaConvert"
+  },
+  "sharedUi": {
+    "glassToast": {
+      "close": "Закрыть"
+    },
+    "previewViewer": {
+      "unavailable": "Предпросмотр недоступен.",
+      "imageAlt": "Предпросмотр",
+      "pdfTitle": "PDF-предпросмотр",
+      "docTitle": "Предпросмотр документа",
+      "unsupported": "Этот формат не поддерживает встроенный предпросмотр."
+    },
+    "quickLook": {
+      "loadingPreview": "Загружаем предпросмотр...",
+      "imageAlt": "Предпросмотр Quick Look",
+      "iframeTitle": "Quick Look",
+      "emptyFile": "Файл пустой.",
+      "unavailable": "Предпросмотр для этого формата недоступен.",
+      "label": "Quick Look",
+      "fallbackTitle": "Предпросмотр",
+      "closePreviewAria": "Закрыть предпросмотр"
+    },
+    "aiPanel": {
+      "label": "AI Panel",
+      "emptyTitle": "AI-подсказки"
+    },
+    "batchUploader": {
+      "title": "Пакетная загрузка",
+      "description": "Загрузите несколько файлов и обработайте их как одну очередь.",
+      "selected": "Выбрано: {count}"
+    },
+    "dynamicBatchStack": {
+      "title": "Динамическая очередь",
+      "statuses": {
+        "done": "Готово",
+        "error": "Ошибка",
+        "processing": "Обработка",
+        "queued": "В очереди"
+      }
+    },
+    "historyList": {
+      "empty": "История пока пуста.",
+      "notAvailable": "н/д"
+    },
+    "nextActions": {
+      "title": "Рекомендуемые следующие действия"
+    },
+    "featurePlaceholder": {
+      "eyebrowFallback": "MegaConvert 3.0",
+      "techStack": "Техстек",
+      "rolloutStage": "Этап внедрения",
+      "tbd": "TBD",
+      "skeletonCreated": "Каркас страницы создан."
+    }
+  },
+  "legacyAi": {
+    "smartAssistant": {
+      "label": "AI Assistant",
+      "providerBadge": "Groq Router",
+      "title": "Ассистент по намерению",
+      "description": "Опишите нужный результат, и MegaConvert выберет самый сильный локальный или облачный workflow для файла.",
+      "dropTitle": "Перетащите файл, чтобы запустить AI-сценарий",
+      "dropHint": "Можно перетащить файл сюда или выбрать его с устройства для следующего действия.",
+      "fileLoaded": "Файл загружен",
+      "promptLabel": "Инструкция",
+      "promptPlaceholder": "Например: извлечь текст, конвертировать в PDF или очистить фон.",
+      "routeLabel": "Маршрут:",
+      "stageLabels": {
+        "analyzing": "Анализируем запрос...",
+        "converting": "Запускаем выбранный workflow..."
+      }
+    },
+    "aiStudio": {
+      "badge": "AI Studio",
+      "heroTitle": "Один промпт. Один файл. Один умный пайплайн.",
+      "heroDescription": "AI Studio превращает естественный язык в понятный маршрут конвертации или улучшения, сохраняет интерфейс чистым и по возможности оставляет обработку локальной.",
+      "dropTitle": "Перетащите файл, чтобы открыть AI-слой",
+      "dropDescription": "Добавьте один файл или небольшой пакет, опишите желаемый результат и позвольте MegaConvert собрать следующий workflow вокруг него.",
+      "capabilities": {
+        "webgpu": "WebGPU-ready",
+        "privateFlow": "Приватность по умолчанию"
+      },
+      "batchLaneReady": "Пакетный режим готов",
+      "filesLoaded": "Загружено файлов: {count}",
+      "multiFile": "Пакетная очередь",
+      "pipelineState": "Состояние пайплайна",
+      "optimizingRoute": "Оптимизируем маршрут между локальными и облачными движками.",
+      "standingBy": "Готовы к следующей инструкции.",
+      "promptPlaceholder": "Опишите желаемый результат простыми словами...",
+      "runPipeline": "Запустить пайплайн",
+      "quickLook": "Quick Look",
+      "newRequest": "Новый запрос",
+      "capabilityRack": "Стойка возможностей",
+      "intentDrivenPresets": "Пресеты по намерению",
+      "executionLane": "Исполнительный слой",
+      "localNeuralStack": "Локальный neural stack",
+      "mediaLanes": {
+        "image": "Слой изображений",
+        "audio": "Слой аудио",
+        "video": "Слой видео",
+        "universal": "Универсальный слой"
+      },
+      "promptSuggestions": {
+        "pdfToWord": "Конвертируй этот PDF в редактируемый Word",
+        "audioToMp3": "Очисти это аудио и экспортируй в MP3",
+        "imageToPng": "Преобразуй это изображение в PNG без потери качества",
+        "compressVideo": "Сожми это видео для лёгкой отправки"
+      },
+      "capabilityModules": {
+        "crystalClear": {
+          "title": "Crystal Clear",
+          "copy": "Улучшает статичные изображения, нормализует форматы выдачи и подготавливает более чистый визуальный актив.",
+          "prompt": "Улучши это изображение и экспортируй более чистую версию"
+        },
+        "silence": {
+          "title": "Silence Control",
+          "copy": "Очищает речь, подавляет шум и подготавливает более аккуратный аудиорезультат.",
+          "prompt": "Очисти аудио и экспортируй более качественную версию"
+        },
+        "smartCrop": {
+          "title": "Smart Crop",
+          "copy": "Подготавливает клипы для коротких форматов выдачи и более лёгких медиа-результатов.",
+          "prompt": "Обрежь и оптимизируй этот медиафайл для короткого финального ролика"
+        }
+      },
+      "infoRows": {
+        "browserFirst": "Browser-first исполнение везде, где сценарий может остаться локальным.",
+        "oneFlow": "Один промпт может запустить OCR, конвертацию, очистку или handoff.",
+        "localPrivacy": "По умолчанию файлы остаются на устройстве, если маршрут это поддерживает."
+      },
+      "stageMessages": {
+        "idle": "Готовы к новому запросу.",
+        "analyzing": "Анализируем файл и намерение...",
+        "converting": "Запускаем конвертационный пайплайн..."
+      }
+    }
+  },
+  "legacyTools": {
+    "batchWatermark": {
+      "eyebrow": "Media / Batch Watermark",
+      "title": "Batch Watermark",
+      "description": "Накладывайте аккуратный текстовый watermark на пакет изображений и выгружайте обработанный набор в виде ZIP-архива.",
+      "defaultWatermark": "MegaConvert",
+      "dropTitle": "Перетащите изображения для watermark-пакета",
+      "dropHint": "Поддерживается до {max} изображений в одном пакете.",
+      "selectFiles": "Выбрать файлы",
+      "filesCount": "Готово файлов: {count} из {max}",
+      "totalSize": "Общий размер: {size}",
+      "watermarkTextLabel": "Текст watermark",
+      "watermarkPlaceholder": "Введите текст watermark",
+      "colorLabel": "Цвет watermark",
+      "positionLabel": "Положение",
+      "selectedFiles": "Выбранные файлы",
+      "moreFiles": "+ещё {count} файлов",
+      "submit": "Применить watermark ко всем",
+      "processingCta": "Накладываем watermark...",
+      "progressLabel": "Прогресс",
+      "archiveReady": "Архив готов",
+      "downloadZip": "Скачать ZIP",
+      "positions": {
+        "center": "По центру",
+        "topLeft": "Сверху слева",
+        "topRight": "Сверху справа",
+        "bottomLeft": "Снизу слева",
+        "bottomRight": "Снизу справа"
+      },
+      "statuses": {
+        "initial": "Перетащите файлы, чтобы запустить пакетный watermark.",
+        "filesAdded": "Файлы добавлены. Настройте watermark и запускайте пакет.",
+        "processing": "Накладываем watermark на каждое изображение...",
+        "zipping": "Упаковываем обработанные изображения...",
+        "done": "Пакетный watermark завершён.",
+        "failed": "Пакетный watermark завершился с ошибкой.",
+        "cleared": "Пакет сброшен."
+      },
+      "errors": {
+        "unsupportedFiles": "В этом workflow поддерживаются только изображения.",
+        "maxFiles": "Для пакета сохранены только первые {max} файлов.",
+        "processingFailed": "Не удалось сформировать watermark-пакет."
+      }
+    },
+    "exifScrubber": {
+      "eyebrow": "Privacy / EXIF",
+      "title": "EXIF Scrubber",
+      "privacyMode": "Режим приватности",
+      "description": "Удаляйте EXIF-метаданные из фотографий до того, как файл покинет устройство или организацию.",
+      "dropTitle": "Перетащите изображение для анализа метаданных",
+      "dropHint": "JPEG-файлы очищаются полностью. Остальные форматы проходят без скрытого EXIF-scrub.",
+      "sourceLabel": "Исходный файл",
+      "processedLabel": "Обработанный результат",
+      "sourceAlt": "Предпросмотр исходника",
+      "processedAlt": "Предпросмотр результата",
+      "resultPending": "Очищенный результат появится здесь после обработки.",
+      "run": "Удалить метаданные",
+      "fileStats": "{size} • обнаружено тегов метаданных: {count}",
+      "downloadPrivate": "Скачать приватную копию ({size})",
+      "statuses": {
+        "initial": "Перетащите файл, чтобы просмотреть и очистить метаданные.",
+        "fileLoaded": "Файл загружен. Анализ приватности готов.",
+        "processing": "Удаляем метаданные...",
+        "privacyOff": "Режим приватности отключён. Исходный файл сохранён без изменений.",
+        "nonJpeg": "Для этого формата файл проходит без EXIF-очистки.",
+        "done": "Метаданные успешно удалены.",
+        "failed": "Очистка метаданных не удалась."
+      },
+      "errors": {
+        "scrubFailed": "Не удалось удалить EXIF-метаданные из этого файла."
+      }
+    },
+    "imageCompressor": {
+      "eyebrow": "Media / Image Compression",
+      "title": "Image Optimizer",
+      "description": "Настраивайте сжатие визуально, сравнивайте до и после и выгружайте более лёгкое изображение без потери контроля.",
+      "dropTitle": "Перетащите изображение для оптимизации",
+      "dropHint": "Для локального предпросмотра сжатия поддерживаются JPEG, PNG, WEBP, GIF и BMP.",
+      "selectImage": "Выбрать изображение",
+      "originalLabel": "Исходник",
+      "compressedLabel": "Сжатый",
+      "sliderHint": "Измените ползунок и отпустите его, чтобы пересчитать предпросмотр.",
+      "compareSlider": "Двигайте разделитель, чтобы сравнить оптимизированный результат.",
+      "before": "До",
+      "after": "После",
+      "beforeAlt": "Предпросмотр исходного изображения",
+      "afterAlt": "Предпросмотр сжатого изображения",
+      "downloadCompressed": "Скачать сжатое изображение ({size})",
+      "statuses": {
+        "initial": "Перетащите изображение, чтобы начать оптимизацию.",
+        "fileLoaded": "Изображение загружено. Предпросмотр сжатия готов.",
+        "recomputing": "Пересчитываем предпросмотр изображения...",
+        "updated": "Предпросмотр сжатия обновлён.",
+        "failed": "Предпросмотр сжатия завершился с ошибкой.",
+        "cleared": "Image optimizer сброшен."
+      },
+      "errors": {
+        "unsupportedFiles": "В оптимизаторе поддерживаются только изображения.",
+        "compressionFailed": "Не удалось сжать изображение локально."
+      }
+    },
+    "localMediaConverter": {
+      "eyebrow": "Media / WebAssembly",
+      "engineLabel": "FFmpeg Worker",
+      "title": "Local Media Converter",
+      "description": "Запускайте браузерную конвертацию видео и аудио через локальный FFmpeg-воркер и при желании добавляйте AI-очистку аудиодорожки.",
+      "dropTitle": "Перетащите аудио или видео для локальной конвертации",
+      "dropHint": "Конвертация остаётся на устройстве, если браузер поддерживает движок.",
+      "selectedFile": "Выбранный файл",
+      "outputFormat": "Выходной формат",
+      "start": "Запустить локальную конвертацию",
+      "progressLabel": "Прогресс",
+      "engineReady": "Движок готов",
+      "engineLoading": "Загружаем движок...",
+      "loadingFfmpeg": "Загружаем FFmpeg core...",
+      "processingCta": "Локально конвертируем...",
+      "resultReady": "Локальный результат готов",
+      "downloadResult": "Скачать результат",
+      "dismissError": "Скрыть",
+      "openCloudFallback": "Открыть облачный fallback",
+      "aiEyebrow": "Neural Edge / Audio",
+      "aiSectionTitle": "Опциональная AI-очистка аудио",
+      "aiSectionDescription": "Для аудиоисточников можно убрать шум и стабилизировать речь до экспорта.",
+      "aiEnabled": "AI-очистка включена",
+      "aiDisabled": "AI-очистка выключена",
+      "aiReadyHint": "Включите AI-очистку, чтобы перед экспортом запустить локальный speech-enhancement pass.",
+      "aiAudioOnlyHint": "AI-очистка доступна только для аудио-в-аудио маршрутов.",
+      "aiCleaning": "Очищаем аудио...",
+      "aiProgress": "AI-прогресс",
+      "lastAiRun": "Последний AI-запуск",
+      "voiceEstimated": "Покрытие речи оценено локально.",
+      "modelReady": "Модель готова",
+      "trackCoverage": "Покрытие речи: {percent}%",
+      "inferenceLabel": "Inference",
+      "deviceLabels": {
+        "webgpu": "WebGPU",
+        "wasmFallback": "WASM fallback",
+        "wasm": "WASM"
+      },
+      "formats": {
+        "mp4": "MP4",
+        "webm": "WEBM",
+        "gif": "GIF",
+        "mp3": "MP3",
+        "wav": "WAV"
+      },
+      "statuses": {
+        "ready": "Готово к локальной конвертации.",
+        "fileLoaded": "Файл загружен. Выберите формат и запустите воркер."
+      }
+    },
+    "ocrRecognition": {
+      "eyebrow": "AI / OCR",
+      "title": "OCR Recognition",
+      "description": "Запускайте OCR в браузере, следите за прогрессом, редактируйте распознанный текст и выгружайте plain text результат.",
+      "dropTitle": "Перетащите изображение для распознавания текста",
+      "dropHint": "Лучший результат дают чёткие сканы, скриншоты и контрастные фотографии.",
+      "selectedFile": "Выбранный файл",
+      "languageLabel": "Язык распознавания",
+      "languageValue": "Язык: {language}",
+      "startCta": "Запустить OCR",
+      "recognizingCta": "Распознаём текст...",
+      "progressLabel": "OCR-прогресс",
+      "extractedTitle": "Извлечённый текст",
+      "placeholder": "Распознанный текст появится здесь...",
+      "copy": "Скопировать текст",
+      "copied": "Скопировано",
+      "downloadTxt": "Скачать TXT",
+      "languages": {
+        "russian": "Русский",
+        "english": "English"
+      },
+      "statuses": {
+        "ready": "Готово к распознаванию текста.",
+        "fileLoaded": "Файл загружен. Запускайте OCR, когда будете готовы.",
+        "initializing": "Инициализируем OCR-пайплайн...",
+        "workerInitializing": "Подготавливаем OCR-воркер...",
+        "recognizing": "Распознаём текст...",
+        "ocrProgress": "{status}...",
+        "done": "Текст успешно распознан.",
+        "noText": "Распознавание завершено, но текст не найден.",
+        "failed": "OCR завершился с ошибкой."
+      },
+      "errors": {
+        "selectSource": "Перед запуском OCR выберите исходное изображение.",
+        "recognitionFailed": "Не удалось распознать текст локально.",
+        "moduleInit": "Не удалось инициализировать OCR-модуль.",
+        "clipboardUnavailable": "Доступ к буферу обмена недоступен в этом браузере.",
+        "copyFailed": "Не удалось скопировать распознанный текст."
+      }
+    },
+    "pdfEditor": {
+      "eyebrow": "PDF / Editor",
+      "title": "PDF Editor",
+      "description": "Визуально собирайте PDF-стек, проверяйте первую страницу каждого документа и локально объединяйте всё в один экспорт.",
+      "dropTitle": "Перетащите один или несколько PDF-файлов",
+      "dropHint": "Каждый документ локально получает предпросмотр до объединения.",
+      "addPdf": "Добавить PDF",
+      "clearAll": "Очистить всё",
+      "summary": "Документов: {count} • страниц: {pages}",
+      "emptyState": "Добавьте PDF-файлы, чтобы собрать стек для merge.",
+      "previewUnavailable": "Предпросмотр недоступен",
+      "mergePdf": "Объединить PDF",
+      "mergingCta": "Объединяем PDF...",
+      "downloadResult": "Скачать {name} ({size})",
+      "removeCardAria": "Удалить документ",
+      "documentLabel": "PDF {index}",
+      "previewAlt": "Предпросмотр {name}",
+      "pageCount": "Страниц: {count} • {size}",
+      "statuses": {
+        "initial": "Перетащите PDF-файлы, чтобы начать merge-workflow.",
+        "extracting": "Считываем PDF-предпросмотры...",
+        "added": "Добавлено документов: {count}.",
+        "removed": "Документ удалён из стека.",
+        "cleared": "PDF-стек очищен.",
+        "loadFailed": "Не удалось загрузить переданные PDF-файлы.",
+        "merging": "Собираем объединённый PDF...",
+        "done": "Объединённый PDF готов.",
+        "failed": "Объединение PDF не удалось."
+      },
+      "errors": {
+        "unsupportedFormat": "Здесь поддерживаются только PDF-файлы.",
+        "previewFailed": "Не удалось отрисовать предпросмотр документа.",
+        "filesSkipped": "Некоторые файлы были пропущены: {details}",
+        "addPdfRequired": "Добавьте хотя бы один PDF перед объединением.",
+        "mergeFailed": "Не удалось объединить выбранные PDF-файлы."
+      }
+    },
+    "mediaTrimmer": {
+      "eyebrow": "Media / Timeline",
+      "engineLabel": "FFmpeg",
+      "title": "Media Trimmer",
+      "description": "Обрезайте точный фрагмент локального медиафайла и экспортируйте его без перекодирования всего исходника.",
+      "dropTitle": "Перетащите аудио или видео для обрезки",
+      "dropHint": "Загрузите медиафайл, изучите таймлайн и экспортируйте только нужный фрагмент.",
+      "fileForTrim": "Файл готов к обрезке",
+      "previewSource": "Предпросмотр источника",
+      "totalDuration": "Общая длительность: {duration}",
+      "readingMetadata": "Считываем метаданные...",
+      "timelineLabel": "Таймлайн",
+      "clipLength": "Длина фрагмента:",
+      "startSeconds": "Начало (секунды)",
+      "endSeconds": "Конец (секунды)",
+      "shiftStart": "Сместить начало",
+      "shiftEnd": "Сместить конец",
+      "progressLabel": "Прогресс",
+      "trimFragment": "Обрезать фрагмент",
+      "loadingCta": "Загружаем движок...",
+      "trimmingCta": "Обрезаем фрагмент...",
+      "fragmentReady": "Фрагмент готов",
+      "downloadTrimmed": "Скачать обрезанный файл",
+      "engineReady": "Движок готов",
+      "engineLoading": "Загружаем движок...",
+      "statuses": {
+        "initial": "Перетащите медиафайл, чтобы начать обрезку.",
+        "loadingCore": "Загружаем FFmpeg core...",
+        "coreReady": "FFmpeg core готов.",
+        "coreFailed": "Не удалось загрузить FFmpeg core.",
+        "fileLoaded": "Файл загружен. Считайте метаданные и выберите диапазон.",
+        "metadataFailed": "Не удалось прочитать метаданные медиафайла.",
+        "selectRange": "Выберите диапазон фрагмента на таймлайне.",
+        "trimming": "Обрезаем выбранный фрагмент...",
+        "done": "Обрезка завершена.",
+        "failed": "Обрезка не удалась."
+      },
+      "errors": {
+        "unsupportedBrowser": "В этом браузере недоступен SharedArrayBuffer. Откройте приложение в cross-origin isolated контексте.",
+        "selectFile": "Перед обрезкой выберите медиафайл.",
+        "durationMissing": "Не удалось определить длительность медиафайла.",
+        "invalidRange": "Время окончания должно быть больше времени начала.",
+        "initFailed": "Не удалось инициализировать FFmpeg.",
+        "trimFailed": "Не удалось обрезать выбранный фрагмент."
+      }
+    }
+  },
+  "legacyV3": {
+    "megaDrop": {
+      "eyebrow": "MegaDrop / P2P",
+      "title": "MegaDrop",
+      "connectionActive": "P2P активно",
+      "waitingForDevice": "Ожидание устройства",
+      "socketLabel": "Сокет",
+      "roomLabel": "Комната {roomId}",
+      "joinByCode": "Подключение по коду",
+      "startFromDesktop": "Старт с десктопа",
+      "connect": "Подключиться",
+      "sendFile": "Отправка файла",
+      "reset": "Сбросить",
+      "qrInvite": "QR-приглашение",
+      "roomLink": "Ссылка комнаты",
+      "qrAlt": "MegaDrop QR",
+      "createRoomHint": "Создайте комнату, чтобы показать QR-код.",
+      "receivedFile": "Полученный файл",
+      "waitingForFile": "Ожидание файла...",
+      "socketStates": {
+        "idle": "Ожидание",
+        "connecting": "Подключение",
+        "connected": "Подключено",
+        "reconnecting": "Переподключение",
+        "disconnected": "Отключено"
+      }
+    },
+    "megaGrid": {
+      "eyebrow": "MegaGrid / Distributed FFmpeg",
+      "title": "MegaGrid",
+      "description": "Разбивайте исходный файл на сегменты в браузере, распределяйте работу по устройствам-воркерам и локально собирайте единый финальный медиафайл.",
+      "peerMesh": "Онлайн-пиров: {count}",
+      "linkedToMaster": "Связано с master-узлом",
+      "waitingForPeer": "Ожидание peer-узла",
+      "socketLabel": "Сокет",
+      "clusterBadge": "Распределённый браузерный кластер",
+      "sessionControl": "Управление сессией",
+      "createMasterSession": "Создать master-сессию",
+      "leaveSession": "Покинуть сессию",
+      "joinAsWorker": "Подключиться как worker",
+      "enterCode": "Введите код",
+      "joinWorker": "Присоединиться",
+      "sessionCode": "Код сессии",
+      "shareCodeHint": "Поделитесь этим кодом или QR с устройствами-воркерами.",
+      "nodeConnectedHint": "Этот worker-узел подключён к текущему кластеру.",
+      "masterPipeline": "Master-пайплайн",
+      "sourceVideo": "Исходное видео",
+      "selectVideoTitle": "Выберите исходное видео",
+      "selectVideoHint": "Выберите видео, чтобы распределить его по доступным браузерным worker-узлам.",
+      "segmentSize": "Размер сегмента",
+      "segmentSizeHint": "Более короткие сегменты лучше балансируются между worker-узлами.",
+      "outputFormat": "Выходной формат",
+      "outputFormatHint": "Выберите финальный медиаконтейнер для распределённого рендера.",
+      "progressLabel": "Прогресс",
+      "segmentsLabel": "Сегменты",
+      "startDistributedJob": "Запустить распределённую задачу",
+      "distributedReady": "Распределённый рендер готов",
+      "downloadFinal": "Скачать финальный файл",
+      "workerPool": "Пул worker-узлов",
+      "ready": "Готов",
+      "paused": "Пауза",
+      "statusLabel": "Статус",
+      "noWorkers": "Пока не подключено ни одного worker-узла.",
+      "inviteQr": "QR-приглашение",
+      "workerLink": "Ссылка для worker",
+      "copied": "Скопировано",
+      "copyLink": "Скопировать ссылку",
+      "qrAlt": "MegaGrid QR",
+      "qrHint": "Откройте эту ссылку на другом устройстве, чтобы подключиться как worker-узел.",
+      "linkPending": "Создайте сессию, чтобы получить ссылку для worker-узла.",
+      "workerNode": "Worker-узел",
+      "nodeLabel": "Имя узла",
+      "pauseWorker": "Поставить worker на паузу",
+      "loadEngineAndReady": "Загрузить движок и подготовить узел",
+      "engineLabel": "Движок",
+      "engineLoaded": "Загружен",
+      "engineNotLoaded": "Не загружен",
+      "readyWorkersInCluster": "Готовых worker-узлов",
+      "pipelineTitle": "Как работает MegaGrid",
+      "pipelineBody": "Master разбивает исходник, отправляет сегменты подключённым браузерам по P2P и затем локально собирает возвращённые результаты.",
+      "currentJobFormat": "Текущий формат",
+      "segmentTime": "Длина сегмента",
+      "formats": {
+        "mp4": "Distributed MP4",
+        "webm": "Distributed WEBM"
+      },
+      "workerNodeFallback": "Worker-узел",
+      "workerNodeWithPlatform": "Worker-узел ({platform})",
+      "workerFallback": "Worker {id}",
+      "errors": {
+        "finalizeFailed": "Не удалось собрать финальный распределённый результат.",
+        "workerDropped": "Один из worker-узлов покинул кластер до завершения сегмента.",
+        "workerProcessFailed": "Worker-узел завершился с ошибкой при обработке своего сегмента.",
+        "createSessionFailed": "Не удалось создать сессию MegaGrid.",
+        "invalidSessionCode": "Введите корректный шестизначный код сессии.",
+        "joinSessionFailed": "Не удалось присоединиться к выбранной сессии.",
+        "toggleReadyFailed": "Не удалось обновить состояние готовности worker-узла.",
+        "selectVideo": "Перед запуском распределённой задачи выберите исходное видео.",
+        "noReadyWorkers": "Нужен хотя бы один готовый worker-узел.",
+        "jobStartFailed": "Не удалось запустить распределённую задачу.",
+        "copyFailed": "Не удалось скопировать ссылку для worker.",
+        "coordinatorFailed": "Соединение с координатором завершилось с ошибкой.",
+        "masterClosed": "Master-устройство закрыло сессию.",
+        "sessionClosed": "Сессия больше недоступна."
+      },
+      "statuses": {
+        "connectingWorker": "Подключаем worker-узел...",
+        "createOrJoin": "Создайте сессию или подключитесь к существующему кластеру.",
+        "sessionEnded": "Сессия завершена.",
+        "finalizing": "Собираем возвращённые сегменты...",
+        "done": "Распределённый рендер завершён.",
+        "finalizeFailed": "Не удалось завершить распределённый рендер.",
+        "sendingSegment": "Отправляем сегмент {current} из {total} на worker {worker}...",
+        "segmentReceived": "Получен сегмент {current} из {total}.",
+        "workerProcessing": "Worker обрабатывает сегмент {current}...",
+        "workerReturned": "Worker вернул сегмент {current}.",
+        "gridChannelReady": "P2P-канал с worker {worker} готов.",
+        "workerBound": "Worker привязан к активной сессии.",
+        "creatingSession": "Создаём распределённую сессию...",
+        "sessionCreated": "Сессия создана. Поделитесь кодом с worker-устройствами.",
+        "createSessionFailed": "Создание сессии не удалось.",
+        "workerJoined": "Worker присоединился к кластеру.",
+        "joinSessionFailed": "Подключение к кластеру не удалось.",
+        "workerReady": "Worker готов к задачам.",
+        "workerPaused": "Worker поставлен на паузу.",
+        "segmentingSource": "Разбиваем исходное медиа на сегменты...",
+        "segmentsReady": "Сегментов готово к распределению: {count}.",
+        "jobStartFailed": "Распределённая задача не стартовала.",
+        "coordinatorConnected": "Координатор подключён.",
+        "coordinatorReconnecting": "Переподключаемся к координатору...",
+        "snapshotWithWorkers": "В сети worker-узлов: {workers} • готовы: {ready}.",
+        "snapshotWaiting": "Ожидаем подключения worker-узлов."
+      },
+      "socketStates": {
+        "idle": "Ожидание",
+        "connecting": "Подключение",
+        "connected": "Подключено",
+        "reconnecting": "Переподключение",
+        "disconnected": "Отключено"
+      },
+      "workerStatuses": {
+        "idle": "Ожидание",
+        "busy": "Занят",
+        "ready": "Готов",
+        "paused": "На паузе",
+        "processing": "Обрабатывает"
+      }
+    }
+  },
+  "workspaceV3": {
+    "title": "Workspace 3.0"
   }
 }

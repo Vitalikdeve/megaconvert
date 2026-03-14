@@ -1430,7 +1430,7 @@ export default function ZenPortal({ variant = 'standalone' }) {
             >
               <div className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-white/58">
                 <Radio className="h-3.5 w-3.5" strokeWidth={1.8} />
-                MegaDrop
+                {t('legacyV3.megaDrop.title')}
               </div>
 
               {!webRtcSupported ? (
@@ -1686,7 +1686,7 @@ export default function ZenPortal({ variant = 'standalone' }) {
                   className="flex min-h-[60px] flex-1 items-center justify-center gap-3 rounded-[24px] border border-indigo-300/20 bg-white/[0.08] px-5 text-base font-medium text-white shadow-[0_0_44px_-22px_rgba(129,140,248,0.75)] transition-colors duration-300 hover:bg-white/[0.11]"
                 >
                   <Smartphone className="h-5 w-5" strokeWidth={1.8} />
-                  MegaDrop
+                  {t('legacyV3.megaDrop.title')}
                 </button>
               </div>
             </MotionSection>

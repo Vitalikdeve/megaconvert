@@ -27,6 +27,9 @@ const OAUTH_STATE = new Map();
 // Temporary in-memory storage until DB is connected.
 const users = [];
 const usedResetTokenIds = new Set();
+let registrationTrialPool = null;
+let registrationTrialPoolLoadAttempted = false;
+let registrationTrialPoolInitError = null;
 
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const normalizeOAuthProvider = (value) => {
@@ -38,6 +41,77 @@ const normalizeOAuthProvider = (value) => {
 const createId = () => {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return crypto.randomBytes(16).toString('hex');
+};
+
+const getRegistrationTrialPool = () => {
+  if (registrationTrialPool) return registrationTrialPool;
+  if (registrationTrialPoolLoadAttempted) return null;
+
+  registrationTrialPoolLoadAttempted = true;
+  const connectionString = String(
+    process.env.DATABASE_URL
+      || process.env.POSTGRES_URL
+      || process.env.POSTGRES_PRISMA_URL
+      || ''
+  ).trim();
+
+  if (!connectionString) {
+    return null;
+  }
+
+  try {
+    const { Pool } = require('pg');
+    registrationTrialPool = new Pool({ connectionString });
+    registrationTrialPool.on('error', (error) => {
+      console.error('[auth][trial] postgres pool error:', error);
+    });
+    return registrationTrialPool;
+  } catch (error) {
+    registrationTrialPoolInitError = error;
+    console.error('[auth][trial] postgres init failed:', error);
+    return null;
+  }
+};
+
+const grantRegistrationTrial = async (userId) => {
+  if (!userId) {
+    return { granted: false, skipped: true, reason: 'missing_user_id' };
+  }
+
+  const pool = getRegistrationTrialPool();
+  if (!pool) {
+    if (registrationTrialPoolInitError) {
+      return { granted: false, skipped: true, reason: 'pool_init_failed' };
+    }
+    return { granted: false, skipped: true, reason: 'database_unavailable' };
+  }
+
+  const endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await pool.query(
+    `
+      INSERT INTO user_entitlements (
+        id,
+        user_id,
+        kind,
+        scope,
+        payload,
+        starts_at,
+        ends_at
+      )
+      VALUES (
+        gen_random_uuid(),
+        $1,
+        'trial',
+        'global',
+        '{"plan":"pro","source":"registration_trial"}'::jsonb,
+        now(),
+        $2
+      )
+    `,
+    [userId, endsAt]
+  );
+
+  return { granted: true, endsAt };
 };
 
 const toPublicUser = (user) => ({
@@ -822,6 +896,29 @@ class AuthController {
       updatedAt: now
     };
     users.push(user);
+
+    try {
+      const trialResult = await grantRegistrationTrial(user.id);
+      if (trialResult?.granted) {
+        console.info('[auth][trial] 30-day Pro trial granted:', {
+          userId: user.id,
+          endsAt: trialResult.endsAt
+        });
+      } else if (!trialResult?.skipped) {
+        console.warn('[auth][trial] unexpected registration trial state:', trialResult);
+      }
+    } catch (error) {
+      const userIndex = users.findIndex((item) => item.id === user.id);
+      if (userIndex >= 0) {
+        users.splice(userIndex, 1);
+      }
+      console.error('[auth][trial] failed to grant registration trial:', error);
+      return res.status(500).json({
+        ok: false,
+        code: 'REGISTRATION_TRIAL_FAILED',
+        message: 'Account trial provisioning failed'
+      });
+    }
 
     const token = createSessionToken(user);
     const sessionId = createId();

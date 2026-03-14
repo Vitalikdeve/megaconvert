@@ -763,7 +763,8 @@
       "documents": "Documents",
       "network": "Network",
       "files": "Files",
-      "navigation": "Navigation"
+      "navigation": "Navigation",
+      "developers": "Desenvolvedores"
     },
     "tools": {
       "zen": {
@@ -799,6 +800,10 @@
       },
       "batchWatermark": {
         "caption": "Bulk overlays"
+      },
+      "apiDashboard": {
+        "label": "Painel de API",
+        "caption": "Chaves, uso e controles de monetizacao"
       }
     },
     "apiSpotlight": {
@@ -1213,5 +1218,731 @@
   "toastLoginSuccess": "Signed in successfully.",
   "toastRegisterSuccess": "Account created successfully.",
   "toastRegisterReady": "Account created. You can sign in now.",
-  "toastForgotSuccess": "If this email exists, we sent a password reset link."
+  "toastForgotSuccess": "If this email exists, we sent a password reset link.",
+  "toolsPortal": {
+    "fileMeta": {
+      "recognized": "Recognized:",
+      "size": "Size:",
+      "reset": "Start over",
+      "documentSummary": "This file is best suited for compliance, archival, and structured extraction workflows.",
+      "genericSummary": "We can route this file into the strongest available business workflow with secure handoff.",
+      "change": "Change file",
+      "mediaSummary": "This asset is ready for transcription, privacy cleanup, and branded distribution workflows.",
+      "ready": "File ready for routing"
+    },
+    "description": "Drop a file into the premium intake layer and unlock business-grade workflows for finance, compliance, privacy, and brand operations.",
+    "types": {
+      "video": "Video",
+      "file": "File",
+      "document": "Document",
+      "media": "Media asset",
+      "image": "Image",
+      "audio": "Audio"
+    },
+    "relevance": {
+      "mediaPriority": "Optimized for images, video, and audio",
+      "complementary": "Also available",
+      "documentPriority": "Optimized for PDFs and office documents",
+      "bestMatch": "Best match"
+    },
+    "eyebrow": "Business workflows",
+    "dropzone": {
+      "hint": "Supports PDFs, office documents, images, audio, and video.",
+      "button": "Choose file",
+      "title": "Drop a file to reveal your next workflow",
+      "badge": "Premium intake portal",
+      "description": "We inspect the file locally, preserve the secure handoff, and surface the most relevant premium tools without cluttering the interface."
+    },
+    "title": "Spatial tools portal for high-stakes files.",
+    "actions": {
+      "openWorkflow": "Open workflow"
+    }
+  },
+  "businessWorkflowPage": {
+    "sizeLabel": "Size:",
+    "fileLabel": "Attached file",
+    "handoffReady": "Secure handoff is ready for this workflow.",
+    "back": "Back to tools portal",
+    "badge": "Premium workflow shell",
+    "note": "This route is fully wired for navigation, localization, and secure intake. You can connect the backend business processor next without redesigning the user experience.",
+    "fileTypeLabel": "Detected type:",
+    "noFile": "Upload a file in the tools portal to attach it to this workflow."
+  },
+  "businessWorkflows": {
+    "exifMetadataStripper": {
+      "paletteCaption": "Remove metadata before sharing",
+      "title": "EXIF/Metadata Stripper",
+      "badge": "Privacy shield",
+      "description": "Remove location tags, device fingerprints, and hidden metadata before assets leave your organization."
+    },
+    "autoSubtitleGenerator": {
+      "paletteCaption": "Generate subtitles and transcripts",
+      "title": "Auto-Subtitle Generator",
+      "badge": "Speech to text",
+      "description": "Transcribe audio or video into polished subtitle tracks and review-ready text for global distribution."
+    },
+    "invoiceScanner": {
+      "paletteCaption": "Invoice data extraction to JSON",
+      "title": "AI Invoice Scanner",
+      "badge": "Finance AI",
+      "description": "Extract vendors, totals, tax fields, and line items into audit-ready JSON for finance operations."
+    },
+    "redactSensitiveData": {
+      "paletteCaption": "AI-assisted redaction workflow",
+      "title": "Redact Sensitive Data",
+      "badge": "Sensitive data",
+      "description": "Identify names, amounts, and confidential entities, then prepare AI-assisted redaction for secure sharing."
+    },
+    "strictPdfA": {
+      "paletteCaption": "Compliance-grade PDF/A conversion",
+      "title": "Convert to Strict PDF/A",
+      "badge": "Archival compliance",
+      "description": "Normalize complex documents into long-term archival PDF/A packages for courts, regulators, and procurement teams."
+    },
+    "smartBrandWatermark": {
+      "paletteCaption": "Batch watermarking for branded assets",
+      "title": "Smart Brand Watermark",
+      "badge": "Brand operations",
+      "description": "Apply consistent logo overlays across batches of media while preserving presentation quality for client delivery."
+    }
+  },
+  "apiDashboard": {
+    "eyebrow": "Plataforma para desenvolvedores",
+    "title": "Leve o MegaConvert para dentro do seu proprio produto.",
+    "description": "Gere chaves de API, monitore o uso e prepare a monetizacao para fluxos de conversao local-first com fallback em nuvem.",
+    "accessBadge": "Acesso B2B a API",
+    "currentPlan": "Plano atual",
+    "gatewayStatus": "Gateway cloud-first",
+    "gatewayTitle": "Pronto para integracoes em producao",
+    "gatewayDescription": "Emita chaves com escopo, meca o volume de requisicoes e controle o acesso por planos pagos antes do lancamento publico da API.",
+    "usageWindow": "Janela de uso",
+    "plans": {
+      "free": "Gratis",
+      "pro": "Pro",
+      "enterprise": "Enterprise"
+    },
+    "actions": {
+      "upgrade": "Fazer upgrade para Pro",
+      "generate": "Gerar nova chave"
+    },
+    "keys": {
+      "title": "Suas chaves de API",
+      "subtitle": "Gerencie tokens de acesso para conversao no servidor, orquestracao de webhooks e automacao embarcada de workflows.",
+      "generate": "Gerar nova chave",
+      "emptyTitle": "Nenhuma chave de API foi emitida ainda",
+      "emptyBody": "Gere uma chave segura para conectar seu aplicativo ao motor de conversao da MegaConvert. A criacao de chaves de API esta disponivel nos planos Pro e Enterprise.",
+      "columns": {
+        "key": "Chave",
+        "scope": "Escopo",
+        "created": "Criada em",
+        "lastUsed": "Ultimo uso",
+        "status": "Status"
+      },
+      "scopeGlobal": "Global",
+      "neverUsed": "Nunca",
+      "active": "Ativa",
+      "copy": "Copiar chave"
+    },
+    "usage": {
+      "eyebrow": "Uso",
+      "title": "Visao geral de uso",
+      "subtitle": "Visualize volume de requisicoes, taxa de sucesso e latencia antes de habilitar a cobranca real.",
+      "metrics": {
+        "requests": "Requisicoes",
+        "successRate": "Taxa de sucesso",
+        "avgLatency": "Latencia media"
+      },
+      "chartLabel": "Padrao de requisicoes em 7 dias",
+      "chartHint": "Dados de preview"
+    },
+    "paywall": {
+      "title": "Desbloqueie a API MegaConvert",
+      "description": "Integre nosso motor de conversao local-first e cloud-fallback aos seus proprios aplicativos. Disponivel nos planos Pro e Enterprise.",
+      "cta": "Fazer upgrade para Pro",
+      "dismiss": "Talvez depois"
+    },
+    "toasts": {
+      "generated": "Nova chave de API gerada.",
+      "copied": "Chave de API copiada para a area de transferencia.",
+      "copyFailed": "Nao foi possivel copiar a chave de API.",
+      "paywall": "A geracao de chaves de API esta disponivel nos planos Pro e Enterprise."
+    },
+    "usageWindowValue": "30d"
+  },
+  "complianceGuard": {
+    "code": "403 - Regiao restrita",
+    "title": "Acesso negado para esta regiao do dispositivo.",
+    "description": "O MegaConvert nao esta disponivel neste contexto do dispositivo devido a controles de exportacao, triagem de sancoes ou restricoes regionais de compliance.",
+    "detectedTimezone": "Fuso horario detectado",
+    "unknownTimezone": "Indisponivel",
+    "statusLabel": "Status de compliance",
+    "statusValue": "Bloqueado pela verificacao de fuso do dispositivo",
+    "explainer": "O fuso horario do dispositivo e tratado como um sinal adicional de compliance e atualmente corresponde a uma jurisdicao restrita."
+  },
+  "brand": {
+    "name": "MegaConvert"
+  },
+  "sharedUi": {
+    "glassToast": {
+      "close": "Close"
+    },
+    "previewViewer": {
+      "unavailable": "Preview unavailable.",
+      "imageAlt": "Preview",
+      "pdfTitle": "PDF Preview",
+      "docTitle": "Document Preview",
+      "unsupported": "This format does not support inline preview."
+    },
+    "quickLook": {
+      "loadingPreview": "Loading preview...",
+      "imageAlt": "Quick Look preview",
+      "iframeTitle": "Quick Look",
+      "emptyFile": "The file is empty.",
+      "unavailable": "Preview is unavailable for this format.",
+      "label": "Quick Look",
+      "fallbackTitle": "Preview",
+      "closePreviewAria": "Close preview"
+    },
+    "aiPanel": {
+      "label": "AI Panel",
+      "emptyTitle": "AI suggestions"
+    },
+    "batchUploader": {
+      "title": "Batch upload",
+      "description": "Upload multiple files and process them as a queue.",
+      "selected": "Selected: {count}"
+    },
+    "dynamicBatchStack": {
+      "title": "Dynamic queue",
+      "statuses": {
+        "done": "Done",
+        "error": "Error",
+        "processing": "Processing",
+        "queued": "Queued"
+      }
+    },
+    "historyList": {
+      "empty": "No history yet.",
+      "notAvailable": "n/a"
+    },
+    "nextActions": {
+      "title": "Suggested next actions"
+    },
+    "featurePlaceholder": {
+      "eyebrowFallback": "MegaConvert 3.0",
+      "techStack": "Tech stack",
+      "rolloutStage": "Rollout stage",
+      "tbd": "TBD",
+      "skeletonCreated": "Page shell created."
+    }
+  },
+  "legacyAi": {
+    "smartAssistant": {
+      "label": "AI Assistant",
+      "providerBadge": "Groq Router",
+      "title": "Intent-driven assistant",
+      "description": "Describe the result you want and let MegaConvert route the file through the strongest available workflow.",
+      "dropTitle": "Drop a file to start an AI-assisted flow",
+      "dropHint": "You can drag a file here or browse from the device to prepare the next action.",
+      "fileLoaded": "File loaded",
+      "promptLabel": "Instruction",
+      "promptPlaceholder": "For example: extract the text, convert to PDF, or clean the background.",
+      "routeLabel": "Route:",
+      "stageLabels": {
+        "analyzing": "Analyzing request...",
+        "converting": "Running the selected workflow..."
+      }
+    },
+    "aiStudio": {
+      "badge": "AI Studio",
+      "heroTitle": "One prompt. One file. One intelligent pipeline.",
+      "heroDescription": "AI Studio turns natural language into a clean conversion or enhancement route, keeps the interface focused, and preserves local-first privacy wherever possible.",
+      "dropTitle": "Drop a file to open the AI lane",
+      "dropDescription": "Bring in one file or a small batch, describe the outcome you want, and let MegaConvert compose the next workflow around it.",
+      "capabilities": {
+        "webgpu": "WebGPU-ready",
+        "privateFlow": "Private by design"
+      },
+      "batchLaneReady": "Batch lane ready",
+      "filesLoaded": "{count} files loaded",
+      "multiFile": "Multi-file queue",
+      "pipelineState": "Pipeline state",
+      "optimizingRoute": "Optimizing the route across local and cloud engines.",
+      "standingBy": "Standing by for the next instruction.",
+      "promptPlaceholder": "Describe the result you want in plain language...",
+      "runPipeline": "Run pipeline",
+      "quickLook": "Quick Look",
+      "newRequest": "New request",
+      "capabilityRack": "Capability rack",
+      "intentDrivenPresets": "Intent-driven presets",
+      "executionLane": "Execution lane",
+      "localNeuralStack": "Local-first neural stack",
+      "mediaLanes": {
+        "image": "Image lane",
+        "audio": "Audio lane",
+        "video": "Video lane",
+        "universal": "Universal lane"
+      },
+      "promptSuggestions": {
+        "pdfToWord": "Convert this PDF into an editable Word document",
+        "audioToMp3": "Clean this audio and export it as MP3",
+        "imageToPng": "Convert this image to PNG and keep the quality",
+        "compressVideo": "Compress this video for lightweight sharing"
+      },
+      "capabilityModules": {
+        "crystalClear": {
+          "title": "Crystal Clear",
+          "copy": "Enhance still images, normalize delivery formats, and prepare a cleaner visual asset.",
+          "prompt": "Enhance this image and export a cleaner version"
+        },
+        "silence": {
+          "title": "Silence Control",
+          "copy": "Clean spoken audio, reduce noise, and ship a sharper listening experience.",
+          "prompt": "Clean the audio and export a polished listening version"
+        },
+        "smartCrop": {
+          "title": "Smart Crop",
+          "copy": "Prepare clips for shorter delivery surfaces and lighter media outputs.",
+          "prompt": "Trim and optimize this media for a shorter final cut"
+        }
+      },
+      "infoRows": {
+        "browserFirst": "Browser-first execution whenever the workflow can stay local.",
+        "oneFlow": "One prompt can trigger OCR, conversion, cleanup, or export handoff.",
+        "localPrivacy": "Files stay on device by default whenever the route supports it."
+      },
+      "stageMessages": {
+        "idle": "Ready for a new request.",
+        "analyzing": "Analyzing file and intent...",
+        "converting": "Running the conversion pipeline..."
+      }
+    }
+  },
+  "legacyTools": {
+    "batchWatermark": {
+      "eyebrow": "Media / Batch Watermark",
+      "title": "Batch Watermark",
+      "description": "Apply a clean text watermark across a batch of images and export the processed set as a ZIP archive.",
+      "defaultWatermark": "MegaConvert",
+      "dropTitle": "Drop image files for watermarking",
+      "dropHint": "Supports up to {max} images in a single batch.",
+      "selectFiles": "Select files",
+      "filesCount": "{count} of {max} files ready",
+      "totalSize": "Total size: {size}",
+      "watermarkTextLabel": "Watermark text",
+      "watermarkPlaceholder": "Enter watermark text",
+      "colorLabel": "Watermark color",
+      "positionLabel": "Placement",
+      "selectedFiles": "Selected files",
+      "moreFiles": "+{count} more files",
+      "submit": "Apply watermark batch",
+      "processingCta": "Applying watermark...",
+      "progressLabel": "Progress",
+      "archiveReady": "Archive ready",
+      "downloadZip": "Download ZIP",
+      "positions": {
+        "center": "Center",
+        "topLeft": "Top left",
+        "topRight": "Top right",
+        "bottomLeft": "Bottom left",
+        "bottomRight": "Bottom right"
+      },
+      "statuses": {
+        "initial": "Drop files to start a watermark batch.",
+        "filesAdded": "Files added. Configure the watermark and run the batch.",
+        "processing": "Applying watermark to every image...",
+        "zipping": "Packaging the processed images...",
+        "done": "Batch watermark complete.",
+        "failed": "Batch watermark failed.",
+        "cleared": "Batch reset."
+      },
+      "errors": {
+        "unsupportedFiles": "Only image files are supported in this workflow.",
+        "maxFiles": "Only the first {max} files were kept for this batch.",
+        "processingFailed": "Could not generate the watermark batch."
+      }
+    },
+    "exifScrubber": {
+      "eyebrow": "Privacy / EXIF",
+      "title": "EXIF Scrubber",
+      "privacyMode": "Privacy mode",
+      "description": "Remove EXIF metadata from photo files before sharing them outside your device or organization.",
+      "dropTitle": "Drop an image to inspect metadata",
+      "dropHint": "JPEG files are fully scrubbed. Other image types pass through without hidden EXIF removal.",
+      "sourceLabel": "Source file",
+      "processedLabel": "Processed result",
+      "sourceAlt": "Source preview",
+      "processedAlt": "Processed preview",
+      "resultPending": "The cleaned result will appear here after processing.",
+      "run": "Remove metadata",
+      "fileStats": "{size} • {count} metadata tags detected",
+      "downloadPrivate": "Download private copy ({size})",
+      "statuses": {
+        "initial": "Drop a file to inspect and scrub metadata.",
+        "fileLoaded": "File loaded. Privacy analysis is ready.",
+        "processing": "Removing metadata...",
+        "privacyOff": "Privacy mode is disabled. Original file kept as-is.",
+        "nonJpeg": "This format is passed through without EXIF scrubbing.",
+        "done": "Metadata removed successfully.",
+        "failed": "Metadata scrubbing failed."
+      },
+      "errors": {
+        "scrubFailed": "Could not scrub EXIF metadata from this file."
+      }
+    },
+    "imageCompressor": {
+      "eyebrow": "Media / Image Compression",
+      "title": "Image Optimizer",
+      "description": "Preview compression levels visually, compare the before and after state, and export a lighter image without losing control.",
+      "dropTitle": "Drop an image to optimize",
+      "dropHint": "JPEG, PNG, WEBP, GIF, and BMP are supported for local preview compression.",
+      "selectImage": "Select image",
+      "originalLabel": "Original",
+      "compressedLabel": "Compressed",
+      "sliderHint": "Adjust the slider and release to recompute the preview.",
+      "compareSlider": "Move the divider to compare the optimized result.",
+      "before": "Before",
+      "after": "After",
+      "beforeAlt": "Original image preview",
+      "afterAlt": "Compressed image preview",
+      "downloadCompressed": "Download compressed image ({size})",
+      "statuses": {
+        "initial": "Drop an image to start optimization.",
+        "fileLoaded": "Image loaded. Compression preview is ready.",
+        "recomputing": "Recomputing image preview...",
+        "updated": "Compression preview updated.",
+        "failed": "Compression preview failed.",
+        "cleared": "Image optimizer reset."
+      },
+      "errors": {
+        "unsupportedFiles": "Only image files are supported in the optimizer.",
+        "compressionFailed": "Could not compress the image locally."
+      }
+    },
+    "localMediaConverter": {
+      "eyebrow": "Media / WebAssembly",
+      "engineLabel": "FFmpeg Worker",
+      "title": "Local Media Converter",
+      "description": "Run browser-native video and audio conversion with a local FFmpeg worker and optional AI cleanup for audio sources.",
+      "dropTitle": "Drop audio or video to convert locally",
+      "dropHint": "The conversion stays on device when the browser supports the engine.",
+      "selectedFile": "Selected file",
+      "outputFormat": "Output format",
+      "start": "Start local conversion",
+      "progressLabel": "Progress",
+      "engineReady": "Engine ready",
+      "engineLoading": "Loading engine...",
+      "loadingFfmpeg": "Loading FFmpeg core...",
+      "processingCta": "Converting locally...",
+      "resultReady": "Local result ready",
+      "downloadResult": "Download result",
+      "dismissError": "Dismiss",
+      "openCloudFallback": "Open cloud fallback",
+      "aiEyebrow": "Neural Edge / Audio",
+      "aiSectionTitle": "Optional AI audio cleanup",
+      "aiSectionDescription": "For audio sources, you can remove noise and stabilize the speech track before exporting.",
+      "aiEnabled": "AI cleanup enabled",
+      "aiDisabled": "AI cleanup disabled",
+      "aiReadyHint": "Enable AI cleanup to run the local speech enhancement pass before export.",
+      "aiAudioOnlyHint": "AI cleanup is available only for audio-to-audio routes.",
+      "aiCleaning": "Cleaning audio...",
+      "aiProgress": "AI progress",
+      "lastAiRun": "Last AI run",
+      "voiceEstimated": "Speech coverage estimated locally.",
+      "modelReady": "Model ready",
+      "trackCoverage": "Speech coverage: {percent}%",
+      "inferenceLabel": "Inference",
+      "deviceLabels": {
+        "webgpu": "WebGPU",
+        "wasmFallback": "WASM fallback",
+        "wasm": "WASM"
+      },
+      "formats": {
+        "mp4": "MP4",
+        "webm": "WEBM",
+        "gif": "GIF",
+        "mp3": "MP3",
+        "wav": "WAV"
+      },
+      "statuses": {
+        "ready": "Ready for local conversion.",
+        "fileLoaded": "File loaded. Pick the target format and run the worker."
+      }
+    },
+    "ocrRecognition": {
+      "eyebrow": "AI / OCR",
+      "title": "OCR Recognition",
+      "description": "Run OCR in the browser, monitor progress, edit the extracted text, and export a plain text result.",
+      "dropTitle": "Drop an image to recognize text",
+      "dropHint": "Best results come from clear scans, screenshots, and high-contrast photos.",
+      "selectedFile": "Selected file",
+      "languageLabel": "Recognition language",
+      "languageValue": "Language: {language}",
+      "startCta": "Start OCR",
+      "recognizingCta": "Recognizing text...",
+      "progressLabel": "OCR progress",
+      "extractedTitle": "Extracted text",
+      "placeholder": "Recognized text will appear here...",
+      "copy": "Copy text",
+      "copied": "Copied",
+      "downloadTxt": "Download TXT",
+      "languages": {
+        "russian": "Russian",
+        "english": "English"
+      },
+      "statuses": {
+        "ready": "Ready to recognize text.",
+        "fileLoaded": "File loaded. Start OCR when ready.",
+        "initializing": "Initializing OCR pipeline...",
+        "workerInitializing": "Preparing OCR worker...",
+        "recognizing": "Recognizing text...",
+        "ocrProgress": "{status}...",
+        "done": "Text recognized successfully.",
+        "noText": "Recognition finished, but no text was detected.",
+        "failed": "OCR failed."
+      },
+      "errors": {
+        "selectSource": "Select a source image before running OCR.",
+        "recognitionFailed": "Could not recognize text locally.",
+        "moduleInit": "OCR module could not be initialized.",
+        "clipboardUnavailable": "Clipboard access is unavailable in this browser.",
+        "copyFailed": "Could not copy the recognized text."
+      }
+    },
+    "pdfEditor": {
+      "eyebrow": "PDF / Editor",
+      "title": "PDF Editor",
+      "description": "Visually stack PDF files, inspect the first page of each document, and merge them into a single export locally.",
+      "dropTitle": "Drop one or more PDF files",
+      "dropHint": "Each document is previewed locally before merge.",
+      "addPdf": "Add PDF",
+      "clearAll": "Clear all",
+      "summary": "{count} documents • {pages} pages total",
+      "emptyState": "Add PDF files to build a merged stack.",
+      "previewUnavailable": "Preview unavailable",
+      "mergePdf": "Merge PDFs",
+      "mergingCta": "Merging PDFs...",
+      "downloadResult": "Download {name} ({size})",
+      "removeCardAria": "Remove document",
+      "documentLabel": "PDF {index}",
+      "previewAlt": "Preview of {name}",
+      "pageCount": "{count} pages • {size}",
+      "statuses": {
+        "initial": "Drop PDF files to start the merge workflow.",
+        "extracting": "Reading PDF previews...",
+        "added": "{count} documents added.",
+        "removed": "Document removed from the stack.",
+        "cleared": "PDF stack cleared.",
+        "loadFailed": "Could not load the provided PDF files.",
+        "merging": "Building the merged PDF...",
+        "done": "Merged PDF ready.",
+        "failed": "PDF merge failed."
+      },
+      "errors": {
+        "unsupportedFormat": "Only PDF files are supported here.",
+        "previewFailed": "Could not render the document preview.",
+        "filesSkipped": "Some files were skipped: {details}",
+        "addPdfRequired": "Add at least one PDF before merging.",
+        "mergeFailed": "Could not merge the selected PDF files."
+      }
+    },
+    "mediaTrimmer": {
+      "eyebrow": "Media / Timeline",
+      "engineLabel": "FFmpeg",
+      "title": "Media Trimmer",
+      "description": "Trim a precise fragment from a local media file before exporting it without re-encoding the whole source.",
+      "dropTitle": "Drop audio or video to trim",
+      "dropHint": "Load a media file, inspect the timeline, and export only the exact fragment you need.",
+      "fileForTrim": "File ready for trimming",
+      "previewSource": "Source preview",
+      "totalDuration": "Total duration: {duration}",
+      "readingMetadata": "Reading metadata...",
+      "timelineLabel": "Timeline",
+      "clipLength": "Clip length:",
+      "startSeconds": "Start time (seconds)",
+      "endSeconds": "End time (seconds)",
+      "shiftStart": "Move start handle",
+      "shiftEnd": "Move end handle",
+      "progressLabel": "Progress",
+      "trimFragment": "Trim fragment",
+      "loadingCta": "Loading engine...",
+      "trimmingCta": "Trimming fragment...",
+      "fragmentReady": "Trimmed fragment ready",
+      "downloadTrimmed": "Download trimmed file",
+      "engineReady": "Engine ready",
+      "engineLoading": "Loading engine...",
+      "statuses": {
+        "initial": "Drop a media file to start trimming.",
+        "loadingCore": "Loading FFmpeg core...",
+        "coreReady": "FFmpeg core ready.",
+        "coreFailed": "FFmpeg core failed to load.",
+        "fileLoaded": "File loaded. Read the metadata and choose the range.",
+        "metadataFailed": "Could not read media metadata.",
+        "selectRange": "Select the fragment range on the timeline.",
+        "trimming": "Trimming the selected fragment...",
+        "done": "Trim complete.",
+        "failed": "Trim failed."
+      },
+      "errors": {
+        "unsupportedBrowser": "SharedArrayBuffer is unavailable in this browser. Open the app in a cross-origin isolated context.",
+        "selectFile": "Select a media file before trimming.",
+        "durationMissing": "Could not determine the media duration.",
+        "invalidRange": "The end time must be greater than the start time.",
+        "initFailed": "Could not initialize FFmpeg.",
+        "trimFailed": "Could not trim the selected fragment."
+      }
+    }
+  },
+  "legacyV3": {
+    "megaDrop": {
+      "eyebrow": "MegaDrop / P2P",
+      "title": "MegaDrop",
+      "connectionActive": "P2P active",
+      "waitingForDevice": "Waiting for device",
+      "socketLabel": "Socket",
+      "roomLabel": "Room {roomId}",
+      "joinByCode": "Join by code",
+      "startFromDesktop": "Start from desktop",
+      "connect": "Connect",
+      "sendFile": "Send file",
+      "reset": "Reset",
+      "qrInvite": "QR invite",
+      "roomLink": "Room link",
+      "qrAlt": "MegaDrop QR",
+      "createRoomHint": "Create a room to show the QR code.",
+      "receivedFile": "Received file",
+      "waitingForFile": "Waiting for file...",
+      "socketStates": {
+        "idle": "Idle",
+        "connecting": "Connecting",
+        "connected": "Connected",
+        "reconnecting": "Reconnecting",
+        "disconnected": "Disconnected"
+      }
+    },
+    "megaGrid": {
+      "eyebrow": "MegaGrid / Distributed FFmpeg",
+      "title": "MegaGrid",
+      "description": "Split a source file into browser-side segments, distribute work across worker devices, and merge the result back into one final media export.",
+      "peerMesh": "{count} peers online",
+      "linkedToMaster": "Linked to master node",
+      "waitingForPeer": "Waiting for peer",
+      "socketLabel": "Socket",
+      "clusterBadge": "Distributed browser cluster",
+      "sessionControl": "Session control",
+      "createMasterSession": "Create master session",
+      "leaveSession": "Leave session",
+      "joinAsWorker": "Join as worker",
+      "enterCode": "Enter code",
+      "joinWorker": "Join worker",
+      "sessionCode": "Session code",
+      "shareCodeHint": "Share this code or QR with worker devices.",
+      "nodeConnectedHint": "This worker node is linked to the current cluster.",
+      "masterPipeline": "Master pipeline",
+      "sourceVideo": "Source video",
+      "selectVideoTitle": "Select a source video",
+      "selectVideoHint": "Choose a video to split across available browser workers.",
+      "segmentSize": "Segment size",
+      "segmentSizeHint": "Shorter segments improve balancing across workers.",
+      "outputFormat": "Output format",
+      "outputFormatHint": "Pick the final media container for the distributed render.",
+      "progressLabel": "Progress",
+      "segmentsLabel": "Segments",
+      "startDistributedJob": "Start distributed job",
+      "distributedReady": "Distributed render ready",
+      "downloadFinal": "Download final file",
+      "workerPool": "Worker pool",
+      "ready": "Ready",
+      "paused": "Paused",
+      "statusLabel": "Status",
+      "noWorkers": "No worker nodes are connected yet.",
+      "inviteQr": "Invite QR",
+      "workerLink": "Worker link",
+      "copied": "Copied",
+      "copyLink": "Copy link",
+      "qrAlt": "MegaGrid QR",
+      "qrHint": "Open this link on another device to join as a worker node.",
+      "linkPending": "Create a session to generate a worker invite link.",
+      "workerNode": "Worker node",
+      "nodeLabel": "Node label",
+      "pauseWorker": "Pause worker",
+      "loadEngineAndReady": "Load engine and ready up",
+      "engineLabel": "Engine",
+      "engineLoaded": "Loaded",
+      "engineNotLoaded": "Not loaded",
+      "readyWorkersInCluster": "Ready workers",
+      "pipelineTitle": "How MegaGrid works",
+      "pipelineBody": "The master splits the source, sends segments to connected browsers over P2P, and then assembles the returned outputs locally.",
+      "currentJobFormat": "Current format",
+      "segmentTime": "Segment length",
+      "formats": {
+        "mp4": "Distributed MP4",
+        "webm": "Distributed WEBM"
+      },
+      "workerNodeFallback": "Worker node",
+      "workerNodeWithPlatform": "Worker node ({platform})",
+      "workerFallback": "Worker {id}",
+      "errors": {
+        "finalizeFailed": "Could not assemble the final distributed output.",
+        "workerDropped": "A worker left the cluster before finishing its segment.",
+        "workerProcessFailed": "A worker failed while processing its assigned segment.",
+        "createSessionFailed": "Could not create a MegaGrid session.",
+        "invalidSessionCode": "Enter a valid six-digit session code.",
+        "joinSessionFailed": "Could not join the requested session.",
+        "toggleReadyFailed": "Could not update the worker readiness state.",
+        "selectVideo": "Select a source video before starting the distributed job.",
+        "noReadyWorkers": "At least one ready worker node is required.",
+        "jobStartFailed": "Could not start the distributed job.",
+        "copyFailed": "Could not copy the worker link.",
+        "coordinatorFailed": "The coordinator connection failed.",
+        "masterClosed": "The master device closed the session.",
+        "sessionClosed": "The session is no longer available."
+      },
+      "statuses": {
+        "connectingWorker": "Connecting worker node...",
+        "createOrJoin": "Create a session or join an existing cluster.",
+        "sessionEnded": "Session ended.",
+        "finalizing": "Merging returned segments...",
+        "done": "Distributed render complete.",
+        "finalizeFailed": "Could not finalize the distributed render.",
+        "sendingSegment": "Sending segment {current} of {total} to worker {worker}...",
+        "segmentReceived": "Segment {current} of {total} returned.",
+        "workerProcessing": "Worker is processing segment {current}...",
+        "workerReturned": "Worker returned segment {current}.",
+        "gridChannelReady": "P2P channel ready with worker {worker}.",
+        "workerBound": "Worker bound to the active session.",
+        "creatingSession": "Creating a distributed session...",
+        "sessionCreated": "Session created. Share the code with worker devices.",
+        "createSessionFailed": "Session creation failed.",
+        "workerJoined": "Worker joined the cluster.",
+        "joinSessionFailed": "Joining the cluster failed.",
+        "workerReady": "Worker is ready for tasks.",
+        "workerPaused": "Worker paused.",
+        "segmentingSource": "Segmenting source media...",
+        "segmentsReady": "{count} segments ready for distribution.",
+        "jobStartFailed": "Distributed job failed to start.",
+        "coordinatorConnected": "Coordinator connected.",
+        "coordinatorReconnecting": "Reconnecting to coordinator...",
+        "snapshotWithWorkers": "{workers} workers online • {ready} ready.",
+        "snapshotWaiting": "Waiting for worker nodes to join."
+      },
+      "socketStates": {
+        "idle": "Idle",
+        "connecting": "Connecting",
+        "connected": "Connected",
+        "reconnecting": "Reconnecting",
+        "disconnected": "Disconnected"
+      },
+      "workerStatuses": {
+        "idle": "Idle",
+        "busy": "Busy",
+        "ready": "Ready",
+        "paused": "Paused",
+        "processing": "Processing"
+      }
+    }
+  },
+  "workspaceV3": {
+    "title": "Workspace 3.0"
+  }
 }

@@ -173,9 +173,9 @@ export default function ExifScrubberTool() {
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8">
       <div>
-        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Privacy / EXIF</div>
+        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.exifScrubber.eyebrow')}</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-          EXIF Scrubber
+          {t('legacyTools.exifScrubber.title')}
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-3xl">
           {t('legacyTools.exifScrubber.description')}
@@ -190,10 +190,10 @@ export default function ExifScrubberTool() {
             onChange={(event) => setPrivacyMode(event.target.checked)}
             className="h-4 w-4 accent-cyan-600"
           />
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
-            <ShieldCheck size={16} />
-            Privacy Mode
-          </span>
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 inline-flex items-center gap-2">
+              <ShieldCheck size={16} />
+              {t('legacyTools.exifScrubber.privacyMode')}
+            </span>
         </label>
       </div>
 
@@ -275,13 +275,13 @@ export default function ExifScrubberTool() {
           <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl p-3">
             <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.exifScrubber.sourceLabel')}</div>
             {sourceUrl ? (
-              <img src={sourceUrl} alt="source-preview" className="mt-2 h-56 w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-900" />
+              <img src={sourceUrl} alt={t('legacyTools.exifScrubber.sourceAlt')} className="mt-2 h-56 w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-900" />
             ) : null}
           </div>
           <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl p-3">
             <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.exifScrubber.processedLabel')}</div>
             {processedUrl ? (
-              <img src={processedUrl} alt="processed-preview" className="mt-2 h-56 w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-900" />
+              <img src={processedUrl} alt={t('legacyTools.exifScrubber.processedAlt')} className="mt-2 h-56 w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-900" />
             ) : (
               <div className="mt-2 h-56 w-full rounded-xl border border-slate-200/70 dark:border-white/10 bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
                 {t('legacyTools.exifScrubber.resultPending')}

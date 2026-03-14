@@ -112,7 +112,7 @@ export default function OcrRecognitionTool() {
       if (copyResetRef.current) clearTimeout(copyResetRef.current);
       copyResetRef.current = setTimeout(() => setCopyState('idle'), 2200);
     }
-  }, [recognizedText]);
+  }, [recognizedText, t]);
 
   const onDownloadTxt = useCallback(() => {
     const text = String(recognizedText || '');
@@ -205,7 +205,7 @@ export default function OcrRecognitionTool() {
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8">
       <div>
-        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">AI / OCR</div>
+        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.ocrRecognition.eyebrow')}</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
           {t('legacyTools.ocrRecognition.title')}
         </h2>

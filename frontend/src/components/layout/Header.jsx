@@ -4,7 +4,8 @@ import { Check, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthModal } from '../../features/auth/components/AuthModalProvider.jsx';
-import { HEADER_LANGUAGE_OPTIONS, normalizeLang } from '../../i18n.js';
+import { normalizeLang } from '../../i18n.js';
+import { getSupportedLanguage, SUPPORTED_LANGUAGES } from '../../lib/languages.js';
 import GlassPanel from '../ui/GlassPanel.jsx';
 
 const BRAND_LOGO_MODULES = import.meta.glob('../../assets/logo.{jpg,jpeg,png,webp,svg}', {
@@ -27,8 +28,8 @@ const NAV_ITEMS = [
   },
   {
     labelKey: 'headerApi',
-    to: '/api-overview',
-    match: (pathname) => pathname === '/api-overview',
+    to: '/developers',
+    match: (pathname) => pathname === '/developers' || pathname === '/api-dashboard' || pathname === '/api-overview',
   },
   {
     labelKey: 'headerPricing',
@@ -45,8 +46,7 @@ export default function Header() {
   const [languageMenuPath, setLanguageMenuPath] = useState(null);
   const isLanguageMenuOpen = languageMenuPath === location.pathname;
   const currentLanguage = normalizeLang(i18n.resolvedLanguage || i18n.language || 'en');
-  const currentLanguageOption = HEADER_LANGUAGE_OPTIONS.find((option) => option.code === currentLanguage)
-    || HEADER_LANGUAGE_OPTIONS[0];
+  const currentLanguageOption = getSupportedLanguage(currentLanguage);
 
   useEffect(() => {
     if (!isLanguageMenuOpen) {
@@ -75,13 +75,13 @@ export default function Header() {
           {BRAND_LOGO_SRC ? (
             <img
               src={BRAND_LOGO_SRC}
-              alt="MegaConvert"
+              alt={t('brand.name')}
               className="h-8 w-auto object-contain mix-blend-screen transition-opacity hover:opacity-90 sm:h-10 lg:h-12"
             />
           ) : (
             <span className="text-sm font-medium tracking-[0.02em] text-white/90">
               <span className="bg-gradient-to-r from-white via-white/90 to-cyan-200 bg-clip-text text-transparent drop-shadow-[0_0_14px_rgba(255,255,255,0.16)]">
-                MegaConvert
+                {t('brand.name')}
               </span>
             </span>
           )}
@@ -123,7 +123,7 @@ export default function Header() {
             <span className="inline-flex items-center gap-2 truncate">
               <Globe className="h-4 w-4 shrink-0" strokeWidth={1.8} />
               <span className="hidden truncate text-sm sm:inline">
-                {currentLanguageOption.nativeLabel}
+                {currentLanguageOption.native}
               </span>
             </span>
             <span className="hidden text-[10px] uppercase tracking-[0.22em] text-white/34 lg:inline">
@@ -138,9 +138,9 @@ export default function Header() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute right-0 top-[calc(100%+0.75rem)] z-10 w-[210px] rounded-[28px] border-white/[0.1] bg-[#0a0a0a]/92 p-2 shadow-[0_34px_120px_-48px_rgba(0,0,0,0.92)]"
+                className="absolute right-0 top-[calc(100%+0.75rem)] z-10 max-h-[min(70vh,32rem)] w-[220px] overflow-y-auto rounded-[28px] border-white/[0.1] bg-[#0a0a0a]/92 p-2 shadow-[0_34px_120px_-48px_rgba(0,0,0,0.92)]"
               >
-                {HEADER_LANGUAGE_OPTIONS.map((option) => {
+                {SUPPORTED_LANGUAGES.map((option) => {
                   const isSelected = option.code === currentLanguage;
 
                   return (
@@ -158,7 +158,7 @@ export default function Header() {
                           : 'text-white/64 hover:bg-white/[0.05] hover:text-white',
                       ].join(' ')}
                     >
-                      <span className="truncate">{option.nativeLabel}</span>
+                      <span className="truncate">{option.native}</span>
                       {isSelected ? <Check className="h-4 w-4 shrink-0" strokeWidth={1.8} /> : null}
                     </button>
                   );

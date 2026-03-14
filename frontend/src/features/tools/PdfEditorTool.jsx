@@ -198,7 +198,7 @@ export default function PdfEditorTool() {
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8">
       <div>
-        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">PDF / Editor</div>
+        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.pdfEditor.eyebrow')}</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
           {t('legacyTools.pdfEditor.title')}
         </h2>
@@ -290,7 +290,7 @@ export default function PdfEditorTool() {
                 className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/75 dark:bg-white/5 backdrop-blur-xl p-4 transition-all duration-300 ease-out hover:translate-y-[-1px]"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">PDF {index + 1}</div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.pdfEditor.documentLabel', { index: index + 1 })}</div>
                   <button
                     type="button"
                     onClick={() => removeDocument(doc.id)}
@@ -302,7 +302,7 @@ export default function PdfEditorTool() {
                 </div>
                 <div className="mt-3 overflow-hidden rounded-xl border border-slate-200/70 dark:border-white/10 bg-white dark:bg-slate-900">
                   {doc.firstPagePreview ? (
-                    <img src={doc.firstPagePreview} alt={`preview-${doc.fileName}`} className="h-40 w-full object-contain bg-white" />
+                    <img src={doc.firstPagePreview} alt={t('legacyTools.pdfEditor.previewAlt', { name: doc.fileName })} className="h-40 w-full object-contain bg-white" />
                   ) : (
                     <div className="h-40 w-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-300">{t('legacyTools.pdfEditor.previewUnavailable')}</div>
                   )}

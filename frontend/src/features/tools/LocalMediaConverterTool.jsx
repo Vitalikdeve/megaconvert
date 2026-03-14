@@ -213,7 +213,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
     <section className="mc-card rounded-3xl p-6 md:p-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / WebAssembly</div>
+          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.localMediaConverter.eyebrow')}</div>
           <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             {t('legacyTools.localMediaConverter.title')}
           </h2>
@@ -222,7 +222,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
           </p>
         </div>
         <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-3 backdrop-blur-xl">
-          <div className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">FFmpeg Worker</div>
+          <div className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.localMediaConverter.engineLabel')}</div>
           <div className={`mt-1 text-sm font-semibold ${engineReady ? 'text-emerald-700 dark:text-emerald-200' : 'text-slate-700 dark:text-slate-200'}`}>
             {engineReady ? t('legacyTools.localMediaConverter.engineReady') : t('legacyTools.localMediaConverter.engineLoading')}
           </div>
@@ -355,7 +355,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
             <div className="max-w-2xl">
               <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 <Sparkles size={14} />
-                Neural Edge / Audio
+                {t('legacyTools.localMediaConverter.aiEyebrow')}
               </div>
               <div className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
                 {t('legacyTools.localMediaConverter.aiSectionTitle')}
@@ -393,7 +393,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
             <div className="rounded-2xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                <span>Inference</span>
+                <span>{t('legacyTools.localMediaConverter.inferenceLabel')}</span>
                 {aiModelReady && (
                     <span className="rounded-full border border-emerald-300/60 dark:border-emerald-300/20 bg-emerald-100/80 dark:bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-200">
                     {t('legacyTools.localMediaConverter.modelReady')}
@@ -402,7 +402,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
                 {modelDevice && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-slate-200">
                     <Cpu size={11} />
-                    {modelDevice === 'webgpu' ? 'WebGPU' : 'WASM fallback'}
+                    {modelDevice === 'webgpu' ? t('legacyTools.localMediaConverter.deviceLabels.webgpu') : t('legacyTools.localMediaConverter.deviceLabels.wasmFallback')}
                   </span>
                 )}
               </div>
@@ -420,7 +420,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
                 <div className="font-semibold">{t('legacyTools.localMediaConverter.lastAiRun')}</div>
                 <div className="mt-1 text-xs text-cyan-700 dark:text-cyan-200">
                   {aiCoverageLabel || t('legacyTools.localMediaConverter.voiceEstimated')}
-                  {modelDevice ? ` · ${modelDevice === 'webgpu' ? 'WebGPU' : 'WASM'}` : ''}
+                  {modelDevice ? ` · ${modelDevice === 'webgpu' ? t('legacyTools.localMediaConverter.deviceLabels.webgpu') : t('legacyTools.localMediaConverter.deviceLabels.wasm')}` : ''}
                 </div>
               </div>
             )}

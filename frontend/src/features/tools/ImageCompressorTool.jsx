@@ -195,7 +195,7 @@ export default function ImageCompressorTool() {
   return (
     <section className="mc-card rounded-3xl p-6 md:p-8">
       <div>
-        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / Image Compression</div>
+        <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.imageCompressor.eyebrow')}</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
           {t('legacyTools.imageCompressor.title')}
         </h2>
@@ -291,7 +291,7 @@ export default function ImageCompressorTool() {
               {sourceUrl && (
                 <img
                   src={sourceUrl}
-                  alt="before"
+                  alt={t('legacyTools.imageCompressor.beforeAlt')}
                   className="absolute inset-0 h-full w-full object-contain select-none pointer-events-none"
                 />
               )}
@@ -299,7 +299,7 @@ export default function ImageCompressorTool() {
                 <div className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${comparePosition}%` }}>
                   <img
                     src={compressedUrl}
-                    alt="after"
+                    alt={t('legacyTools.imageCompressor.afterAlt')}
                     className="absolute inset-0 h-full w-full object-contain select-none pointer-events-none"
                   />
                 </div>
