@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { Turnstile } from '@marsidev/react-turnstile';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import AuthModalShell from './AuthModalShell.jsx';
@@ -10,6 +11,10 @@ import {
   authPrimaryButtonClassName,
 } from './authModalStyles.js';
 import { buildAuthEndpoint, parsePayload } from '../lib/authApi.js';
+
+const TURNSTILE_SITE_KEY = String(
+  import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA',
+).trim();
 
 function persistAuthSession({ token, email, user }) {
   if (!token) {
@@ -36,6 +41,7 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (event) => {
@@ -47,6 +53,10 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
     const normalizedEmail = String(email || '').trim().toLowerCase();
     if (!String(name || '').trim() || !normalizedEmail || !password) {
       toast.error(t('auth.validationRequired', 'Please fill in all required fields.'));
+      return;
+    }
+    if (!captchaToken) {
+      toast.error(t('auth.captchaRequired', 'Please complete the captcha challenge.'));
       return;
     }
 
@@ -61,8 +71,9 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
           name: String(name || '').trim(),
           email: normalizedEmail,
           password,
-          captchaToken: '',
-          'cf-turnstile-response': '',
+          turnstileToken: captchaToken,
+          captchaToken,
+          'cf-turnstile-response': captchaToken,
         }),
       });
       const payload = await parsePayload(response);
@@ -150,6 +161,16 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
             required
           />
         </label>
+
+        <div className="auth-turnstile-wrap">
+          <Turnstile
+            siteKey={TURNSTILE_SITE_KEY}
+            onSuccess={(token) => setCaptchaToken(String(token || '').trim())}
+            onExpire={() => setCaptchaToken('')}
+            onError={() => setCaptchaToken('')}
+            options={{ theme: 'dark' }}
+          />
+        </div>
 
         <button
           type="submit"

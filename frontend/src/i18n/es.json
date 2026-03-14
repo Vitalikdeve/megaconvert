@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Configuración avanzada e IA local",
   "planIndividualFeature4": "Se requiere acceso promocional o verificado",
   "pricingPage": {
-    "eyebrow": "Planes y acceso",
-    "subtitle": "Elige un plan pensado para trabajo personal, rendimiento premium o acceso individual basado en promociones.",
-    "popularBadge": "Más popular"
+    "eyebrow": "Planes",
+    "title": "Escala tus flujos de archivos.",
+    "subtitle": "Empieza con 30 dias de Pro gratis. No necesitas tarjeta.",
+    "planLabel": "Plan",
+    "footnote": "Cada cuenta nueva empieza con 30 dias de Pro.",
+    "plans": {
+      "free": {
+        "name": "Gratis",
+        "price": "$0",
+        "description": "Herramientas esenciales para las tareas de cada dia.",
+        "cta": "Empezar",
+        "features": {
+          "fileSize": "Hasta 250 MB por archivo",
+          "engine": "Motor WASM basico",
+          "priority": "Cola del servidor (prioridad normal)",
+          "ads": "Con anuncios"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "Mas popular",
+        "price": "US$9.99/mes",
+        "description": "Libera toda la potencia de la IA local y del procesamiento en la nube.",
+        "ctaGuest": "Iniciar prueba gratis de 30 dias",
+        "ctaAuth": "Ir a facturacion",
+        "features": {
+          "fileSize": "Archivos de hasta 2 GB",
+          "priority": "Servidores de alta prioridad",
+          "batch": "Procesamiento por lotes",
+          "aiBackground": "Eliminacion de fondo con IA",
+          "smartHandoff": "Transferencia inteligente",
+          "adsFree": "Sin anuncios"
+        }
+      },
+      "individual": {
+        "name": "Individual",
+        "price": "Personalizado",
+        "description": "Limites e infraestructura a medida para cargas intensivas.",
+        "cta": "Canjear codigo promo",
+        "features": {
+          "apiAccess": "Acceso a API",
+          "customLimits": "Limites de tamano personalizados",
+          "dedicatedWorkers": "Workers dedicados",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Canjear codigo promo",
+      "subtitle": "Introduce el codigo del admin para desbloquear acceso Individual o beneficios especiales de Pro.",
+      "label": "Codigo promo",
+      "placeholder": "INGRESA-CODIGO",
+      "hint": "Lo llevaremos al espacio de facturacion para completar el canje.",
+      "cancel": "Quizas despues",
+      "submit": "Abrir facturacion",
+      "signIn": "Inicia sesion para canjear",
+      "close": "Cerrar",
+      "empty": "Introduce primero un codigo promo."
+    },
+    "account": {
+      "eyebrow": "Espacio de facturacion",
+      "guestCopy": "Inicia sesion para gestionar facturacion, canjear un codigo del admin y mantener tu acceso Pro en un solo lugar.",
+      "manageTitle": "Acceso Pro",
+      "manageCopy": "La sincronizacion de checkout y beneficios llegara aqui a continuacion. Por ahora, este espacio ya sirve para pasar a upgrade y canjear promos.",
+      "manageCta": "Continuar al checkout",
+      "statusNote": "Cada cuenta nueva recibe 30 dias de Pro automaticamente al registrarse.",
+      "promoSaved": "Codigo promo guardado para canjearlo en facturacion."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "Verificar con SheerID",
       "redirecting": "Redirigiendo a la verificación de SheerID..."
     }
+  },
+  "headerEditors": "Editores",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Estudio creativo",
+    "welcomeTitle": "Un espacio de nivel escritorio para flujos de video, foto, audio y generación.",
+    "welcomeSubtitle": "Elige un estudio para abrir. Este shell premium está pensado para líneas de tiempo, capas, inspectores y copilotos de IA.",
+    "welcomeHint": "Selecciona una herramienta en el dock o entra en uno de los cuatro estudios de abajo.",
+    "openStudio": "Abrir estudio",
+    "placeholderEyebrow": "Superficie del estudio",
+    "placeholderTitle": "Espacio de trabajo de {{name}}",
+    "placeholderBody": "Aquí se integrarán después líneas de tiempo, paneles de inspección, navegadores de recursos y copilotos de IA.",
+    "placeholderStatus": "Shell UI activo",
+    "placeholderAction": "Volver a todos los estudios",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "Editor de video multipista avanzado con subtítulos automáticos por IA y efectos.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Manipulación y retoque profesional de imágenes basado en capas.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "Mezcla, recorte y masterización de audio con alta fidelidad.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Transforma texto en imágenes hiperrealistas con modelos de nueva generación."
+  },
+  "megaPhoto": {
+    "properties": "Propiedades",
+    "opacity": "Opacidad",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Modo de fusión",
+    "blendNormal": "Normal",
+    "blendMultiply": "Multiplicar",
+    "blendScreen": "Trama",
+    "blendOverlay": "Superponer",
+    "layers": "Capas",
+    "layerText": "Capa de texto",
+    "layerSubject": "Capa del sujeto",
+    "layerBackground": "Fondo",
+    "canvasLabel": "Lienzo",
+    "canvasEmpty": "Espacio de trabajo transparente",
+    "visible": "Visible",
+    "hidden": "Oculto",
+    "locked": "Bloqueado",
+    "unlocked": "Desbloqueado",
+    "toolMove": "Mover",
+    "toolCrop": "Recortar",
+    "toolBrush": "Pincel",
+    "toolMagicWand": "Varita mágica",
+    "toolText": "Texto",
+    "toolBlur": "Desenfoque",
+    "toolEraser": "Borrador",
+    "layerEmpty": "Todavia no hay capas",
+    "canvasDropHint": "Suelta una imagen aquí",
+    "canvasDropActive": "Suéltala para colocarla en el lienzo",
+    "layerTypePath": "Trazado",
+    "layerTypeImage": "Imagen",
+    "layerTypeText": "Texto",
+    "layerTypeGroup": "Grupo",
+    "layerTypeObject": "Objeto"
   }
 }

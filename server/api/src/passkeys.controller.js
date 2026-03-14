@@ -174,6 +174,8 @@ function registerPasskeyRoutes(router, {
   setSessionCookie,
   toPublicUser,
   sessionJwtSecret,
+  grantRegistrationTrial = null,
+  logRegistrationTrialOutcome = null,
   persistUsers = null
 }) {
   const persistIfPossible = () => {
@@ -368,6 +370,17 @@ function registerPasskeyRoutes(router, {
           updatedAt: now
         };
         users.push(user);
+
+        if (typeof grantRegistrationTrial === 'function') {
+          try {
+            const trialResult = await grantRegistrationTrial(user.id);
+            if (typeof logRegistrationTrialOutcome === 'function') {
+              logRegistrationTrialOutcome(user.id, trialResult, 'passkey_signup');
+            }
+          } catch (error) {
+            console.error('[auth][trial] failed to grant registration trial during passkey signup:', error);
+          }
+        }
       }
 
       const passkeys = ensurePasskeyArray(user);

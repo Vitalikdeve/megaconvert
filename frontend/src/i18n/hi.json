@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "उन्नत सेटिंग्स और लोकल AI",
   "planIndividualFeature4": "प्रोमो या सत्यापित एक्सेस आवश्यक",
   "pricingPage": {
-    "eyebrow": "प्लान और एक्सेस",
-    "subtitle": "ऐसा प्लान चुनें जो व्यक्तिगत काम, प्रीमियम थ्रूपुट या प्रोमो-आधारित व्यक्तिगत एक्सेस के लिए बनाया गया हो।",
-    "popularBadge": "सबसे लोकप्रिय"
+    "eyebrow": "प्लान",
+    "title": "अपने फाइल वर्कफ्लो को स्केल करें।",
+    "subtitle": "30 दिनों के Pro के साथ मुफ्त शुरुआत करें। क्रेडिट कार्ड की जरूरत नहीं।",
+    "planLabel": "प्लान",
+    "footnote": "हर नया अकाउंट 30 दिनों के Pro के साथ शुरू होता है।",
+    "plans": {
+      "free": {
+        "name": "मुफ्त",
+        "price": "$0",
+        "description": "रोजमर्रा के कामों के लिए जरूरी टूल्स।",
+        "cta": "शुरू करें",
+        "features": {
+          "fileSize": "प्रति फाइल 250MB तक",
+          "engine": "बेसिक WASM इंजन",
+          "priority": "सर्वर कतार (सामान्य प्राथमिकता)",
+          "ads": "विज्ञापन शामिल"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "सबसे लोकप्रिय",
+        "price": "$9.99/माह",
+        "description": "लोकल AI और क्लाउड प्रोसेसिंग की पूरी ताकत खोलें।",
+        "ctaGuest": "30-दिन का मुफ्त ट्रायल शुरू करें",
+        "ctaAuth": "बिलिंग पर जाएं",
+        "features": {
+          "fileSize": "2GB तक की फाइलें",
+          "priority": "हाई-प्रायोरिटी सर्वर",
+          "batch": "बैच प्रोसेसिंग",
+          "aiBackground": "AI बैकग्राउंड रिमूवल",
+          "smartHandoff": "स्मार्ट हैंडऑफ",
+          "adsFree": "बिना विज्ञापन"
+        }
+      },
+      "individual": {
+        "name": "इंडिविजुअल",
+        "price": "कस्टम",
+        "description": "भारी वर्कलोड के लिए कस्टम लिमिट और इंफ्रास्ट्रक्चर।",
+        "cta": "प्रोमो कोड रिडीम करें",
+        "features": {
+          "apiAccess": "API एक्सेस",
+          "customLimits": "कस्टम साइज लिमिट",
+          "dedicatedWorkers": "डेडिकेटेड वर्कर",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "प्रोमो कोड रिडीम करें",
+      "subtitle": "इंडिविजुअल एक्सेस या खास Pro फायदे खोलने के लिए एडमिन दिया हुआ कोड दर्ज करें।",
+      "label": "प्रोमो कोड",
+      "placeholder": "कोड दर्ज करें",
+      "hint": "हम इसे रिडेम्प्शन के लिए बिलिंग वर्कस्पेस में भेज देंगे।",
+      "cancel": "बाद में",
+      "submit": "बिलिंग खोलें",
+      "signIn": "रिडीम करने के लिए साइन इन करें",
+      "close": "बंद करें",
+      "empty": "पहले एक प्रोमो कोड दर्ज करें।"
+    },
+    "account": {
+      "eyebrow": "बिलिंग वर्कस्पेस",
+      "guestCopy": "बिलिंग मैनेज करने, एडमिन प्रोमो कोड रिडीम करने और अपना Pro एक्सेस एक ही जगह रखने के लिए साइन इन करें।",
+      "manageTitle": "Pro एक्सेस",
+      "manageCopy": "चेकआउट और entitlement sync यहीं जोड़ी जाएगी। फिलहाल यह workspace upgrade handoff और promo redemption के लिए तैयार है।",
+      "manageCta": "चेकआउट जारी रखें",
+      "statusNote": "हर नए अकाउंट को रजिस्ट्रेशन पर 30 दिनों का Pro अपने आप मिलता है।",
+      "promoSaved": "प्रोमो कोड बिलिंग रिडेम्प्शन के लिए सेव हो गया।"
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "SheerID से सत्यापित करें",
       "redirecting": "SheerID सत्यापन पर रीडायरेक्ट किया जा रहा है..."
     }
+  },
+  "headerEditors": "एडिटर्स",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "क्रिएटिव स्टूडियो",
+    "welcomeTitle": "वीडियो, फोटो, ऑडियो और जनरेटिव वर्कफ़्लो के लिए एक डेस्कटॉप-ग्रेड स्पेस।",
+    "welcomeSubtitle": "खोलने के लिए एक स्टूडियो चुनें। यह प्रीमियम शेल टाइमलाइन, लेयर्स, इंस्पेक्टर और AI को-पायलट्स के लिए बनाया गया है।",
+    "welcomeHint": "डॉक से कोई टूल चुनें या नीचे दिए गए चार स्टूडियो में से किसी एक में जाएँ।",
+    "openStudio": "स्टूडियो खोलें",
+    "placeholderEyebrow": "स्टूडियो सरफेस",
+    "placeholderTitle": "{{name}} वर्कस्पेस",
+    "placeholderBody": "टाइमलाइन, इंस्पेक्टर पैनल, एसेट ब्राउज़र और AI को-पायलट जल्द ही यहीं डॉक होंगे।",
+    "placeholderStatus": "UI शेल सक्रिय है",
+    "placeholderAction": "सभी स्टूडियो पर वापस जाएँ",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "AI ऑटो-कैप्शन और इफेक्ट्स वाला उन्नत मल्टी-ट्रैक वीडियो एडिटर।",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "प्रोफेशनल लेयर-आधारित इमेज मैनिपुलेशन और रिटचिंग।",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "हाई-फिडेलिटी ऑडियो मिक्सिंग, ट्रिमिंग और मास्टरिंग।",
+    "aiName": "MegaGen AI",
+    "aiDescription": "नेक्स्ट-जेन मॉडलों की मदद से टेक्स्ट को हाइपर-रियलिस्टिक इमेज में बदलें।"
+  },
+  "megaPhoto": {
+    "properties": "प्रॉपर्टीज़",
+    "opacity": "अपारदर्शिता",
+    "opacityValue": "{{value}}%",
+    "blendMode": "ब्लेंड मोड",
+    "blendNormal": "सामान्य",
+    "blendMultiply": "मल्टिप्लाई",
+    "blendScreen": "स्क्रीन",
+    "blendOverlay": "ओवरले",
+    "layers": "लेयर्स",
+    "layerText": "टेक्स्ट लेयर",
+    "layerSubject": "सब्जेक्ट लेयर",
+    "layerBackground": "बैकग्राउंड",
+    "canvasLabel": "कैनवास",
+    "canvasEmpty": "पारदर्शी कार्यक्षेत्र",
+    "visible": "दृश्य",
+    "hidden": "छिपा हुआ",
+    "locked": "लॉक्ड",
+    "unlocked": "अनलॉक्ड",
+    "toolMove": "मूव",
+    "toolCrop": "क्रॉप",
+    "toolBrush": "ब्रश",
+    "toolMagicWand": "मैजिक वैंड",
+    "toolText": "टेक्स्ट",
+    "toolBlur": "ब्लर",
+    "toolEraser": "इरेज़र",
+    "layerEmpty": "अभी कोई लेयर नहीं है",
+    "canvasDropHint": "यहाँ एक इमेज छोड़ें",
+    "canvasDropActive": "छोड़ते ही यह कैनवास पर रखी जाएगी",
+    "layerTypePath": "पाथ",
+    "layerTypeImage": "इमेज",
+    "layerTypeText": "टेक्स्ट",
+    "layerTypeGroup": "ग्रुप",
+    "layerTypeObject": "ऑब्जेक्ट"
   }
 }

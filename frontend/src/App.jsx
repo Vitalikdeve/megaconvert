@@ -58,12 +58,19 @@ const ToolsPortalPage = lazy(() => import('./pages/ToolsPortalPage.jsx'));
 const BusinessWorkflowPage = lazy(() => import('./pages/BusinessWorkflowPage.jsx'));
 const ApiDashboard = lazy(() => import('./pages/ApiDashboard.jsx'));
 const PricingPage = lazy(() => import('./pages/PricingPage.jsx'));
+const AccountBillingPage = lazy(() => import('./pages/AccountBillingPage.jsx'));
+const BlogIndex = lazy(() => import('./pages/blog/BlogIndex.jsx'));
+const BlogPost = lazy(() => import('./pages/blog/BlogPost.jsx'));
+const StudioLayout = lazy(() => import('./pages/editors/StudioLayout.jsx'));
 
-function RouteFallback() {
+function RouteFallback({ fullScreen = false }) {
   const { t } = useTranslation();
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-[#030303] px-4 text-white">
+    <div className={[
+      'flex w-full items-center justify-center bg-[#030303] px-4 text-white',
+      fullScreen ? 'h-screen' : 'min-h-[calc(100vh-4rem)]',
+    ].join(' ')}>
       <GlassPanel className="flex h-[320px] w-[min(620px,calc(100vw-2rem))] flex-col items-center justify-center gap-5 px-8 text-center">
         <div className="h-16 w-16 animate-pulse rounded-full border border-white/[0.08] bg-white/[0.04]" />
         <div className="text-sm uppercase tracking-[0.28em] text-white/28">
@@ -80,6 +87,7 @@ export default function App() {
   const { t } = useTranslation();
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const isStudioRoute = location.pathname === '/editors' || location.pathname.startsWith('/editors/');
   const apiBase = useMemo(
     () => String(import.meta.env.VITE_API_BASE || '/api').trim() || '/api',
     [],
@@ -190,6 +198,13 @@ export default function App() {
   const activeToolMeta = useMemo(
     () => (
       toolItems.find((item) => item.path === location.pathname || item.aliases?.includes(location.pathname))
+      || ((location.pathname === '/editors' || location.pathname.startsWith('/editors/'))
+        ? {
+          id: 'editors',
+          path: '/editors',
+          label: t('headerEditors', 'Editors'),
+        }
+        : null)
       || (location.pathname === '/tools'
         ? {
           id: 'tools-portal',
@@ -265,96 +280,120 @@ export default function App() {
     navigate(item.path, item.state ? { state: item.state } : undefined);
   }, [deferredInstallPrompt, navigate]);
 
+  const routeShell = (
+    <AnimatePresence mode="wait">
+      <Suspense fallback={<RouteFallback fullScreen={isStudioRoute} />}>
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<HomeDashboard />} />
+          <Route path="/receive" element={<ZenPortal />} />
+          <Route path="/tools" element={<ToolsPortalPage />} />
+          <Route path="/developers" element={<ApiDashboard />} />
+          <Route path="/api-dashboard" element={<ApiDashboard />} />
+          <Route path="/tools/image-optimizer" element={<ImageOptimizer />} />
+          <Route path="/tools/video-compressor" element={<VideoCompressor />} />
+          <Route path="/tools/audio-converter" element={<AudioConverter />} />
+          <Route path="/tools/video-to-gif" element={<VideoToGif />} />
+          <Route path="/tools/smart-ocr" element={<SmartOcr />} />
+          <Route path="/tools/pdf-editor" element={<PdfEditor />} />
+          <Route path="/tools/megagrid" element={<MegaGrid />} />
+          <Route path="/tools/archive-manager" element={<ArchiveManager />} />
+          <Route path="/tools/batch-watermark" element={<BatchWatermark />} />
+          <Route
+            path="/tools/ai-invoice-scanner"
+            element={<BusinessWorkflowPage workflowId="invoiceScanner" />}
+          />
+          <Route
+            path="/tools/strict-pdfa"
+            element={<BusinessWorkflowPage workflowId="strictPdfA" />}
+          />
+          <Route
+            path="/tools/redact-sensitive-data"
+            element={<BusinessWorkflowPage workflowId="redactSensitiveData" />}
+          />
+          <Route
+            path="/tools/auto-subtitle-generator"
+            element={<BusinessWorkflowPage workflowId="autoSubtitleGenerator" />}
+          />
+          <Route
+            path="/tools/exif-metadata-stripper"
+            element={<BusinessWorkflowPage workflowId="exifMetadataStripper" />}
+          />
+          <Route
+            path="/tools/smart-brand-watermark"
+            element={<BusinessWorkflowPage workflowId="smartBrandWatermark" />}
+          />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+          <Route path="/cookies" element={<CookiesPage />} />
+          <Route
+            path="/api-overview"
+            element={<Navigate to="/developers" replace />}
+          />
+          <Route
+            path="/pricing"
+            element={<PricingPage />}
+          />
+          <Route
+            path="/blog"
+            element={<BlogIndex />}
+          />
+          <Route
+            path="/blog/:slug"
+            element={<BlogPost />}
+          />
+          <Route
+            path="/editors"
+            element={<StudioLayout />}
+          />
+          <Route
+            path="/editors/photo"
+            element={<StudioLayout />}
+          />
+          <Route
+            path="/account/billing"
+            element={<AccountBillingPage />}
+          />
+          <Route
+            path="/login"
+            element={<LoginPage apiBase={apiBase} onNavigate={navigate} />}
+          />
+          <Route
+            path="/register"
+            element={<RegisterPage apiBase={apiBase} onNavigate={navigate} />}
+          />
+          <Route
+            path="/forgot-password"
+            element={<ForgotPasswordPage apiBase={apiBase} onNavigate={navigate} />}
+          />
+          <Route
+            path="/reset-password"
+            element={<ResetPasswordPage apiBase={apiBase} onNavigate={navigate} />}
+          />
+          <Route
+            path="/auth/callback"
+            element={<AuthCallbackPage onNavigate={navigate} />}
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </AnimatePresence>
+  );
+
   return (
     <>
-      <MainLayout>
-        <AnimatePresence mode="wait">
-          <Suspense fallback={<RouteFallback />}>
-            <Routes location={location} key={location.pathname}>
-              <Route path="/" element={<HomeDashboard />} />
-              <Route path="/receive" element={<ZenPortal />} />
-              <Route path="/tools" element={<ToolsPortalPage />} />
-              <Route path="/developers" element={<ApiDashboard />} />
-              <Route path="/api-dashboard" element={<ApiDashboard />} />
-              <Route path="/tools/image-optimizer" element={<ImageOptimizer />} />
-              <Route path="/tools/video-compressor" element={<VideoCompressor />} />
-              <Route path="/tools/audio-converter" element={<AudioConverter />} />
-              <Route path="/tools/video-to-gif" element={<VideoToGif />} />
-              <Route path="/tools/smart-ocr" element={<SmartOcr />} />
-              <Route path="/tools/pdf-editor" element={<PdfEditor />} />
-              <Route path="/tools/megagrid" element={<MegaGrid />} />
-              <Route path="/tools/archive-manager" element={<ArchiveManager />} />
-              <Route path="/tools/batch-watermark" element={<BatchWatermark />} />
-              <Route
-                path="/tools/ai-invoice-scanner"
-                element={<BusinessWorkflowPage workflowId="invoiceScanner" />}
-              />
-              <Route
-                path="/tools/strict-pdfa"
-                element={<BusinessWorkflowPage workflowId="strictPdfA" />}
-              />
-              <Route
-                path="/tools/redact-sensitive-data"
-                element={<BusinessWorkflowPage workflowId="redactSensitiveData" />}
-              />
-              <Route
-                path="/tools/auto-subtitle-generator"
-                element={<BusinessWorkflowPage workflowId="autoSubtitleGenerator" />}
-              />
-              <Route
-                path="/tools/exif-metadata-stripper"
-                element={<BusinessWorkflowPage workflowId="exifMetadataStripper" />}
-              />
-              <Route
-                path="/tools/smart-brand-watermark"
-                element={<BusinessWorkflowPage workflowId="smartBrandWatermark" />}
-              />
-              <Route path="/terms" element={<TermsPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
-              <Route path="/security" element={<SecurityPage />} />
-              <Route path="/cookies" element={<CookiesPage />} />
-              <Route
-                path="/api-overview"
-                element={<Navigate to="/developers" replace />}
-              />
-              <Route
-                path="/pricing"
-                element={<PricingPage />}
-              />
-              <Route
-                path="/login"
-                element={<LoginPage apiBase={apiBase} onNavigate={navigate} />}
-              />
-              <Route
-                path="/register"
-                element={<RegisterPage apiBase={apiBase} onNavigate={navigate} />}
-              />
-              <Route
-                path="/forgot-password"
-                element={<ForgotPasswordPage apiBase={apiBase} onNavigate={navigate} />}
-              />
-              <Route
-                path="/reset-password"
-                element={<ResetPasswordPage apiBase={apiBase} onNavigate={navigate} />}
-              />
-              <Route
-                path="/auth/callback"
-                element={<AuthCallbackPage onNavigate={navigate} />}
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </AnimatePresence>
-      </MainLayout>
+      {isStudioRoute ? routeShell : <MainLayout>{routeShell}</MainLayout>}
 
-      <CommandPalette
-        open={isPaletteOpen}
-        onOpenChange={setIsPaletteOpen}
-        items={toolItems}
-        activeTool={activeToolMeta.id}
-        installAvailable={Boolean(deferredInstallPrompt)}
-        onSelect={handleSelectTool}
-      />
+      {isStudioRoute ? null : (
+        <CommandPalette
+          open={isPaletteOpen}
+          onOpenChange={setIsPaletteOpen}
+          items={toolItems}
+          activeTool={activeToolMeta.id}
+          installAvailable={Boolean(deferredInstallPrompt)}
+          onSelect={handleSelectTool}
+        />
+      )}
     </>
   );
 }

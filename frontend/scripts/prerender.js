@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { CONVERSIONS } from '../src/seo/conversions.js';
+import { BLOG_POSTS } from '../src/data/blogPosts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,6 +71,19 @@ const escapeHtml = (value) => String(value || '')
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#39;');
+const stripMarkdown = (value) => String(value || '')
+  .replace(/\[\[[^\]]+\]\]/g, ' ')
+  .replace(/^#{1,6}\s+/gm, '')
+  .replace(/```[\s\S]*?```/g, ' ')
+  .replace(/`([^`]+)`/g, '$1')
+  .replace(/\*\*([^*]+)\*\*/g, '$1')
+  .replace(/\*([^*]+)\*/g, '$1')
+  .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+  .replace(/^[-*+]\s+/gm, '')
+  .replace(/^\d+\.\s+/gm, '')
+  .replace(/\n+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
 
 if (fs.existsSync(convertDir)) {
   fs.rmSync(convertDir, { recursive: true, force: true });
@@ -175,6 +189,132 @@ const pageTemplate = ({ title, description, canonicalPath, headline, body, ctaHr
 </html>`;
 };
 
+const blogIndexTemplate = () => {
+  const postsMarkup = BLOG_POSTS.map((post) => `        <a class="story" href="/blog/${escapeHtml(post.slug)}">
+          <div class="eyebrow">${escapeHtml(post.category)}</div>
+          <h2>${escapeHtml(post.title)}</h2>
+          <p>${escapeHtml(post.excerpt)}</p>
+          <div class="meta">${escapeHtml(post.readTime)} • ${escapeHtml(post.tags.join(' • '))}</div>
+        </a>`).join('\n');
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'MegaConvert Blog',
+    description: 'Technical guides for file conversion, video compression, and hybrid WASM + edge infrastructure.',
+    url: `${siteUrl}/blog`,
+  };
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MegaConvert Blog | Premium Guides for File Workflows</title>
+    <meta name="description" content="Technical guides on file conversion, HEIC, MP4 delivery, and the hybrid WASM + edge architecture behind modern file tools." />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MegaConvert Blog | Premium Guides for File Workflows" />
+    <meta property="og:description" content="Technical guides on file conversion, HEIC, MP4 delivery, and the hybrid WASM + edge architecture behind modern file tools." />
+    <meta property="og:url" content="${siteUrl}/blog" />
+    <link rel="canonical" href="${siteUrl}/blog" />
+    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+    <style>
+      body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:#030303;color:#f8fafc}
+      .wrap{max-width:1080px;margin:0 auto;padding:72px 24px}
+      .hero{padding:40px;border-radius:32px;border:1px solid rgba(255,255,255,0.08);background:linear-gradient(180deg,rgba(10,14,22,0.96),rgba(6,9,16,0.92));box-shadow:0 30px 120px -54px rgba(59,130,246,0.36)}
+      .eyebrow{display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:rgba(186,230,253,.82)}
+      h1{margin:24px 0 12px;font-size:52px;line-height:1.02;letter-spacing:-.05em}
+      .sub{max-width:760px;color:rgba(255,255,255,.64);font-size:19px;line-height:1.8}
+      .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:24px}
+      .story{display:block;padding:26px;border-radius:28px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:inherit;text-decoration:none}
+      .story h2{margin:14px 0 10px;font-size:28px;line-height:1.1;letter-spacing:-.03em}
+      .story p{margin:0;color:rgba(255,255,255,.62);line-height:1.75}
+      .meta{margin-top:16px;font-size:14px;color:rgba(255,255,255,.42)}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero">
+        <div class="eyebrow">Editorial Engine</div>
+        <h1>MegaConvert Blog</h1>
+        <p class="sub">Deep guides on HEIC, MP4 delivery, privacy-first conversion, and the hybrid WASM + edge systems that make file products feel instant.</p>
+      </section>
+      <section class="grid">
+${postsMarkup}
+      </section>
+    </div>
+  </body>
+</html>`;
+};
+
+const blogPostTemplate = (post) => {
+  const canonicalPath = `/blog/${post.slug}`;
+  const previewText = stripMarkdown(post.markdown).slice(0, 560);
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    headline: post.title,
+    description: post.description,
+    datePublished: post.publishedAt,
+    dateModified: post.publishedAt,
+    author: {
+      '@type': 'Organization',
+      name: 'MegaConvert',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'MegaConvert',
+    },
+    mainEntityOfPage: `${siteUrl}${canonicalPath}`,
+  };
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(post.title)} | MegaConvert Blog</title>
+    <meta name="description" content="${escapeHtml(post.description)}" />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="${escapeHtml(post.title)} | MegaConvert Blog" />
+    <meta property="og:description" content="${escapeHtml(post.description)}" />
+    <meta property="og:url" content="${siteUrl}${canonicalPath}" />
+    <link rel="canonical" href="${siteUrl}${canonicalPath}" />
+    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+    <style>
+      body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:#030303;color:#f8fafc}
+      .wrap{max-width:860px;margin:0 auto;padding:72px 24px}
+      .hero{padding:36px;border-radius:32px;border:1px solid rgba(255,255,255,0.08);background:linear-gradient(180deg,rgba(9,13,22,0.96),rgba(4,7,13,0.94));box-shadow:0 34px 120px -60px rgba(56,189,248,0.34)}
+      .back{display:inline-block;margin-bottom:24px;color:rgba(255,255,255,.62);text-decoration:none}
+      .category{display:inline-block;padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.72)}
+      h1{margin:24px 0 12px;font-size:48px;line-height:1.04;letter-spacing:-.05em}
+      .meta{color:rgba(255,255,255,.46);font-size:14px}
+      .excerpt{margin-top:14px;color:rgba(255,255,255,.62);font-size:19px;line-height:1.8}
+      .article{margin-top:28px;padding:34px;border-radius:32px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03)}
+      .article p{margin:0;color:rgba(255,255,255,.72);font-size:18px;line-height:1.9}
+      .cta{display:inline-block;margin-top:24px;padding:12px 20px;border-radius:999px;background:#fff;color:#020617;font-weight:700;text-decoration:none}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <a class="back" href="/blog">← Back to blog</a>
+      <section class="hero">
+        <div class="category">${escapeHtml(post.category)}</div>
+        <h1>${escapeHtml(post.title)}</h1>
+        <div class="meta">${escapeHtml(post.readTime)} • ${escapeHtml(post.publishedAt)}</div>
+        <p class="excerpt">${escapeHtml(post.excerpt)}</p>
+      </section>
+      <section class="article">
+        <p>${escapeHtml(previewText)}...</p>
+        <a class="cta" href="/">Try MegaConvert now</a>
+      </section>
+    </div>
+  </body>
+</html>`;
+};
+
 const writeLocaleCopies = (canonicalPath, htmlByLocale = null) => {
   for (const locale of localePrefixes) {
     const localePath = `/${locale}${canonicalPath}`;
@@ -262,6 +402,12 @@ for (const guide of guides) {
   writeLocaleCopies(pathName, html);
 }
 
+writeFile('blog/index.html', blogIndexTemplate());
+
+for (const post of BLOG_POSTS) {
+  writeFile(`blog/${post.slug}/index.html`, blogPostTemplate(post));
+}
+
 for (const route of trustRoutes) {
   const html = pageTemplate({
     title: `${route.replace('/', '').replaceAll('-', ' ') || 'Home'} | MegaConvert`,
@@ -281,6 +427,7 @@ const allRoutes = [
   ...trustRoutes,
   ...coreSeoLandings.map((item) => item.path),
   ...guides.map((item) => `/guides/${item.slug}`),
+  ...BLOG_POSTS.map((item) => `/blog/${item.slug}`),
   ...CONVERSIONS.map((item) => `/convert/${item.slug}`),
   ...legacyAliases.map((item) => `/convert/${item.slug}`)
 ];
@@ -316,4 +463,4 @@ Sitemap: ${siteUrl}/sitemap.xml
 
 writeFile('robots.txt', robotsTxt);
 
-console.log(`Prerendered ${CONVERSIONS.length} conversion pages + SEO hubs, guides, and trust landings.`);
+console.log(`Prerendered ${CONVERSIONS.length} conversion pages + blog, guides, and trust landings.`);

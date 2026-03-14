@@ -3,22 +3,11 @@ import { AnimatePresence } from 'framer-motion';
 import { Check, Globe } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
+import logoImage from '../../assets/logo.jpg';
 import { useAuthModal } from '../../features/auth/components/AuthModalProvider.jsx';
 import { normalizeLang } from '../../i18n.js';
 import { getSupportedLanguage, SUPPORTED_LANGUAGES } from '../../lib/languages.js';
 import GlassPanel from '../ui/GlassPanel.jsx';
-
-const BRAND_LOGO_MODULES = import.meta.glob('../../assets/logo.{jpg,jpeg,png,webp,svg}', {
-  eager: true,
-  import: 'default',
-});
-
-const BRAND_LOGO_SRC = BRAND_LOGO_MODULES['../../assets/logo.jpg']
-  || BRAND_LOGO_MODULES['../../assets/logo.jpeg']
-  || BRAND_LOGO_MODULES['../../assets/logo.png']
-  || BRAND_LOGO_MODULES['../../assets/logo.webp']
-  || BRAND_LOGO_MODULES['../../assets/logo.svg']
-  || null;
 
 const NAV_ITEMS = [
   {
@@ -33,8 +22,21 @@ const NAV_ITEMS = [
   },
   {
     labelKey: 'headerPricing',
+    fallback: 'Pricing',
     to: '/pricing',
     match: (pathname) => pathname === '/pricing',
+  },
+  {
+    labelKey: 'headerEditors',
+    fallback: 'Editors',
+    to: '/editors',
+    match: (pathname) => pathname === '/editors' || pathname.startsWith('/editors/'),
+  },
+  {
+    labelKey: 'headerBlog',
+    fallback: 'Blog',
+    to: '/blog',
+    match: (pathname) => pathname === '/blog' || pathname.startsWith('/blog/'),
   },
 ];
 
@@ -70,21 +72,13 @@ export default function Header() {
       <div className="flex min-w-0 items-center">
         <Link
           to="/"
-          className="inline-flex items-center transition-opacity duration-300 hover:opacity-90"
+          className="flex items-center gap-2"
         >
-          {BRAND_LOGO_SRC ? (
-            <img
-              src={BRAND_LOGO_SRC}
-              alt={t('brand.name')}
-              className="h-8 w-auto object-contain mix-blend-screen transition-opacity hover:opacity-90 sm:h-10 lg:h-12"
-            />
-          ) : (
-            <span className="text-sm font-medium tracking-[0.02em] text-white/90">
-              <span className="bg-gradient-to-r from-white via-white/90 to-cyan-200 bg-clip-text text-transparent drop-shadow-[0_0_14px_rgba(255,255,255,0.16)]">
-                {t('brand.name')}
-              </span>
-            </span>
-          )}
+          <img
+            src={logoImage}
+            alt="MegaConvert Logo"
+            className="h-10 w-auto object-contain mix-blend-screen transition-opacity hover:opacity-90 sm:h-12"
+          />
         </Link>
       </div>
 
@@ -100,7 +94,7 @@ export default function Header() {
                 isActive ? 'text-white' : 'text-white/60 hover:text-white',
               ].join(' ')}
             >
-              {t(item.labelKey)}
+              {t(item.labelKey, item.fallback)}
             </Link>
           );
         })}

@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "高度な設定とローカル AI",
   "planIndividualFeature4": "プロモまたは認証済みアクセスが必要です",
   "pricingPage": {
-    "eyebrow": "プランとアクセス",
-    "subtitle": "個人利用、プレミアム処理性能、またはプロモベースの個人アクセス向けに設計されたプランを選択してください。",
-    "popularBadge": "最も人気"
+    "eyebrow": "プラン",
+    "title": "ファイルワークフローを加速する。",
+    "subtitle": "新規登録で Pro を 30 日間無料。クレジットカードは不要です。",
+    "planLabel": "プラン",
+    "footnote": "新規アカウントには自動で 30 日間の Pro が付きます。",
+    "plans": {
+      "free": {
+        "name": "無料",
+        "price": "$0",
+        "description": "日常タスクに必要な基本ツールをまとめました。",
+        "cta": "はじめる",
+        "features": {
+          "fileSize": "1 ファイル 250MB まで",
+          "engine": "基本 WASM エンジン",
+          "priority": "サーバーキュー（通常優先）",
+          "ads": "広告あり"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "一番人気",
+        "price": "$9.99/月",
+        "description": "ローカル AI とクラウド処理のフルパワーを解放します。",
+        "ctaGuest": "30 日間無料トライアルを開始",
+        "ctaAuth": "請求設定へ",
+        "features": {
+          "fileSize": "最大 2GB のファイル",
+          "priority": "高優先度サーバー",
+          "batch": "バッチ処理",
+          "aiBackground": "AI 背景除去",
+          "smartHandoff": "スマートハンドオフ",
+          "adsFree": "広告なし"
+        }
+      },
+      "individual": {
+        "name": "個人向け",
+        "price": "個別見積もり",
+        "description": "大きな負荷に合わせて制限と基盤を個別に設計します。",
+        "cta": "プロモコードを利用",
+        "features": {
+          "apiAccess": "API アクセス",
+          "customLimits": "カスタム容量制限",
+          "dedicatedWorkers": "専用ワーカー",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "プロモコードを利用",
+      "subtitle": "管理者から発行されたコードを入力して、個人向けアクセスや特別な Pro 特典を有効にします。",
+      "label": "プロモコード",
+      "placeholder": "コードを入力",
+      "hint": "請求ワークスペースに引き継いで適用します。",
+      "cancel": "あとで",
+      "submit": "請求を開く",
+      "signIn": "サインインして利用",
+      "close": "閉じる",
+      "empty": "先にプロモコードを入力してください。"
+    },
+    "account": {
+      "eyebrow": "請求ワークスペース",
+      "guestCopy": "サインインすると、請求管理、管理者発行コードの利用、Pro アクセスの管理を 1 か所で行えます。",
+      "manageTitle": "Pro アクセス",
+      "manageCopy": "チェックアウトと特典同期はこの画面に集約されます。現時点でも、アップグレード導線とプロモ利用の受け皿として使えます。",
+      "manageCta": "チェックアウトへ進む",
+      "statusNote": "新規アカウントには登録時に自動で 30 日間の Pro が付与されます。",
+      "promoSaved": "プロモコードを請求適用用に保存しました。"
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "SheerID で確認",
       "redirecting": "SheerID の確認にリダイレクトしています..."
     }
+  },
+  "headerEditors": "エディター",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "クリエイティブスタジオ",
+    "welcomeTitle": "動画・写真・音声・生成ワークフローを1つにまとめたデスクトップ級の空間。",
+    "welcomeSubtitle": "開くスタジオを選択してください。このプレミアムシェルはタイムライン、レイヤー、インスペクター、AI コパイロットのために設計されています。",
+    "welcomeHint": "ドックからツールを選ぶか、下の4つのスタジオのいずれかに入ってください。",
+    "openStudio": "スタジオを開く",
+    "placeholderEyebrow": "スタジオサーフェス",
+    "placeholderTitle": "{{name}} ワークスペース",
+    "placeholderBody": "今後ここにタイムライン、インスペクターパネル、アセットブラウザ、AI コパイロットが配置されます。",
+    "placeholderStatus": "UI シェル稼働中",
+    "placeholderAction": "すべてのスタジオに戻る",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "AI 自動字幕とエフェクトを備えた高度なマルチトラック動画エディター。",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "レイヤーベースの本格的な画像加工とレタッチ。",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "高音質のオーディオミックス、トリミング、マスタリング。",
+    "aiName": "MegaGen AI",
+    "aiDescription": "次世代モデルを使ってテキストを超高精細な画像へ変換。"
+  },
+  "megaPhoto": {
+    "properties": "プロパティ",
+    "opacity": "不透明度",
+    "opacityValue": "{{value}}%",
+    "blendMode": "描画モード",
+    "blendNormal": "通常",
+    "blendMultiply": "乗算",
+    "blendScreen": "スクリーン",
+    "blendOverlay": "オーバーレイ",
+    "layers": "レイヤー",
+    "layerText": "テキストレイヤー",
+    "layerSubject": "被写体レイヤー",
+    "layerBackground": "背景",
+    "canvasLabel": "キャンバス",
+    "canvasEmpty": "透明ワークスペース",
+    "visible": "表示",
+    "hidden": "非表示",
+    "locked": "ロック済み",
+    "unlocked": "ロック解除",
+    "toolMove": "移動",
+    "toolCrop": "切り抜き",
+    "toolBrush": "ブラシ",
+    "toolMagicWand": "自動選択",
+    "toolText": "テキスト",
+    "toolBlur": "ぼかし",
+    "toolEraser": "消しゴム",
+    "layerEmpty": "まだレイヤーはありません",
+    "canvasDropHint": "ここに画像をドロップ",
+    "canvasDropActive": "放してキャンバスに配置",
+    "layerTypePath": "パス",
+    "layerTypeImage": "画像",
+    "layerTypeText": "テキスト",
+    "layerTypeGroup": "グループ",
+    "layerTypeObject": "オブジェクト"
   }
 }

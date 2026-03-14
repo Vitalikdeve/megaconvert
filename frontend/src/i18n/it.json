@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Impostazioni avanzate e AI locale",
   "planIndividualFeature4": "Richiede accesso promozionale o verificato",
   "pricingPage": {
-    "eyebrow": "Piani e accesso",
-    "subtitle": "Scegli un piano pensato per il lavoro personale, il throughput premium o l'accesso individuale basato su promozione.",
-    "popularBadge": "Più richiesto"
+    "eyebrow": "Piani",
+    "title": "Scala i tuoi flussi di lavoro sui file.",
+    "subtitle": "Inizia con 30 giorni di Pro gratis. Nessuna carta richiesta.",
+    "planLabel": "Piano",
+    "footnote": "Ogni nuovo account parte con 30 giorni di Pro.",
+    "plans": {
+      "free": {
+        "name": "Gratuito",
+        "price": "$0",
+        "description": "Strumenti essenziali per le attivita di ogni giorno.",
+        "cta": "Inizia",
+        "features": {
+          "fileSize": "Fino a 250 MB per file",
+          "engine": "Motore WASM di base",
+          "priority": "Coda server (priorita normale)",
+          "ads": "Con pubblicita"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "Il piu scelto",
+        "price": "$9.99/mese",
+        "description": "Sblocca tutta la potenza dell IA locale e dell elaborazione cloud.",
+        "ctaGuest": "Avvia la prova gratuita di 30 giorni",
+        "ctaAuth": "Vai alla fatturazione",
+        "features": {
+          "fileSize": "File fino a 2 GB",
+          "priority": "Server ad alta priorita",
+          "batch": "Elaborazione batch",
+          "aiBackground": "Rimozione sfondo con IA",
+          "smartHandoff": "Handoff intelligente",
+          "adsFree": "Senza pubblicita"
+        }
+      },
+      "individual": {
+        "name": "Individuale",
+        "price": "Su misura",
+        "description": "Limiti e infrastruttura personalizzati per carichi intensi.",
+        "cta": "Riscatta promo code",
+        "features": {
+          "apiAccess": "Accesso API",
+          "customLimits": "Limiti di dimensione personalizzati",
+          "dedicatedWorkers": "Worker dedicati",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Riscatta promo code",
+      "subtitle": "Inserisci il codice fornito dall admin per sbloccare l accesso Individuale o vantaggi Pro speciali.",
+      "label": "Promo code",
+      "placeholder": "INSERISCI-CODICE",
+      "hint": "Lo passeremo allo spazio di fatturazione per completare il riscatto.",
+      "cancel": "Forse dopo",
+      "submit": "Apri fatturazione",
+      "signIn": "Accedi per riscattare",
+      "close": "Chiudi",
+      "empty": "Inserisci prima un promo code."
+    },
+    "account": {
+      "eyebrow": "Spazio fatturazione",
+      "guestCopy": "Accedi per gestire la fatturazione, riscattare un codice admin e tenere il tuo accesso Pro in un unico posto.",
+      "manageTitle": "Accesso Pro",
+      "manageCopy": "Checkout e sincronizzazione dei diritti arriveranno qui a breve. Per ora questo spazio e pronto per upgrade e promo.",
+      "manageCta": "Continua al checkout",
+      "statusNote": "Ogni nuovo account riceve automaticamente 30 giorni di Pro alla registrazione.",
+      "promoSaved": "Promo code salvato per il riscatto in fatturazione."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "Verifica con SheerID",
       "redirecting": "Reindirizzamento alla verifica SheerID..."
     }
+  },
+  "headerEditors": "Editor",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Studio creativo",
+    "welcomeTitle": "Uno spazio di livello desktop per flussi video, foto, audio e generativi.",
+    "welcomeSubtitle": "Scegli uno studio da aprire. Questa shell premium è progettata per timeline, livelli, inspector e copiloti AI.",
+    "welcomeHint": "Seleziona uno strumento dal dock oppure entra in uno dei quattro studi qui sotto.",
+    "openStudio": "Apri studio",
+    "placeholderEyebrow": "Superficie studio",
+    "placeholderTitle": "Workspace di {{name}}",
+    "placeholderBody": "Timeline, pannelli inspector, browser delle risorse e copiloti AI verranno agganciati qui a breve.",
+    "placeholderStatus": "Shell UI attiva",
+    "placeholderAction": "Torna a tutti gli studi",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "Editor video avanzato multitraccia con sottotitoli automatici AI ed effetti.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Manipolazione e ritocco professionale delle immagini basati su livelli.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "Mixing, trimming e mastering audio ad alta fedeltà.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Trasforma il testo in immagini iper-realistiche con modelli di nuova generazione."
+  },
+  "megaPhoto": {
+    "properties": "Proprietà",
+    "opacity": "Opacità",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Metodo di fusione",
+    "blendNormal": "Normale",
+    "blendMultiply": "Moltiplica",
+    "blendScreen": "Scolora",
+    "blendOverlay": "Sovrapponi",
+    "layers": "Livelli",
+    "layerText": "Livello testo",
+    "layerSubject": "Livello soggetto",
+    "layerBackground": "Sfondo",
+    "canvasLabel": "Tela",
+    "canvasEmpty": "Area di lavoro trasparente",
+    "visible": "Visibile",
+    "hidden": "Nascosto",
+    "locked": "Bloccato",
+    "unlocked": "Sbloccato",
+    "toolMove": "Sposta",
+    "toolCrop": "Ritaglia",
+    "toolBrush": "Pennello",
+    "toolMagicWand": "Bacchetta magica",
+    "toolText": "Testo",
+    "toolBlur": "Sfocatura",
+    "toolEraser": "Gomma",
+    "layerEmpty": "Nessun livello ancora",
+    "canvasDropHint": "Trascina un'immagine qui",
+    "canvasDropActive": "Rilascia per posizionarla sulla tela",
+    "layerTypePath": "Tracciato",
+    "layerTypeImage": "Immagine",
+    "layerTypeText": "Testo",
+    "layerTypeGroup": "Gruppo",
+    "layerTypeObject": "Oggetto"
   }
 }

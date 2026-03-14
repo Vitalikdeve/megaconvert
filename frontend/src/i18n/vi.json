@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Thiết lập nâng cao và AI cục bộ",
   "planIndividualFeature4": "Yêu cầu quyền truy cập khuyến mãi hoặc đã xác minh",
   "pricingPage": {
-    "eyebrow": "Gói và quyền truy cập",
-    "subtitle": "Chọn gói được thiết kế cho công việc cá nhân, thông lượng cao cấp hoặc quyền truy cập cá nhân theo diện khuyến mãi.",
-    "popularBadge": "Phổ biến nhất"
+    "eyebrow": "Goi",
+    "title": "Mo rong quy trinh xu ly tep cua ban.",
+    "subtitle": "Bat dau voi 30 ngay Pro mien phi. Khong can the tin dung.",
+    "planLabel": "Goi",
+    "footnote": "Moi tai khoan moi deu tu dong co 30 ngay Pro.",
+    "plans": {
+      "free": {
+        "name": "Mien phi",
+        "price": "$0",
+        "description": "Nhung cong cu thiet yeu cho cong viec hang ngay.",
+        "cta": "Bat dau",
+        "features": {
+          "fileSize": "Toi da 250MB moi tep",
+          "engine": "Dong co WASM co ban",
+          "priority": "Hang doi may chu (uu tien thuong)",
+          "ads": "Co quang cao"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "Pho bien nhat",
+        "price": "$9.99/thang",
+        "description": "Mo khoa toan bo suc manh cua AI cuc bo va xu ly dam may.",
+        "ctaGuest": "Bat dau dung thu mien phi 30 ngay",
+        "ctaAuth": "Den billing",
+        "features": {
+          "fileSize": "Tep toi da 2GB",
+          "priority": "May chu uu tien cao",
+          "batch": "Xu ly hang loat",
+          "aiBackground": "Xoa nen bang AI",
+          "smartHandoff": "Ban giao thong minh",
+          "adsFree": "Khong quang cao"
+        }
+      },
+      "individual": {
+        "name": "Ca nhan",
+        "price": "Tuy chinh",
+        "description": "Han muc va ha tang duoc tuy chinh cho khoi luong nang.",
+        "cta": "Nhap ma promo",
+        "features": {
+          "apiAccess": "Truy cap API",
+          "customLimits": "Han muc kich thuoc tuy chinh",
+          "dedicatedWorkers": "Worker rieng",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Nhap ma promo",
+      "subtitle": "Nhap ma do admin cap de mo quyen truy cap Ca nhan hoac uu dai Pro dac biet.",
+      "label": "Ma promo",
+      "placeholder": "NHAP-MA",
+      "hint": "Chung toi se chuyen ma nay sang workspace billing de hoan tat kich hoat.",
+      "cancel": "De sau",
+      "submit": "Mo billing",
+      "signIn": "Dang nhap de kich hoat",
+      "close": "Dong",
+      "empty": "Hay nhap ma promo truoc."
+    },
+    "account": {
+      "eyebrow": "Workspace billing",
+      "guestCopy": "Dang nhap de quan ly billing, nhap ma admin va giu quyen Pro cua ban trong mot noi.",
+      "manageTitle": "Quyen truy cap Pro",
+      "manageCopy": "Dong bo checkout va entitlement se duoc ket noi tai day tiep theo. Hien tai khu vuc nay da san sang cho nang cap va kich hoat promo.",
+      "manageCta": "Tiep tuc den checkout",
+      "statusNote": "Moi tai khoan moi deu duoc cap 30 ngay Pro tu dong khi dang ky.",
+      "promoSaved": "Ma promo da duoc luu de kich hoat trong billing."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "Xác minh với SheerID",
       "redirecting": "Đang chuyển hướng đến quy trình xác minh SheerID..."
     }
+  },
+  "headerEditors": "Trình biên tập",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Studio sáng tạo",
+    "welcomeTitle": "Một không gian chuẩn desktop cho quy trình video, ảnh, âm thanh và sáng tạo sinh.",
+    "welcomeSubtitle": "Chọn studio để mở. Shell cao cấp này được thiết kế cho timeline, layer, inspector và AI copilot.",
+    "welcomeHint": "Chọn công cụ từ dock hoặc đi thẳng vào một trong bốn studio bên dưới.",
+    "openStudio": "Mở studio",
+    "placeholderEyebrow": "Bề mặt studio",
+    "placeholderTitle": "Không gian làm việc {{name}}",
+    "placeholderBody": "Timeline, bảng inspector, trình duyệt asset và AI copilot sẽ sớm được gắn vào đây.",
+    "placeholderStatus": "Shell UI đang hoạt động",
+    "placeholderAction": "Quay lại tất cả studio",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "Trình biên tập video đa track nâng cao với phụ đề tự động bằng AI và hiệu ứng.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Chỉnh sửa và retouch ảnh chuyên nghiệp dựa trên layer.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "Mix, cắt và mastering âm thanh độ trung thực cao.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Biến văn bản thành hình ảnh siêu chân thực bằng các mô hình thế hệ mới."
+  },
+  "megaPhoto": {
+    "properties": "Thuộc tính",
+    "opacity": "Độ mờ",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Chế độ hòa trộn",
+    "blendNormal": "Bình thường",
+    "blendMultiply": "Nhân",
+    "blendScreen": "Screen",
+    "blendOverlay": "Overlay",
+    "layers": "Lớp",
+    "layerText": "Lớp văn bản",
+    "layerSubject": "Lớp chủ thể",
+    "layerBackground": "Nền",
+    "canvasLabel": "Canvas",
+    "canvasEmpty": "Không gian làm việc trong suốt",
+    "visible": "Hiển thị",
+    "hidden": "Ẩn",
+    "locked": "Đã khóa",
+    "unlocked": "Đã mở khóa",
+    "toolMove": "Di chuyển",
+    "toolCrop": "Cắt",
+    "toolBrush": "Cọ",
+    "toolMagicWand": "Đũa thần",
+    "toolText": "Văn bản",
+    "toolBlur": "Làm mờ",
+    "toolEraser": "Tẩy",
+    "layerEmpty": "Chưa có lớp nào",
+    "canvasDropHint": "Thả ảnh vào đây",
+    "canvasDropActive": "Thả ra để đặt lên canvas",
+    "layerTypePath": "Nét vẽ",
+    "layerTypeImage": "Hình ảnh",
+    "layerTypeText": "Văn bản",
+    "layerTypeGroup": "Nhóm",
+    "layerTypeObject": "Đối tượng"
   }
 }

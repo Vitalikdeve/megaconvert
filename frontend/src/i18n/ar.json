@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "إعدادات متقدمة وذكاء اصطناعي محلي",
   "planIndividualFeature4": "يتطلب وصولاً ترويجياً أو تحققاً",
   "pricingPage": {
-    "eyebrow": "الخطط وإمكانية الوصول",
-    "subtitle": "اختر خطة مصممة للعمل الشخصي أو الأداء المتميز أو الوصول الفردي المعتمد على العروض الترويجية.",
-    "popularBadge": "الأكثر شيوعًا"
+    "eyebrow": "الخطط",
+    "title": "وسّع سير عمل ملفاتك.",
+    "subtitle": "ابدأ مع 30 يوما من Pro مجانا. من دون بطاقة ائتمان.",
+    "planLabel": "الخطة",
+    "footnote": "كل حساب جديد يحصل تلقائيا على 30 يوما من Pro.",
+    "plans": {
+      "free": {
+        "name": "مجاني",
+        "price": "$0",
+        "description": "ادوات اساسية للمهام اليومية.",
+        "cta": "ابدأ الان",
+        "features": {
+          "fileSize": "حتى 250 ميغابايت لكل ملف",
+          "engine": "محرك WASM اساسي",
+          "priority": "طابور الخادم (اولوية عادية)",
+          "ads": "يتضمن اعلانات"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "الاكثر طلبا",
+        "price": "$9.99 شهريا",
+        "description": "اطلق كامل قوة الذكاء الاصطناعي المحلي والمعالجة السحابية.",
+        "ctaGuest": "ابدأ تجربة مجانية لمدة 30 يوما",
+        "ctaAuth": "اذهب الى الفوترة",
+        "features": {
+          "fileSize": "ملفات حتى 2 غيغابايت",
+          "priority": "خوادم باولوية عالية",
+          "batch": "معالجة دفعية",
+          "aiBackground": "ازالة الخلفية بالذكاء الاصطناعي",
+          "smartHandoff": "تسليم ذكي",
+          "adsFree": "من دون اعلانات"
+        }
+      },
+      "individual": {
+        "name": "فردي",
+        "price": "مخصص",
+        "description": "حدود وبنية تحتية مصممة خصيصا للاحمال الثقيلة.",
+        "cta": "استرداد رمز ترويجي",
+        "features": {
+          "apiAccess": "وصول API",
+          "customLimits": "حدود احجام مخصصة",
+          "dedicatedWorkers": "عمّال مخصصون",
+          "sla": "اتفاقية مستوى الخدمة"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "استرداد رمز ترويجي",
+      "subtitle": "ادخل الرمز الصادر من المشرف لفتح الوصول الفردي او مزايا Pro الخاصة.",
+      "label": "الرمز الترويجي",
+      "placeholder": "ادخل الرمز",
+      "hint": "سنمرره الى مساحة الفوترة لاكمال الاسترداد.",
+      "cancel": "لاحقا",
+      "submit": "فتح الفوترة",
+      "signIn": "سجّل الدخول للاسترداد",
+      "close": "اغلاق",
+      "empty": "ادخل رمزا ترويجيا اولا."
+    },
+    "account": {
+      "eyebrow": "مساحة الفوترة",
+      "guestCopy": "سجّل الدخول لادارة الفوترة واسترداد رمز مشرف والحفاظ على وصول Pro في مكان واحد.",
+      "manageTitle": "وصول Pro",
+      "manageCopy": "ستصل مزامنة الدفع والاستحقاقات الى هنا لاحقا. حاليا هذه المساحة جاهزة للترقية واسترداد الرموز.",
+      "manageCta": "متابعة الى الدفع",
+      "statusNote": "كل حساب جديد يحصل تلقائيا على 30 يوما من Pro عند التسجيل.",
+      "promoSaved": "تم حفظ الرمز الترويجي لاسترداده من الفوترة."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "تحقّق عبر SheerID",
       "redirecting": "جارٍ تحويلك إلى التحقق عبر SheerID..."
     }
+  },
+  "headerEditors": "المحررات",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "الاستوديو الإبداعي",
+    "welcomeTitle": "مساحة بمستوى تطبيقات سطح المكتب لسير عمل الفيديو والصور والصوت والتوليد بالذكاء الاصطناعي.",
+    "welcomeSubtitle": "اختر استوديو لفتحه. صُممت هذه الواجهة المميزة للخطوط الزمنية والطبقات ولوحات الفحص ومساعدي الذكاء الاصطناعي.",
+    "welcomeHint": "اختر أداة من الشريط الجانبي أو ابدأ بأحد الاستوديوهات الأربعة أدناه.",
+    "openStudio": "فتح الاستوديو",
+    "placeholderEyebrow": "سطح الاستوديو",
+    "placeholderTitle": "مساحة عمل {{name}}",
+    "placeholderBody": "ستظهر هنا لاحقًا الخطوط الزمنية ولوحات الفحص ومتصفحات الأصول ومساعدو الذكاء الاصطناعي.",
+    "placeholderStatus": "هيكل الواجهة نشط",
+    "placeholderAction": "العودة إلى كل الاستوديوهات",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "محرر فيديو متقدم متعدد المسارات مع تسميات توضيحية تلقائية وتأثيرات بالذكاء الاصطناعي.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "معالجة احترافية للصور وإعادة لمسها بالاعتماد على الطبقات.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "مزج صوتي عالي الدقة مع القص والماسترينغ.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "حوّل النص إلى صور فائقة الواقعية باستخدام نماذج الجيل التالي."
+  },
+  "megaPhoto": {
+    "properties": "الخصائص",
+    "opacity": "التعتيم",
+    "opacityValue": "{{value}}%",
+    "blendMode": "وضع المزج",
+    "blendNormal": "عادي",
+    "blendMultiply": "ضرب",
+    "blendScreen": "تفتيح",
+    "blendOverlay": "تراكب",
+    "layers": "الطبقات",
+    "layerText": "طبقة النص",
+    "layerSubject": "طبقة العنصر",
+    "layerBackground": "الخلفية",
+    "canvasLabel": "اللوحة",
+    "canvasEmpty": "مساحة عمل شفافة",
+    "visible": "مرئي",
+    "hidden": "مخفي",
+    "locked": "مقفل",
+    "unlocked": "غير مقفل",
+    "toolMove": "تحريك",
+    "toolCrop": "اقتصاص",
+    "toolBrush": "فرشاة",
+    "toolMagicWand": "العصا السحرية",
+    "toolText": "نص",
+    "toolBlur": "تمويه",
+    "toolEraser": "ممحاة",
+    "layerEmpty": "لا توجد طبقات بعد",
+    "canvasDropHint": "أفلت صورة هنا",
+    "canvasDropActive": "حررها لوضعها على اللوحة",
+    "layerTypePath": "مسار",
+    "layerTypeImage": "صورة",
+    "layerTypeText": "نص",
+    "layerTypeGroup": "مجموعة",
+    "layerTypeObject": "عنصر"
   }
 }

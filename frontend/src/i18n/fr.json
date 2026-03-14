@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Paramètres avancés et IA locale",
   "planIndividualFeature4": "Accès promotionnel ou vérifié requis",
   "pricingPage": {
-    "eyebrow": "Plans et accès",
-    "subtitle": "Choisissez une offre conçue pour le travail personnel, le débit premium ou un accès individuel basé sur une promotion.",
-    "popularBadge": "Le plus populaire"
+    "eyebrow": "Offres",
+    "title": "Faites evoluer vos flux de fichiers.",
+    "subtitle": "Commencez avec 30 jours de Pro offerts. Aucune carte requise.",
+    "planLabel": "Offre",
+    "footnote": "Chaque nouveau compte demarre avec 30 jours de Pro.",
+    "plans": {
+      "free": {
+        "name": "Gratuit",
+        "price": "$0",
+        "description": "Les outils essentiels pour les taches du quotidien.",
+        "cta": "Commencer",
+        "features": {
+          "fileSize": "Jusqu a 250 Mo par fichier",
+          "engine": "Moteur WASM standard",
+          "priority": "File serveur (priorite normale)",
+          "ads": "Publicite incluse"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "Le plus choisi",
+        "price": "9,99 $/mois",
+        "description": "Liberez toute la puissance de l IA locale et du traitement cloud.",
+        "ctaGuest": "Lancer l essai gratuit de 30 jours",
+        "ctaAuth": "Aller a la facturation",
+        "features": {
+          "fileSize": "Fichiers jusqu a 2 Go",
+          "priority": "Serveurs prioritaires",
+          "batch": "Traitement par lots",
+          "aiBackground": "Suppression d arriere-plan par IA",
+          "smartHandoff": "Relais intelligent",
+          "adsFree": "Sans publicite"
+        }
+      },
+      "individual": {
+        "name": "Individuel",
+        "price": "Sur mesure",
+        "description": "Des limites et une infrastructure adaptees aux charges lourdes.",
+        "cta": "Utiliser un code promo",
+        "features": {
+          "apiAccess": "Acces API",
+          "customLimits": "Limites de taille personnalisees",
+          "dedicatedWorkers": "Workers dedies",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Utiliser un code promo",
+      "subtitle": "Entrez le code fourni par l admin pour debloquer l acces Individuel ou des avantages Pro speciaux.",
+      "label": "Code promo",
+      "placeholder": "ENTRER-LE-CODE",
+      "hint": "Nous le transmettrons a l espace de facturation pour finaliser l activation.",
+      "cancel": "Plus tard",
+      "submit": "Ouvrir la facturation",
+      "signIn": "Se connecter pour utiliser le code",
+      "close": "Fermer",
+      "empty": "Entrez d abord un code promo."
+    },
+    "account": {
+      "eyebrow": "Espace facturation",
+      "guestCopy": "Connectez-vous pour gerer la facturation, utiliser un code admin et garder votre acces Pro au meme endroit.",
+      "manageTitle": "Acces Pro",
+      "manageCopy": "Le checkout et la synchronisation des droits arrivent ici ensuite. Pour l instant, cet espace est pret pour l upgrade et les codes promo.",
+      "manageCta": "Continuer vers le checkout",
+      "statusNote": "Chaque nouveau compte recoit automatiquement 30 jours de Pro a l inscription.",
+      "promoSaved": "Code promo enregistre pour activation dans la facturation."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "Vérifier avec SheerID",
       "redirecting": "Redirection vers la vérification SheerID..."
     }
+  },
+  "headerEditors": "Éditeurs",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Studio créatif",
+    "welcomeTitle": "Un espace de niveau desktop pour les flux vidéo, photo, audio et génératifs.",
+    "welcomeSubtitle": "Choisissez un studio à ouvrir. Cette interface premium est pensée pour les timelines, les calques, les inspecteurs et les copilotes IA.",
+    "welcomeHint": "Sélectionnez un outil dans le dock ou entrez dans l’un des quatre studios ci-dessous.",
+    "openStudio": "Ouvrir le studio",
+    "placeholderEyebrow": "Surface du studio",
+    "placeholderTitle": "Espace de travail {{name}}",
+    "placeholderBody": "Les timelines, panneaux d’inspection, navigateurs d’assets et copilotes IA viendront s’ancrer ici ensuite.",
+    "placeholderStatus": "Coque UI active",
+    "placeholderAction": "Retour à tous les studios",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "Éditeur vidéo multipiste avancé avec sous-titres automatiques IA et effets.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Retouche et manipulation d’image professionnelles basées sur des calques.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "Mixage, découpe et mastering audio haute fidélité.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Transformez du texte en images hyperréalistes grâce à des modèles de nouvelle génération."
+  },
+  "megaPhoto": {
+    "properties": "Propriétés",
+    "opacity": "Opacité",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Mode de fusion",
+    "blendNormal": "Normal",
+    "blendMultiply": "Produit",
+    "blendScreen": "Écran",
+    "blendOverlay": "Incrustation",
+    "layers": "Calques",
+    "layerText": "Calque de texte",
+    "layerSubject": "Calque du sujet",
+    "layerBackground": "Arrière-plan",
+    "canvasLabel": "Toile",
+    "canvasEmpty": "Espace de travail transparent",
+    "visible": "Visible",
+    "hidden": "Masqué",
+    "locked": "Verrouillé",
+    "unlocked": "Déverrouillé",
+    "toolMove": "Déplacer",
+    "toolCrop": "Recadrer",
+    "toolBrush": "Pinceau",
+    "toolMagicWand": "Baguette magique",
+    "toolText": "Texte",
+    "toolBlur": "Flou",
+    "toolEraser": "Gomme",
+    "layerEmpty": "Aucun calque pour le moment",
+    "canvasDropHint": "Déposez une image ici",
+    "canvasDropActive": "Relâchez pour la placer sur la toile",
+    "layerTypePath": "Tracé",
+    "layerTypeImage": "Image",
+    "layerTypeText": "Texte",
+    "layerTypeGroup": "Groupe",
+    "layerTypeObject": "Objet"
   }
 }

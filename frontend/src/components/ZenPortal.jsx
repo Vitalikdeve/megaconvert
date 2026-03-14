@@ -57,6 +57,7 @@ const springTransition = {
   damping: 22,
   mass: 0.9,
 };
+const AUTH_TOKEN_STORAGE_KEY = 'mc_auth_token';
 
 const MotionPortal = motion.div;
 const MotionSection = motion.div;
@@ -242,17 +243,31 @@ function shouldUseLocalFallback(error) {
   const code = String(error?.code || '').trim().toUpperCase();
   const message = String(error?.message || '').trim().toLowerCase();
 
-  if ([500, 502, 503, 504].includes(status)) {
+  if ([401, 500, 502, 503, 504].includes(status)) {
     return true;
   }
 
-  if (code === 'CLOUD_TIMEOUT' || code === 'CLOUD_NETWORK') {
+  if (['API_KEY_REQUIRED', 'CLOUD_TIMEOUT', 'CLOUD_NETWORK', 'HTTP_401'].includes(code)) {
     return true;
   }
 
   return message.includes('timed out')
     || message.includes('failed to fetch')
-    || message.includes('network');
+    || message.includes('network')
+    || message.includes('missing api key')
+    || message.includes('api key required');
+}
+
+function readAuthSessionToken() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  return String(window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '').trim();
+}
+
+function isApiKeyUiNoise(value) {
+  return /missing api key|api key required/i.test(String(value || ''));
 }
 
 function normalizeMegaDropRoomCode(value) {
@@ -552,6 +567,7 @@ export default function ZenPortal({ variant = 'standalone' }) {
       : t('portalStatusConverting', { progress: Math.round(progress) }));
   const indicatorLabel = isProcessing && !isModelLoading ? 'AI' : `${Math.round(progressRatio * 100)}%`;
   const surfaceError = aiError || error || cloudError;
+  const shouldShowSurfaceError = Boolean(surfaceError) && !isApiKeyUiNoise(surfaceError);
   const showTransparencyGrid = Boolean(aiResult) && String(finalResult?.mimeType || '').toLowerCase() === 'image/png';
   const isEmbedded = variant === 'embedded';
   const usedCloudResult = cloudPhase === 'completed' && Boolean(finalResult);
@@ -880,7 +896,7 @@ export default function ZenPortal({ variant = 'standalone' }) {
     [clearAiError, clearAiResult, clearError, clearSourcePreview, resetAiSession, resetCloudSession, resetMagneticOrbit, resetMegaDrop, resetSession],
   );
 
-  const runStrictCloudFirstAction = useCallback(async (file, actionType, actionOptions = {}) => {
+  const runAuthAwareAction = useCallback(async (file, actionType, actionOptions = {}) => {
     const inputExt = String(
       actionOptions.inputFormat || detectFileExtension(file) || '',
     ).trim().toLowerCase();
@@ -888,6 +904,17 @@ export default function ZenPortal({ variant = 'standalone' }) {
 
     if (!targetFormat) {
       return runLocalAction(file, actionType, actionOptions);
+    }
+
+    if (!readAuthSessionToken()) {
+      resetCloudSession();
+      toast.info(t('portalToastLocalMode', 'Running locally (sign in for cloud speed).'), {
+        duration: 3200,
+      });
+      return runLocalAction(file, actionType, {
+        ...actionOptions,
+        targetFormat,
+      });
     }
 
     setProgressMessageOverride('portalStatusCloudSubmitting');
@@ -971,7 +998,7 @@ export default function ZenPortal({ variant = 'standalone' }) {
           return;
         }
 
-        await runStrictCloudFirstAction(activeFile, actionType, {
+        await runAuthAwareAction(activeFile, actionType, {
           ...actionOptions,
           tool: actionType === 'convert'
             ? String(
@@ -985,7 +1012,7 @@ export default function ZenPortal({ variant = 'standalone' }) {
         // The hooks already store a subtle inline error state.
       }
     },
-    [activeFile, clearAiError, clearAiResult, clearError, detectedFormatMeta.ext, isBusy, navigate, primeAudio, resetCloudSession, resetSession, runStrictCloudFirstAction],
+    [activeFile, clearAiError, clearAiResult, clearError, detectedFormatMeta.ext, isBusy, navigate, primeAudio, resetCloudSession, resetSession, runAuthAwareAction],
   );
 
   const handleOpenMegaDrop = useCallback(async () => {
@@ -1332,7 +1359,7 @@ export default function ZenPortal({ variant = 'standalone' }) {
                 )}
               </motion.div>
 
-              {surfaceError && (
+              {shouldShowSurfaceError && (
                 <div className="rounded-[24px] border border-red-400/20 bg-red-500/8 px-4 py-3 text-sm text-red-100/75">
                   <div className="flex items-center justify-between gap-4">
                     <span>{surfaceError}</span>

@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "高级设置与本地 AI",
   "planIndividualFeature4": "需要优惠资格或验证资格",
   "pricingPage": {
-    "eyebrow": "方案与权限",
-    "subtitle": "选择适合个人工作、高级吞吐量或基于优惠资格的个人访问方案。",
-    "popularBadge": "最受欢迎"
+    "eyebrow": "套餐",
+    "title": "扩展你的文件工作流。",
+    "subtitle": "新账号即送 30 天 Pro 免费试用，无需信用卡。",
+    "planLabel": "方案",
+    "footnote": "每个新账号都会自动获得 30 天 Pro。",
+    "plans": {
+      "free": {
+        "name": "免费版",
+        "price": "$0",
+        "description": "满足日常任务所需的核心工具。",
+        "cta": "立即开始",
+        "features": {
+          "fileSize": "单个文件最高 250MB",
+          "engine": "基础 WASM 引擎",
+          "priority": "服务器队列（普通优先级）",
+          "ads": "包含广告"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "最受欢迎",
+        "price": "$9.99/月",
+        "description": "释放本地 AI 与云端处理的完整能力。",
+        "ctaGuest": "开启 30 天免费试用",
+        "ctaAuth": "前往账单",
+        "features": {
+          "fileSize": "文件最高 2GB",
+          "priority": "高优先级服务器",
+          "batch": "批量处理",
+          "aiBackground": "AI 背景移除",
+          "smartHandoff": "智能接力",
+          "adsFree": "无广告"
+        }
+      },
+      "individual": {
+        "name": "定制版",
+        "price": "定制",
+        "description": "为重负载场景提供量身定制的限制与基础设施。",
+        "cta": "兑换优惠码",
+        "features": {
+          "apiAccess": "API 访问",
+          "customLimits": "自定义大小限制",
+          "dedicatedWorkers": "专属工作节点",
+          "sla": "SLA 服务保障"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "兑换优惠码",
+      "subtitle": "输入管理员提供的代码，解锁定制版访问或专属 Pro 权益。",
+      "label": "优惠码",
+      "placeholder": "输入兑换码",
+      "hint": "我们会将此代码带入账单工作区完成兑换。",
+      "cancel": "稍后再说",
+      "submit": "打开账单",
+      "signIn": "登录后兑换",
+      "close": "关闭",
+      "empty": "请先输入优惠码。"
+    },
+    "account": {
+      "eyebrow": "账单工作区",
+      "guestCopy": "登录后即可统一管理账单、兑换管理员优惠码并保留你的 Pro 权益。",
+      "manageTitle": "Pro 权益",
+      "manageCopy": "结账与权益同步将在这里接入。现在，这里已经可以承接升级流程与优惠码兑换。",
+      "manageCta": "继续前往结账",
+      "statusNote": "每个新账号在注册时都会自动获得 30 天 Pro。",
+      "promoSaved": "优惠码已保存，稍后可在账单中兑换。"
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "通过 SheerID 验证",
       "redirecting": "正在跳转到 SheerID 验证..."
     }
+  },
+  "headerEditors": "编辑器",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "创意工作室",
+    "welcomeTitle": "用于视频、图片、音频与生成式工作流的一体化桌面级空间。",
+    "welcomeSubtitle": "选择一个工作室打开。这个高级外壳为时间线、图层、检查器和 AI 副驾驶而设计。",
+    "welcomeHint": "从左侧工具坞选择工具，或直接进入下面四个工作室之一。",
+    "openStudio": "打开工作室",
+    "placeholderEyebrow": "工作室界面",
+    "placeholderTitle": "{{name}} 工作区",
+    "placeholderBody": "时间线、检查器面板、素材浏览器和 AI 副驾驶将在这里陆续接入。",
+    "placeholderStatus": "UI 外壳已激活",
+    "placeholderAction": "返回全部工作室",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "支持 AI 自动字幕与特效的高级多轨视频编辑器。",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "专业级基于图层的图像处理与修图。",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "高保真音频混音、剪辑与母带处理。",
+    "aiName": "MegaGen AI",
+    "aiDescription": "使用新一代模型将文本转化为超写实图像。"
+  },
+  "megaPhoto": {
+    "properties": "属性",
+    "opacity": "不透明度",
+    "opacityValue": "{{value}}%",
+    "blendMode": "混合模式",
+    "blendNormal": "正常",
+    "blendMultiply": "正片叠底",
+    "blendScreen": "滤色",
+    "blendOverlay": "叠加",
+    "layers": "图层",
+    "layerText": "文字图层",
+    "layerSubject": "主体图层",
+    "layerBackground": "背景",
+    "canvasLabel": "画布",
+    "canvasEmpty": "透明工作区",
+    "visible": "可见",
+    "hidden": "隐藏",
+    "locked": "已锁定",
+    "unlocked": "未锁定",
+    "toolMove": "移动",
+    "toolCrop": "裁剪",
+    "toolBrush": "画笔",
+    "toolMagicWand": "魔棒",
+    "toolText": "文字",
+    "toolBlur": "模糊",
+    "toolEraser": "橡皮擦",
+    "layerEmpty": "还没有图层",
+    "canvasDropHint": "将图片拖放到这里",
+    "canvasDropActive": "松开即可放置到画布上",
+    "layerTypePath": "路径",
+    "layerTypeImage": "图像",
+    "layerTypeText": "文本",
+    "layerTypeGroup": "组",
+    "layerTypeObject": "对象"
   }
 }

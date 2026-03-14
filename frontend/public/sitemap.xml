@@ -274,6 +274,27 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://megaconvert-web.vercel.app/guides/reduce-image-size" />
   </url>
   <url>
+    <loc>https://megaconvert-web.vercel.app/blog/heic-to-jpg-guide</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://megaconvert-web.vercel.app/en/blog/heic-to-jpg-guide" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://megaconvert-web.vercel.app/es/blog/heic-to-jpg-guide" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://megaconvert-web.vercel.app/de/blog/heic-to-jpg-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://megaconvert-web.vercel.app/blog/heic-to-jpg-guide" />
+  </url>
+  <url>
+    <loc>https://megaconvert-web.vercel.app/blog/compress-mp4-messaging</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://megaconvert-web.vercel.app/en/blog/compress-mp4-messaging" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://megaconvert-web.vercel.app/es/blog/compress-mp4-messaging" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://megaconvert-web.vercel.app/de/blog/compress-mp4-messaging" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://megaconvert-web.vercel.app/blog/compress-mp4-messaging" />
+  </url>
+  <url>
+    <loc>https://megaconvert-web.vercel.app/blog/wasm-edge-computing</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://megaconvert-web.vercel.app/en/blog/wasm-edge-computing" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://megaconvert-web.vercel.app/es/blog/wasm-edge-computing" />
+    <xhtml:link rel="alternate" hreflang="de" href="https://megaconvert-web.vercel.app/de/blog/wasm-edge-computing" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://megaconvert-web.vercel.app/blog/wasm-edge-computing" />
+  </url>
+  <url>
     <loc>https://megaconvert-web.vercel.app/convert/pdf-to-word</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://megaconvert-web.vercel.app/en/convert/pdf-to-word" />
     <xhtml:link rel="alternate" hreflang="es" href="https://megaconvert-web.vercel.app/es/convert/pdf-to-word" />

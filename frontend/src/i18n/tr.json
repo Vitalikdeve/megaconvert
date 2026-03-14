@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Gelişmiş ayarlar ve yerel AI",
   "planIndividualFeature4": "Promosyon veya doğrulanmış erişim gerekir",
   "pricingPage": {
-    "eyebrow": "Planlar ve erişim",
-    "subtitle": "Kişisel çalışma, premium işlem hacmi veya promosyon tabanlı bireysel erişim için tasarlanmış bir plan seçin.",
-    "popularBadge": "En popüler"
+    "eyebrow": "Planlar",
+    "title": "Dosya is akisinizi buyutun.",
+    "subtitle": "30 gunluk Pro ile ucretsiz baslayin. Kredi karti gerekmez.",
+    "planLabel": "Plan",
+    "footnote": "Her yeni hesap 30 gunluk Pro ile baslar.",
+    "plans": {
+      "free": {
+        "name": "Ucretsiz",
+        "price": "$0",
+        "description": "Gunluk isler icin temel araclar.",
+        "cta": "Baslayin",
+        "features": {
+          "fileSize": "Dosya basina 250 MB a kadar",
+          "engine": "Temel WASM motoru",
+          "priority": "Sunucu sirasi (Normal Oncelik)",
+          "ads": "Reklamli"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "En populer",
+        "price": "$9.99/ay",
+        "description": "Yerel AI ve bulut islemenin tum gucunu ortaya cikarin.",
+        "ctaGuest": "30 gunluk ucretsiz denemeyi baslat",
+        "ctaAuth": "Faturalandirmaya git",
+        "features": {
+          "fileSize": "2 GB a kadar dosyalar",
+          "priority": "Yuksek oncelikli sunucular",
+          "batch": "Toplu isleme",
+          "aiBackground": "AI arka plan kaldirma",
+          "smartHandoff": "Akilli aktarma",
+          "adsFree": "Reklamsiz"
+        }
+      },
+      "individual": {
+        "name": "Bireysel",
+        "price": "Ozel",
+        "description": "Yuksek yukler icin ozel limitler ve altyapi.",
+        "cta": "Promo kodu kullan",
+        "features": {
+          "apiAccess": "API erisimi",
+          "customLimits": "Ozel boyut limitleri",
+          "dedicatedWorkers": "Ayrilmis worker lar",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Promo kodu kullan",
+      "subtitle": "Bireysel erisimi veya ozel Pro avantajlarini acmak icin adminin verdigi kodu girin.",
+      "label": "Promo kodu",
+      "placeholder": "KODU-GIRIN",
+      "hint": "Bunu kullanmak icin faturalandirma alanina aktaracagiz.",
+      "cancel": "Belki sonra",
+      "submit": "Faturalandirmayi ac",
+      "signIn": "Kullanmak icin giris yap",
+      "close": "Kapat",
+      "empty": "Once bir promo kodu girin."
+    },
+    "account": {
+      "eyebrow": "Faturalandirma alani",
+      "guestCopy": "Faturalandirmayi yonetmek, admin kodu kullanmak ve Pro erisiminizi tek yerde tutmak icin giris yapin.",
+      "manageTitle": "Pro erisimi",
+      "manageCopy": "Checkout ve entitlement senkronizasyonu siradaki adimda buraya gelecek. Simdilik bu alan upgrade gecisi ve promo kullanimi icin hazir.",
+      "manageCta": "Checkout a devam et",
+      "statusNote": "Her yeni hesap kayit sirasinda otomatik olarak 30 gunluk Pro alir.",
+      "promoSaved": "Promo kodu faturalandirma kullanimi icin kaydedildi."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "SheerID ile doğrula",
       "redirecting": "SheerID doğrulamasına yönlendiriliyor..."
     }
+  },
+  "headerEditors": "Editörler",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Yaratıcı stüdyo",
+    "welcomeTitle": "Video, fotoğraf, ses ve üretken iş akışları için masaüstü kalitesinde tek bir alan.",
+    "welcomeSubtitle": "Açmak için bir stüdyo seçin. Bu premium kabuk; timeline, katmanlar, denetleyiciler ve AI yardımcıları için tasarlandı.",
+    "welcomeHint": "Dock üzerinden bir araç seçin ya da aşağıdaki dört stüdyodan birine geçin.",
+    "openStudio": "Stüdyoyu aç",
+    "placeholderEyebrow": "Stüdyo yüzeyi",
+    "placeholderTitle": "{{name}} çalışma alanı",
+    "placeholderBody": "Timeline’lar, denetim panelleri, varlık tarayıcıları ve AI yardımcıları sıradaki adımda buraya yerleşecek.",
+    "placeholderStatus": "UI kabuğu aktif",
+    "placeholderAction": "Tüm stüdyolara dön",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "AI otomatik altyazılar ve efektlerle gelişmiş çok kanallı video editörü.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Profesyonel katman tabanlı görüntü işleme ve rötuş.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "Yüksek doğruluklu ses miksajı, kırpma ve mastering.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Metni yeni nesil modellerle hiper-gerçekçi görüntülere dönüştürün."
+  },
+  "megaPhoto": {
+    "properties": "Özellikler",
+    "opacity": "Opaklık",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Karışım modu",
+    "blendNormal": "Normal",
+    "blendMultiply": "Çarp",
+    "blendScreen": "Ekran",
+    "blendOverlay": "Kaplama",
+    "layers": "Katmanlar",
+    "layerText": "Metin katmanı",
+    "layerSubject": "Konu katmanı",
+    "layerBackground": "Arka plan",
+    "canvasLabel": "Tuval",
+    "canvasEmpty": "Şeffaf çalışma alanı",
+    "visible": "Görünür",
+    "hidden": "Gizli",
+    "locked": "Kilitli",
+    "unlocked": "Kilitsiz",
+    "toolMove": "Taşı",
+    "toolCrop": "Kırp",
+    "toolBrush": "Fırça",
+    "toolMagicWand": "Sihirli değnek",
+    "toolText": "Metin",
+    "toolBlur": "Bulanıklaştır",
+    "toolEraser": "Silgi",
+    "layerEmpty": "Henüz katman yok",
+    "canvasDropHint": "Buraya bir görsel bırakın",
+    "canvasDropActive": "Tuvale yerleştirmek için bırakın",
+    "layerTypePath": "Yol",
+    "layerTypeImage": "Görsel",
+    "layerTypeText": "Metin",
+    "layerTypeGroup": "Grup",
+    "layerTypeObject": "Nesne"
   }
 }

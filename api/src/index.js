@@ -13820,7 +13820,7 @@ app.post('/uploads/proxy', express.raw({ type: '*/*', limit: `${MAX_FILE_SIZE_MB
 
     const inputKey = String(req.headers['x-input-key'] || '').trim();
     const providedSha256 = normalizeSha256(req.headers['x-file-sha256']);
-    const fileName = String(req.headers['x-file-name'] || '').trim();
+    const fileName = safeDecodeURIComponent(req.headers['x-file-name']).trim();
     const contentType = String(req.headers['content-type'] || 'application/octet-stream').split(';')[0];
     const declaredSize = Number(req.headers['x-file-size'] || 0);
     const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);

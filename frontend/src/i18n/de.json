@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Erweiterte Einstellungen und lokale KI",
   "planIndividualFeature4": "Promo- oder verifizierter Zugang erforderlich",
   "pricingPage": {
-    "eyebrow": "Pläne und Zugriff",
-    "subtitle": "Wählen Sie einen Plan für persönliche Arbeit, Premium-Durchsatz oder individuellen Zugang auf Promo-Basis.",
-    "popularBadge": "Am beliebtesten"
+    "eyebrow": "Tarife",
+    "title": "Skalieren Sie Ihre Datei-Workflows.",
+    "subtitle": "Starten Sie mit 30 Tagen Pro kostenlos. Keine Kreditkarte erforderlich.",
+    "planLabel": "Tarif",
+    "footnote": "Jedes neue Konto startet mit 30 Tagen Pro.",
+    "plans": {
+      "free": {
+        "name": "Kostenlos",
+        "price": "$0",
+        "description": "Die wichtigsten Werkzeuge fur alltagliche Aufgaben.",
+        "cta": "Loslegen",
+        "features": {
+          "fileSize": "Bis zu 250 MB pro Datei",
+          "engine": "Basis-WASM-Engine",
+          "priority": "Server-Warteschlange (normale Prioritat)",
+          "ads": "Mit Werbung"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "Am beliebtesten",
+        "price": "9,99 $/Monat",
+        "description": "Nutzen Sie die volle Leistung von lokaler KI und Cloud-Verarbeitung.",
+        "ctaGuest": "30-Tage-Test starten",
+        "ctaAuth": "Zur Abrechnung",
+        "features": {
+          "fileSize": "Dateien bis 2 GB",
+          "priority": "Server mit hoher Prioritat",
+          "batch": "Batch-Verarbeitung",
+          "aiBackground": "KI-Hintergrundentfernung",
+          "smartHandoff": "Intelligente Ubergabe",
+          "adsFree": "Keine Werbung"
+        }
+      },
+      "individual": {
+        "name": "Individuell",
+        "price": "Individuell",
+        "description": "Massgeschneiderte Limits und Infrastruktur fur hohe Lasten.",
+        "cta": "Promo-Code einlosen",
+        "features": {
+          "apiAccess": "API-Zugang",
+          "customLimits": "Individuelle Grossenlimits",
+          "dedicatedWorkers": "Dedizierte Worker",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Promo-Code einlosen",
+      "subtitle": "Geben Sie den vom Admin vergebenen Code ein, um individuellen Zugriff oder spezielle Pro-Vorteile freizuschalten.",
+      "label": "Promo-Code",
+      "placeholder": "CODE-EINGEBEN",
+      "hint": "Wir ubergeben ihn an den Abrechnungsbereich, um die Einlosung abzuschliessen.",
+      "cancel": "Vielleicht spater",
+      "submit": "Abrechnung offnen",
+      "signIn": "Zum Einlosen anmelden",
+      "close": "Schliessen",
+      "empty": "Geben Sie zuerst einen Promo-Code ein."
+    },
+    "account": {
+      "eyebrow": "Abrechnungsbereich",
+      "guestCopy": "Melden Sie sich an, um Abrechnung zu verwalten, einen Admin-Code einzulosen und Ihren Pro-Zugang an einem Ort zu behalten.",
+      "manageTitle": "Pro-Zugang",
+      "manageCopy": "Checkout und Rechte-Synchronisierung werden als Nächstes hier angebunden. Aktuell ist dieser Bereich fur Upgrade-Ubergabe und Promo-Einlosung bereit.",
+      "manageCta": "Weiter zum Checkout",
+      "statusNote": "Jedes neue Konto erhalt bei der Registrierung automatisch 30 Tage Pro.",
+      "promoSaved": "Promo-Code fur die Einlosung in der Abrechnung gespeichert."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "Mit SheerID verifizieren",
       "redirecting": "Weiterleitung zur SheerID-Verifizierung..."
     }
+  },
+  "headerEditors": "Editoren",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Creative Studio",
+    "welcomeTitle": "Ein Desktop-Workspace für Video-, Foto-, Audio- und generative Workflows.",
+    "welcomeSubtitle": "Wähle ein Studio zum Öffnen. Diese Premium-Oberfläche ist für Timelines, Ebenen, Inspektoren und KI-Copiloten konzipiert.",
+    "welcomeHint": "Wähle ein Tool aus dem Dock oder springe direkt in eines der vier Studios unten.",
+    "openStudio": "Studio öffnen",
+    "placeholderEyebrow": "Studio-Oberfläche",
+    "placeholderTitle": "{{name}}-Workspace",
+    "placeholderBody": "Timelines, Inspector-Panels, Asset-Browser und KI-Copiloten werden als Nächstes hier angedockt.",
+    "placeholderStatus": "UI-Shell aktiv",
+    "placeholderAction": "Zurück zu allen Studios",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "Fortschrittlicher Mehrspur-Videoeditor mit KI-Untertiteln und Effekten.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Professionelle, ebenenbasierte Bildbearbeitung und Retusche.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "Hochwertiges Audio-Mixing, Trimmen und Mastering.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Verwandle Text mit Modellen der nächsten Generation in hyperrealistische Bilder."
+  },
+  "megaPhoto": {
+    "properties": "Eigenschaften",
+    "opacity": "Deckkraft",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Mischmodus",
+    "blendNormal": "Normal",
+    "blendMultiply": "Multiplizieren",
+    "blendScreen": "Negativ multiplizieren",
+    "blendOverlay": "Überlagern",
+    "layers": "Ebenen",
+    "layerText": "Textebene",
+    "layerSubject": "Motiv-Ebene",
+    "layerBackground": "Hintergrund",
+    "canvasLabel": "Leinwand",
+    "canvasEmpty": "Transparenter Arbeitsbereich",
+    "visible": "Sichtbar",
+    "hidden": "Ausgeblendet",
+    "locked": "Gesperrt",
+    "unlocked": "Entsperrt",
+    "toolMove": "Verschieben",
+    "toolCrop": "Freistellen",
+    "toolBrush": "Pinsel",
+    "toolMagicWand": "Zauberstab",
+    "toolText": "Text",
+    "toolBlur": "Weichzeichnen",
+    "toolEraser": "Radierer",
+    "layerEmpty": "Noch keine Ebenen",
+    "canvasDropHint": "Bild hier ablegen",
+    "canvasDropActive": "Loslassen, um es auf der Leinwand zu platzieren",
+    "layerTypePath": "Pfad",
+    "layerTypeImage": "Bild",
+    "layerTypeText": "Text",
+    "layerTypeGroup": "Gruppe",
+    "layerTypeObject": "Objekt"
   }
 }

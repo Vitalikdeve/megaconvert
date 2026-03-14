@@ -114,6 +114,22 @@ const grantRegistrationTrial = async (userId) => {
   return { granted: true, endsAt };
 };
 
+const logRegistrationTrialOutcome = (userId, trialResult, source = 'registration') => {
+  if (trialResult?.granted) {
+    console.info('[auth][trial] 30-day Pro trial granted:', {
+      source,
+      userId,
+      endsAt: trialResult.endsAt
+    });
+  } else if (!trialResult?.skipped) {
+    console.warn('[auth][trial] unexpected registration trial state:', {
+      source,
+      userId,
+      trialResult
+    });
+  }
+};
+
 const toPublicUser = (user) => ({
   id: user.id,
   email: user.email,
@@ -480,6 +496,20 @@ const findOrCreateOAuthUser = async ({ provider, providerUserId, email, name }) 
       updatedAt: now
     };
     users.push(user);
+
+    try {
+      const trialResult = await grantRegistrationTrial(user.id);
+      logRegistrationTrialOutcome(user.id, trialResult, 'oauth_signup');
+    } catch (error) {
+      const userIndex = users.findIndex((item) => item.id === user.id);
+      if (userIndex >= 0) {
+        users.splice(userIndex, 1);
+      }
+      console.error('[auth][trial] failed to grant registration trial during OAuth signup:', error);
+      const provisionError = new Error('Account trial provisioning failed');
+      provisionError.code = 'REGISTRATION_TRIAL_FAILED';
+      throw provisionError;
+    }
   }
 
   if (!user.email) user.email = resolvedEmail;
@@ -899,14 +929,7 @@ class AuthController {
 
     try {
       const trialResult = await grantRegistrationTrial(user.id);
-      if (trialResult?.granted) {
-        console.info('[auth][trial] 30-day Pro trial granted:', {
-          userId: user.id,
-          endsAt: trialResult.endsAt
-        });
-      } else if (!trialResult?.skipped) {
-        console.warn('[auth][trial] unexpected registration trial state:', trialResult);
-      }
+      logRegistrationTrialOutcome(user.id, trialResult, 'password_signup');
     } catch (error) {
       const userIndex = users.findIndex((item) => item.id === user.id);
       if (userIndex >= 0) {
@@ -1102,7 +1125,9 @@ const createAuthRouter = () => {
     createSessionToken,
     setSessionCookie,
     toPublicUser,
-    sessionJwtSecret: SESSION_JWT_SECRET
+    sessionJwtSecret: SESSION_JWT_SECRET,
+    grantRegistrationTrial,
+    logRegistrationTrialOutcome
   });
 
   return router;

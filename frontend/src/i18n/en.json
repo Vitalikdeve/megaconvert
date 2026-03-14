@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Advanced settings & local AI",
   "planIndividualFeature4": "Promo or verified access required",
   "pricingPage": {
-    "eyebrow": "Plans & access",
-    "subtitle": "Choose a plan built for personal work, premium throughput, or promo-based individual access.",
-    "popularBadge": "Most popular"
+    "eyebrow": "Plans",
+    "title": "Scale Your File Workflows.",
+    "subtitle": "Start with 30 days of Pro for free. No credit card required.",
+    "planLabel": "Plan",
+    "footnote": "Every new account starts with 30 days of Pro.",
+    "plans": {
+      "free": {
+        "name": "Free",
+        "price": "$0",
+        "description": "Essential tools for everyday tasks.",
+        "cta": "Get Started",
+        "features": {
+          "fileSize": "Up to 250MB per file",
+          "engine": "Basic WASM engine",
+          "priority": "Server queue (Normal Priority)",
+          "ads": "Ads included"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "Most Popular",
+        "price": "$9.99/mo",
+        "description": "Unleash the full power of local AI and cloud processing.",
+        "ctaGuest": "Start 30-Day Free Trial",
+        "ctaAuth": "Go to Billing",
+        "features": {
+          "fileSize": "Files up to 2GB",
+          "priority": "High-priority servers",
+          "batch": "Batch processing",
+          "aiBackground": "AI background removal",
+          "smartHandoff": "Smart handoff",
+          "adsFree": "No ads"
+        }
+      },
+      "individual": {
+        "name": "Individual",
+        "price": "Custom",
+        "description": "Tailored limits and infrastructure for heavy workloads.",
+        "cta": "Redeem Promo Code",
+        "features": {
+          "apiAccess": "API access",
+          "customLimits": "Custom size limits",
+          "dedicatedWorkers": "Dedicated workers",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Redeem promo code",
+      "subtitle": "Enter the admin-issued code to unlock Individual access or special Pro benefits.",
+      "label": "Promo code",
+      "placeholder": "ENTER-CODE",
+      "hint": "We will hand this off to the billing workspace for redemption.",
+      "cancel": "Maybe Later",
+      "submit": "Open Billing",
+      "signIn": "Sign In to Redeem",
+      "close": "Close",
+      "empty": "Enter a promo code first."
+    },
+    "account": {
+      "eyebrow": "Billing workspace",
+      "guestCopy": "Sign in to manage billing, redeem an admin promo code, and keep your Pro access in one place.",
+      "manageTitle": "Pro access",
+      "manageCopy": "Checkout and entitlement sync land here next. For now, this workspace is ready for upgrade handoff and promo redemption.",
+      "manageCta": "Continue to Checkout",
+      "statusNote": "Every new account is granted 30 days of Pro automatically at registration.",
+      "promoSaved": "Promo code saved for billing redemption."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "Verify with SheerID",
       "redirecting": "Redirecting to SheerID verification..."
     }
+  },
+  "headerEditors": "Editors",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Creative Studio",
+    "welcomeTitle": "One desktop-grade space for video, photo, audio, and generative workflows.",
+    "welcomeSubtitle": "Choose a studio to open. This premium shell is designed for timelines, layers, inspectors, and AI copilots.",
+    "welcomeHint": "Select a tool from the dock or jump into one of the four studios below.",
+    "openStudio": "Open studio",
+    "placeholderEyebrow": "Studio surface",
+    "placeholderTitle": "{{name}} workspace",
+    "placeholderBody": "Timelines, inspector panels, asset browsers, and AI copilots will dock here next.",
+    "placeholderStatus": "UI shell active",
+    "placeholderAction": "Back to all studios",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "Advanced multi-track video editor with AI auto-captions and effects.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Professional layer-based image manipulation and retouching.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "High-fidelity audio mixing, trimming, and mastering.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Transform text into hyper-realistic images using next-gen models."
+  },
+  "megaPhoto": {
+    "properties": "Properties",
+    "opacity": "Opacity",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Blend Mode",
+    "blendNormal": "Normal",
+    "blendMultiply": "Multiply",
+    "blendScreen": "Screen",
+    "blendOverlay": "Overlay",
+    "layers": "Layers",
+    "layerText": "Text Layer",
+    "layerSubject": "Subject Layer",
+    "layerBackground": "Background",
+    "canvasLabel": "Canvas",
+    "canvasEmpty": "Transparent workspace",
+    "visible": "Visible",
+    "hidden": "Hidden",
+    "locked": "Locked",
+    "unlocked": "Unlocked",
+    "toolMove": "Move",
+    "toolCrop": "Crop",
+    "toolBrush": "Brush",
+    "toolMagicWand": "Magic Wand",
+    "toolText": "Text",
+    "toolBlur": "Blur",
+    "toolEraser": "Eraser",
+    "layerEmpty": "No layers yet",
+    "canvasDropHint": "Drop an image here",
+    "canvasDropActive": "Release to place it on the canvas",
+    "layerTypePath": "Path",
+    "layerTypeImage": "Image",
+    "layerTypeText": "Text",
+    "layerTypeGroup": "Group",
+    "layerTypeObject": "Object"
   }
 }

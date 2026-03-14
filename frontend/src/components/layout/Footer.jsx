@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 export default function Footer() {
   const { t } = useTranslation();
   const footerLinks = [
+    { label: t('navBlog', 'Blog'), to: '/blog' },
     { label: t('navTerms'), to: '/terms' },
     { label: t('navPrivacy'), to: '/privacy' },
     { label: t('navSecurity'), to: '/security' },
@@ -23,7 +24,7 @@ export default function Footer() {
 
         <nav
           aria-label={t('navLegal')}
-          className="grid grid-cols-2 gap-x-6 gap-y-3 text-center md:text-left"
+          className="grid grid-cols-2 gap-x-6 gap-y-3 text-center md:grid-cols-3 md:text-left"
         >
           {footerLinks.map((item) => (
             <Link

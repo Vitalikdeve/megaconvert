@@ -1953,9 +1953,74 @@
   "planIndividualFeature3": "Pengaturan lanjutan & AI lokal",
   "planIndividualFeature4": "Membutuhkan akses promo atau akses terverifikasi",
   "pricingPage": {
-    "eyebrow": "Paket & akses",
-    "subtitle": "Pilih paket yang dirancang untuk pekerjaan personal, throughput premium, atau akses individual berbasis promo.",
-    "popularBadge": "Paling populer"
+    "eyebrow": "Paket",
+    "title": "Skalakan alur kerja file Anda.",
+    "subtitle": "Mulai dengan Pro gratis selama 30 hari. Tanpa kartu kredit.",
+    "planLabel": "Paket",
+    "footnote": "Setiap akun baru langsung mendapat 30 hari Pro.",
+    "plans": {
+      "free": {
+        "name": "Gratis",
+        "price": "$0",
+        "description": "Alat penting untuk pekerjaan sehari-hari.",
+        "cta": "Mulai",
+        "features": {
+          "fileSize": "Hingga 250MB per file",
+          "engine": "Mesin WASM dasar",
+          "priority": "Antrean server (Prioritas Normal)",
+          "ads": "Dengan iklan"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "badge": "Paling populer",
+        "price": "$9.99/bulan",
+        "description": "Buka seluruh kekuatan AI lokal dan pemrosesan cloud.",
+        "ctaGuest": "Mulai uji coba gratis 30 hari",
+        "ctaAuth": "Ke billing",
+        "features": {
+          "fileSize": "File hingga 2GB",
+          "priority": "Server prioritas tinggi",
+          "batch": "Pemrosesan batch",
+          "aiBackground": "Hapus background dengan AI",
+          "smartHandoff": "Smart handoff",
+          "adsFree": "Tanpa iklan"
+        }
+      },
+      "individual": {
+        "name": "Individual",
+        "price": "Kustom",
+        "description": "Limit dan infrastruktur yang disesuaikan untuk beban kerja berat.",
+        "cta": "Redeem kode promo",
+        "features": {
+          "apiAccess": "Akses API",
+          "customLimits": "Limit ukuran kustom",
+          "dedicatedWorkers": "Worker dedicated",
+          "sla": "SLA"
+        }
+      }
+    },
+    "promoModal": {
+      "title": "Redeem kode promo",
+      "subtitle": "Masukkan kode dari admin untuk membuka akses Individual atau benefit Pro khusus.",
+      "label": "Kode promo",
+      "placeholder": "MASUKKAN-KODE",
+      "hint": "Kami akan meneruskannya ke workspace billing untuk proses redeem.",
+      "cancel": "Nanti saja",
+      "submit": "Buka billing",
+      "signIn": "Masuk untuk redeem",
+      "close": "Tutup",
+      "empty": "Masukkan kode promo terlebih dahulu."
+    },
+    "account": {
+      "eyebrow": "Workspace billing",
+      "guestCopy": "Masuk untuk mengelola billing, redeem kode admin, dan menyimpan akses Pro Anda di satu tempat.",
+      "manageTitle": "Akses Pro",
+      "manageCopy": "Sinkronisasi checkout dan entitlement akan hadir di sini berikutnya. Untuk sekarang, workspace ini sudah siap untuk handoff upgrade dan redeem promo.",
+      "manageCta": "Lanjut ke checkout",
+      "statusNote": "Setiap akun baru otomatis mendapat 30 hari Pro saat registrasi.",
+      "promoSaved": "Kode promo disimpan untuk redeem di billing."
+    }
   },
   "pricing": {
     "student": {
@@ -1964,5 +2029,62 @@
       "cta": "Verifikasi dengan SheerID",
       "redirecting": "Mengalihkan ke verifikasi SheerID..."
     }
+  },
+  "headerEditors": "Editor",
+  "studio": {
+    "brand": "Mega Studio",
+    "welcomeEyebrow": "Studio kreatif",
+    "welcomeTitle": "Satu ruang setingkat desktop untuk alur kerja video, foto, audio, dan generatif.",
+    "welcomeSubtitle": "Pilih studio yang ingin dibuka. Shell premium ini dirancang untuk timeline, layer, inspector, dan kopilot AI.",
+    "welcomeHint": "Pilih alat dari dock atau langsung masuk ke salah satu dari empat studio di bawah.",
+    "openStudio": "Buka studio",
+    "placeholderEyebrow": "Permukaan studio",
+    "placeholderTitle": "Ruang kerja {{name}}",
+    "placeholderBody": "Timeline, panel inspector, browser aset, dan kopilot AI akan dipasang di sini berikutnya.",
+    "placeholderStatus": "Shell UI aktif",
+    "placeholderAction": "Kembali ke semua studio",
+    "videoName": "MegaCut Pro",
+    "videoDescription": "Editor video multi-track canggih dengan auto-caption AI dan efek.",
+    "photoName": "MegaPhoto Studio",
+    "photoDescription": "Manipulasi dan retouching gambar profesional berbasis layer.",
+    "audioName": "MegaBeat DAW",
+    "audioDescription": "Mixing, trimming, dan mastering audio dengan fidelitas tinggi.",
+    "aiName": "MegaGen AI",
+    "aiDescription": "Ubah teks menjadi gambar hiper-realistis dengan model generasi berikutnya."
+  },
+  "megaPhoto": {
+    "properties": "Properti",
+    "opacity": "Opasitas",
+    "opacityValue": "{{value}}%",
+    "blendMode": "Mode blend",
+    "blendNormal": "Normal",
+    "blendMultiply": "Multiply",
+    "blendScreen": "Screen",
+    "blendOverlay": "Overlay",
+    "layers": "Layer",
+    "layerText": "Layer teks",
+    "layerSubject": "Layer subjek",
+    "layerBackground": "Latar belakang",
+    "canvasLabel": "Kanvas",
+    "canvasEmpty": "Ruang kerja transparan",
+    "visible": "Terlihat",
+    "hidden": "Tersembunyi",
+    "locked": "Terkunci",
+    "unlocked": "Tidak terkunci",
+    "toolMove": "Pindah",
+    "toolCrop": "Crop",
+    "toolBrush": "Brush",
+    "toolMagicWand": "Magic Wand",
+    "toolText": "Teks",
+    "toolBlur": "Blur",
+    "toolEraser": "Eraser",
+    "layerEmpty": "Belum ada layer",
+    "canvasDropHint": "Letakkan gambar di sini",
+    "canvasDropActive": "Lepaskan untuk menempatkannya di kanvas",
+    "layerTypePath": "Path",
+    "layerTypeImage": "Gambar",
+    "layerTypeText": "Teks",
+    "layerTypeGroup": "Grup",
+    "layerTypeObject": "Objek"
   }
 }

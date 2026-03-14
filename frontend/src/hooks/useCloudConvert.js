@@ -240,6 +240,10 @@ const buildInputKey = (fileName) => {
   return `inputs/web/${randomId}/${safeName}`;
 };
 
+const buildEncodedContentDisposition = (fileName) => (
+  `attachment; filename="${encodeURIComponent(String(fileName || 'upload.bin'))}"`
+);
+
 async function fetchJsonFromCandidates({ candidates, timeoutMs, ...requestInit }) {
   let lastError = null;
 
@@ -397,6 +401,7 @@ export default function useCloudConvert({ apiBase = import.meta.env.VITE_API_BAS
     }
 
     const safeFileName = sanitizeFileName(file.name);
+    const encodedFileName = encodeURIComponent(String(file.name || safeFileName || 'upload.bin'));
     const inputKey = buildInputKey(safeFileName);
     const fileExtension = safeFileName.includes('.') ? safeFileName.split('.').pop() : '';
     const resolvedInputFormat = String(requestOptions.inputFormat || fileExtension || '').trim().toLowerCase();
@@ -421,7 +426,8 @@ export default function useCloudConvert({ apiBase = import.meta.env.VITE_API_BAS
         headers: {
           'content-type': String(file.type || 'application/octet-stream'),
           'x-input-key': inputKey,
-          'x-file-name': safeFileName,
+          'x-file-name': encodedFileName,
+          'content-disposition': buildEncodedContentDisposition(file.name || safeFileName || 'upload.bin'),
           'x-file-size': String(file.size || 0),
         },
         body: file,

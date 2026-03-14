@@ -125,6 +125,10 @@ const extractErrorMessage = (payload, fallback) => {
   return fallback;
 };
 
+const buildEncodedContentDisposition = (fileName) => (
+  `attachment; filename="${encodeURIComponent(String(fileName || 'upload.bin'))}"`
+);
+
 const fetchSignedUpload = async (apiBase, authHeaders, file, nameOverride, timeoutMs, sha256 = '') => {
   const normalizedSha = String(sha256 || '').trim().toLowerCase();
   const res = await fetchWithTimeout(`${apiBase}/uploads/sign`, {
@@ -203,7 +207,8 @@ const fetchProxyUpload = async (apiBase, authHeaders, file, signed, timeoutMs, s
       'Content-Type': file.type || 'application/octet-stream',
       'x-input-key': signed.inputKey,
       'x-file-size': String(file.size || 0),
-      'x-file-name': String(file.name || 'upload.bin'),
+      'x-file-name': encodeURIComponent(String(file.name || 'upload.bin')),
+      'content-disposition': buildEncodedContentDisposition(file.name || 'upload.bin'),
       ...(normalizedSha ? { 'x-file-sha256': normalizedSha } : {})
     },
     body: file
