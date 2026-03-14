@@ -247,6 +247,46 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!location.hash || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const targetId = decodeURIComponent(location.hash.slice(1));
+    let timeoutId = null;
+    let frameId = 0;
+
+    const scrollToHashTarget = (attempt = 0) => {
+      const target = document.getElementById(targetId);
+      if (target) {
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+        return;
+      }
+
+      if (attempt >= 10) {
+        return;
+      }
+
+      timeoutId = window.setTimeout(() => {
+        scrollToHashTarget(attempt + 1);
+      }, 80);
+    };
+
+    frameId = window.requestAnimationFrame(() => {
+      scrollToHashTarget();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [location.hash, location.pathname]);
+
   const handleSelectTool = useCallback(async (item) => {
     if (!item) {
       return;
