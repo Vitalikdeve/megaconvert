@@ -30,7 +30,7 @@
   "twofaSuccess": "Подтверждено",
   "twofaError": "Неверный код. Попробуйте ещё раз.",
   "userDefaultName": "Пользователь",
-  "authEmailPlaceholder": "Email",
+  "authEmailPlaceholder": "Электронная почта",
   "authPasswordPlaceholder": "Пароль",
   "speedInstant": "Мгновенно",
   "speedFast": "Быстро",
@@ -111,7 +111,7 @@
   "navHelpCenter": "Центр помощи",
   "navPrivacy": "Конфиденциальность",
   "navTerms": "Условия",
-  "navCookies": "Cookies",
+  "navCookies": "Файлы cookie",
   "navDisclaimer": "Отказ от ответственности",
   "navLegalCenter": "Юр. центр",
   "navAbout": "О нас",
@@ -567,7 +567,7 @@
   "blogArticleNotFoundSubtitle": "Эта статья недоступна.",
   "legalLastUpdatedLabel": "Последнее обновление:",
   "legalWebsiteLabel": "Сайт:",
-  "legalContactLabel": "Email:",
+  "legalContactLabel": "Электронная почта:",
   "privacyIntroText": "Эта Политика конфиденциальности объясняет, как мы собираем, используем, раскрываем и защищаем ваши данные при использовании MegaConvert.",
   "termsIntroText": "Используя MegaConvert, вы соглашаетесь с этими Условиями.",
   "disclaimerBody": "MegaConvert предоставляет инструменты конвертации для информационных и утилитарных целей. Мы не гарантируем применимость каждого результата конвертации, поэтому перед использованием проверяйте итоговые файлы.",
@@ -759,61 +759,61 @@
   "headerApi": "API",
   "headerPricing": "Тарифы",
   "headerLanguage": "Язык",
-  "headerLanguageEnglish": "English",
+  "headerLanguageEnglish": "Английский",
   "headerLanguageRussian": "Русский",
   "headerSignIn": "Войти",
   "dashboardEyebrow": "Локальная файловая среда",
   "dashboardTitle": "Ультимативная ОС для работы с файлами",
   "dashboardSubtitle": "Конвертируйте, редактируйте и управляйте файлами безопасно. Локальный AI и WASM внутри.",
   "dashboardPortalBadge": "Zen Portal",
-  "dashboardSectionEyebrow": "Bento Dashboard",
+  "dashboardSectionEyebrow": "Панель управления Bento",
   "dashboardSectionTitle": "Умные маршруты для любого файлового сценария",
   "dashboardSectionSubtitle": "Портал остаётся в центре, а сетка ниже даёт быстрый вход в каждый ключевой workflow.",
   "dashboardCardAiTitle": "AI удаление фона",
   "dashboardCardAiEyebrow": "Neural Edit",
   "dashboardCardAiDescription": "Перетащите портрет, товар или логотип в Zen Portal и удалите фон локально через существующий on-device AI pipeline.",
   "dashboardCardAiCta": "Открыть Zen Portal",
-  "dashboardCardPdfTitle": "Visual PDF Editor",
+  "dashboardCardPdfTitle": "Визуальный PDF Редактор",
   "dashboardCardPdfEyebrow": "Document Studio",
   "dashboardCardPdfDescription": "Меняйте порядок страниц, объединяйте документы и запускайте OCR-экспорт в тактильном локальном PDF-редакторе.",
   "dashboardCardPdfCta": "Открыть PDF Editor",
   "dashboardCardOcrTitle": "Smart OCR",
-  "dashboardCardOcrEyebrow": "Text Extraction",
+  "dashboardCardOcrEyebrow": "Извлечение текста",
   "dashboardCardOcrDescription": "Сканируйте изображения и PDF прямо в браузере, затем редактируйте и копируйте распознанный текст без сервера.",
   "dashboardCardOcrCta": "Открыть Smart OCR",
   "dashboardCardMegaDropTitle": "MegaDrop P2P",
-  "dashboardCardMegaDropEyebrow": "Secure Handoff",
+  "dashboardCardMegaDropEyebrow": "Безопасная передача обслуживания",
   "dashboardCardMegaDropDescription": "Используйте центральный портал, чтобы отправлять готовые файлы напрямую между устройствами через MegaDrop и QR.",
   "dashboardCardMegaDropCta": "Запустить Handoff",
-  "dashboardCardAudioTitle": "Audio Converter",
-  "dashboardCardAudioEyebrow": "High-Fidelity Engine",
+  "dashboardCardAudioTitle": "Аудиоконвертер",
+  "dashboardCardAudioEyebrow": "Механизм высокой точности",
   "dashboardCardAudioDescription": "Готовьте чистые аудио-конвертации, извлекайте дорожки и запускайте премиальный сценарий обработки звука с акцентом на качество.",
   "dashboardCardAudioCta": "Открыть Audio Converter",
-  "dashboardCardGifTitle": "Video to GIF",
-  "dashboardCardGifEyebrow": "Motion Export",
+  "dashboardCardGifTitle": "Видео в GIF",
+  "dashboardCardGifEyebrow": "Экспорт движения",
   "dashboardCardGifDescription": "Преобразуйте короткие ролики в оптимизированные GIF-анимации для превью, демо и лёгких motion-ассетов.",
   "dashboardCardGifCta": "Открыть Video to GIF",
-  "dashboardCardArchiveTitle": "Archive Manager",
-  "dashboardCardArchiveEyebrow": "Compression Control",
+  "dashboardCardArchiveTitle": "Менеджер архива",
+  "dashboardCardArchiveEyebrow": "Управление сжатием",
   "dashboardCardArchiveDescription": "Распаковывайте ZIP и RAR, пересобирайте наборы файлов и подготавливайте чистые архивы, не выходя из продукта.",
   "dashboardCardArchiveCta": "Открыть Archive Manager",
-  "dashboardCardWatermarkTitle": "Batch Watermark",
-  "dashboardCardWatermarkEyebrow": "Bulk Branding",
+  "dashboardCardWatermarkTitle": "Пакетный водяной знак",
+  "dashboardCardWatermarkEyebrow": "Массовая партия Брендинг",
   "dashboardCardWatermarkDescription": "Массово накладывайте водяные знаки на медианаборы через отдельный workflow, рассчитанный на production-объём.",
   "dashboardCardWatermarkCta": "Открыть Batch Watermark",
-  "toolPlaceholderBadge": "Workflow Preview",
+  "toolPlaceholderBadge": "Предварительный просмотр рабочего процесса",
   "toolPlaceholderBack": "Назад к дашборду",
   "toolAudioConverterBadge": "Audio Engine",
-  "toolAudioConverterTitle": "Audio Converter",
+  "toolAudioConverterTitle": "Аудиоконвертер",
   "toolAudioConverterDescription": "Оболочка инструмента готова для высококачественного аудио-транскодинга, пресетов очистки и управляемого экспорта. Визуальный слой уже на месте для backend pipeline.",
-  "toolVideoToGifBadge": "Motion Export",
-  "toolVideoToGifTitle": "Video to GIF",
+  "toolVideoToGifBadge": "Экспорт движения",
+  "toolVideoToGifTitle": "Видео в GIF",
   "toolVideoToGifDescription": "Этот workspace подготовлен для создания оптимизированных GIF с trim, компрессией и loop-настройками на следующем этапе активации.",
-  "toolArchiveManagerBadge": "Archive Workflow",
-  "toolArchiveManagerTitle": "Archive Manager",
+  "toolArchiveManagerBadge": "Рабочий процесс архивирования",
+  "toolArchiveManagerTitle": "Менеджер архива",
   "toolArchiveManagerDescription": "Поверхность готова для просмотра архивов, извлечения содержимого и повторного сжатия, чтобы ZIP и RAR жили в единой продуктовой оболочке.",
-  "toolBatchWatermarkBadge": "Brand Layer",
-  "toolBatchWatermarkTitle": "Batch Watermark",
+  "toolBatchWatermarkBadge": "Уровень бренда",
+  "toolBatchWatermarkTitle": "Пакетный водяной знак",
   "toolBatchWatermarkDescription": "Оболочка готова для массового размещения водяных знаков на изображениях и видео, с местом под пресеты и правила экспорта.",
   "portalActionOpenPdfEditor": "Открыть в PDF-редакторе",
   "portalActionOpenPdfOcr": "Распознать текст (OCR)",
@@ -866,7 +866,7 @@
   "portalFormatSearchCount": "{count} форматов доступно",
   "portalFormatSearchEmpty": "По этому запросу форматы не найдены. Попробуйте другое слово или категорию.",
   "portalFormatBadgeCloud": "Cloud-first маршрут",
-  "portalFormatBadgeCloudShort": "Cloud",
+  "portalFormatBadgeCloudShort": "Облако",
   "portalFormatBadgeReady": "Гибридный роутинг готов",
   "portalFormatBadgeDirect": "Direct",
   "portalNoFormatsAvailable": "Для этого файла пока нет доступных вариантов конвертации.",
@@ -909,314 +909,314 @@
   "toastRegisterReady": "Аккаунт создан. Теперь можно войти.",
   "toastForgotSuccess": "Если такой email существует, мы отправили ссылку для сброса пароля.",
   "appShell": {
-    "loadingModule": "Loading Module",
+    "loadingModule": "Модуль загрузки",
     "toolGroups": {
-      "home": "Home",
-      "media": "Media",
-      "documents": "Documents",
-      "network": "Network",
-      "files": "Files",
-      "navigation": "Navigation",
+      "home": "Домашняя страница",
+      "media": "Медиа",
+      "documents": "Документы",
+      "network": "Сеть",
+      "files": "Файлы",
+      "navigation": "Навигация",
       "developers": "Разработчики"
     },
     "tools": {
       "zen": {
         "label": "Magic Portal",
-        "caption": "Dashboard and smart portal"
+        "caption": "Панель мониторинга и интеллектуальный портал"
       },
       "imageOptimizer": {
-        "label": "Image Optimizer",
-        "caption": "Frame refinement"
+        "label": "Оптимизатор изображений",
+        "caption": "Уточнение кадра"
       },
       "videoCompressor": {
-        "label": "Video Compressor",
-        "caption": "Motion shaping"
+        "label": "Видеокомпрессор",
+        "caption": "Формирование движения"
       },
       "audioConverter": {
-        "caption": "High-fidelity engine"
+        "caption": "Высокоточный движок"
       },
       "videoToGif": {
-        "caption": "Optimized animations"
+        "caption": "Оптимизированная анимация"
       },
       "smartOcr": {
-        "caption": "Text extraction"
+        "caption": "Извлечение текста"
       },
       "pdfEditor": {
-        "caption": "Document assembly"
+        "caption": "Сборка документа"
       },
       "megaGrid": {
         "label": "MegaGrid",
-        "caption": "Distributed browser cluster"
+        "caption": "Распределенный кластер браузеров"
       },
       "archiveManager": {
-        "caption": "ZIP and RAR workflows"
+        "caption": "ZIP и рабочие процессы RAR"
       },
       "batchWatermark": {
-        "caption": "Bulk overlays"
+        "caption": "Массовые наложения"
       },
       "apiDashboard": {
-        "label": "API Dashboard",
+        "label": "API Панель мониторинга",
         "caption": "Ключи, usage и контроль монетизации"
       }
     },
     "apiSpotlight": {
       "eyebrow": "Developer Surface",
-      "title": "API experience is being shaped into a premium control plane.",
-      "description": "Upload signing, conversion jobs, auth and observability are already in the platform. This route becomes the polished developer surface while the product shell keeps the same Apple-tier visual system.",
-      "primaryAction": "Sign in",
-      "secondaryAction": "Back home"
+      "title": "API Опыт преобразуется в плоскость управления премиум-класса.",
+      "description": "Подписание загрузки, задания по преобразованию, аутентификация и наблюдаемость уже доступны на платформе. Этот маршрут становится полированной поверхностью разработчика, в то время как оболочка продукта сохраняет ту же визуальную систему уровня Apple.",
+      "primaryAction": "Войти",
+      "secondaryAction": "Вернуться домой"
     },
     "pricingSpotlight": {
-      "eyebrow": "Commercial Layer",
-      "title": "Pricing is moving toward a clearer premium structure.",
-      "description": "We are packaging personal workflows, professional conversion throughput and future API access into a cleaner pricing surface without compromising the local-first product feeling.",
-      "primaryAction": "Create account",
-      "secondaryAction": "Browse tools"
+      "eyebrow": "Коммерческий уровень",
+      "title": "Ценообразование движется в сторону более четкой структуры премий.",
+      "description": "Мы объединяем персональные рабочие процессы, профессиональную производительность конверсии и будущий API доступ к более чистой ценовой поверхности, не ставя под угрозу ощущение продукта, ориентированного на местный рынок.",
+      "primaryAction": "Создать учетную запись",
+      "secondaryAction": "Инструменты просмотра"
     }
   },
   "commandPalette": {
-    "label": "MegaConvert command menu",
-    "searchPlaceholder": "Jump anywhere...",
-    "empty": "Nothing found.",
-    "active": "Active",
+    "label": "MegaConvert меню команд",
+    "searchPlaceholder": "Перейти куда угодно...",
+    "empty": "Ничего не найдено.",
+    "active": "Активен",
     "sections": {
-      "system": "System",
-      "quickActions": "Quick Actions",
-      "currentTool": "Current Tool"
+      "system": "Система",
+      "quickActions": "Быстрые действия",
+      "currentTool": "Текущий инструмент"
     },
     "install": {
-      "label": "Install MegaConvert OS on this device",
-      "caption": "Install offline-ready app shell"
+      "label": "Установите MegaConvert ОС на это устройство",
+      "caption": "Установить оболочку приложения, готовую к работе в автономном режиме"
     },
     "quick": {
-      "resumeLabel": "Resume Smart OCR",
-      "resumeCaptionWithName": "Last session: {name}",
-      "resumeCaptionFallback": "Open saved OCR session",
-      "clipboardLabel": "Paste from clipboard",
-      "clipboardCaption": "Clipboard to Smart OCR",
-      "lastToolLabel": "Open last tool"
+      "resumeLabel": "Возобновить Smart OCR",
+      "resumeCaptionWithName": "Последний сеанс: {name}",
+      "resumeCaptionFallback": "Открыть сохраненный сеанс OCR",
+      "clipboardLabel": "Вставить из буфера обмена",
+      "clipboardCaption": "Буфер обмена в Smart OCR",
+      "lastToolLabel": "Открыть последний инструмент"
     },
     "currentTool": {
-      "returnHomeLabel": "Return to Home (Zen Portal)",
-      "returnHomeCaption": "Back to MegaConvert"
+      "returnHomeLabel": "Вернуться на главную (Zen Portal)",
+      "returnHomeCaption": "Вернуться к MegaConvert"
     }
   },
   "legalPage": {
-    "badge": "Legal",
-    "lastUpdated": "Last updated: {updatedAt}"
+    "badge": "Юридическая информация",
+    "lastUpdated": "Последнее обновление: {updatedAt}"
   },
   "legalPages": {
     "security": {
-      "intro": "MegaConvert is designed to give users enterprise-grade security controls without forcing every workflow through the cloud. Our architecture blends local browser execution with hardened cloud infrastructure so file processing can stay private, resilient, and transparent.",
-      "hybridTitle": "Hybrid Architecture",
-      "hybridBody": "A substantial portion of MegaConvert workflows can execute directly on the user's device via WebAssembly (WASM), browser APIs, and local AI pipelines. When a task stays local, the underlying files may never leave the device at all. This local-first model provides a practical zero-knowledge posture for supported workflows because MegaConvert has no server-side visibility into files that are processed entirely in-browser.",
-      "cloudTitle": "Cloud Processing",
-      "cloudBody": "When server-side processing is required, files are transmitted over TLS 1.3 and stored using AES-256 encryption at rest. Access to cloud processing systems is restricted by least-privilege controls, service isolation, and operational monitoring designed to reduce unauthorized access risk.",
-      "deletionTitle": "Strict Data Deletion",
-      "deletionBody": "Cloud-processed source files and generated outputs are scheduled for deletion within 1 hour after processing completes. This shortened retention window is intentionally stricter than many competing services and is designed to minimize residual storage exposure.",
-      "complianceTitle": "Compliance",
-      "complianceBody": "MegaConvert is deployed on infrastructure operated by providers that maintain internationally recognized security assurance frameworks, including ISO/IEC 27001 and SOC 2 Type II. While those attestations apply to the underlying infrastructure and not as a blanket certification of every MegaConvert feature, we align our operational practices with those controls wherever applicable.",
-      "accountTitle": "Account and Session Protection",
-      "accountBody": "Authentication endpoints, session handling, and abuse detection controls are used to protect accounts against unauthorized access, credential misuse, automated attacks, and fraudulent activity. Users remain responsible for safeguarding their own credentials and device security.",
-      "disclosureTitle": "Responsible Disclosure",
-      "disclosureBody": "If you believe you have identified a vulnerability, please report it through our official support or security contact channels. We review credible reports promptly and prioritize remediation based on severity and exploitability."
+      "intro": "MegaConvert предназначен для предоставления пользователям средств управления безопасностью корпоративного уровня без необходимости принудительного выполнения каждого рабочего процесса через облако. Наша архитектура сочетает в себе выполнение локального браузера и защищенную облачную инфраструктуру, поэтому обработка файлов может оставаться конфиденциальной, отказоустойчивой и прозрачной.",
+      "hybridTitle": "Гибридная архитектура",
+      "hybridBody": "Значительная часть рабочих процессов MegaConvert может выполняться непосредственно на устройстве пользователя через WebAssembly (WASM), браузер API и локальные конвейеры искусственного интеллекта. Если задача остается локальной, лежащие в ее основе файлы могут вообще никогда не покидать устройство. Эта локальная модель обеспечивает практическую позицию с нулевым разглашением для поддерживаемых рабочих процессов, поскольку MegaConvert не имеет видимости на стороне сервера файлов, которые обрабатываются полностью в браузере.",
+      "cloudTitle": "Облако Processing",
+      "cloudBody": "Когда требуется обработка на стороне сервера, файлы передаются через TLS 1.3 и сохраняются с использованием шифрования AES-256 в состоянии покоя. Доступ к системам облачной обработки ограничен средствами управления с минимальными привилегиями, изоляцией сервисов и операционным мониторингом, предназначенными для снижения риска несанкционированного доступа.",
+      "deletionTitle": "Строгое удаление данных",
+      "deletionBody": "Исходные файлы, обработанные в облаке, и сгенерированные выходные данные планируется удалить в течение 1 часа после завершения обработки. Этот сокращенный период хранения намеренно более строгий, чем у многих конкурирующих сервисов, и предназначен для минимизации остаточного риска хранения.",
+      "complianceTitle": "Соответствие",
+      "complianceBody": "MegaConvert развертывается в инфраструктуре, управляемой поставщиками, которые поддерживают международно признанные структуры обеспечения безопасности, включая ISO/IEC 27001 и SOC 2 Type II. Хотя эти аттестации применяются к базовой инфраструктуре, а не как общая сертификация каждой функции MegaConvert, мы согласовываем нашу операционную практику с этими средствами контроля, где это применимо.",
+      "accountTitle": "Учетная запись и сеанс Protection",
+      "accountBody": "Конечные точки аутентификации, обработка сеанса и элементы управления обнаружением злоупотреблений используются для защиты учетных записей от несанкционированного доступа, неправильного использования учетных данных, автоматических атак и мошеннических действий. Пользователи по-прежнему несут ответственность за защиту своих учетных данных и безопасности устройства.",
+      "disclosureTitle": "Ответственное раскрытие информации",
+      "disclosureBody": "Если вы считаете, что обнаружили уязвимость, сообщите об этом через нашу официальную службу поддержки или по каналам связи по безопасности. Мы оперативно проверяем достоверные отчеты и определяем приоритетность исправлений в зависимости от серьезности и возможности использования."
     },
     "privacy": {
-      "intro": "This Privacy Policy explains how MegaConvert collects, uses, protects, and deletes personal information in connection with our website, browser-based tools, account system, cloud processing endpoints, and related product experiences.",
-      "regulatoryTitle": "Regulatory Scope",
-      "regulatoryBody": "MegaConvert is designed to align with major privacy regimes, including the General Data Protection Regulation (GDPR) in the European Union, the California Consumer Privacy Act and California Privacy Rights Act (CCPA/CPRA), and Brazil's Lei Geral de Protecao de Dados (LGPD), to the extent these laws apply to our operations and users.",
-      "collectTitle": "Information We Collect",
-      "collectBody": "We may collect information you provide directly, such as your name, email address, account credentials, support requests, and billing or subscription metadata where applicable. We may also process limited technical information such as browser type, device diagnostics, language preference, authentication events, and service telemetry needed to maintain reliability and security.",
-      "localFirstTitle": "Local-First Processing",
-      "localFirstBody": "Many MegaConvert workflows run locally inside the browser using WASM and on-device AI. In those cases, the file may never be uploaded to our servers at all. If a workflow requires cloud execution, we process only the minimum file and metadata necessary to complete the requested task.",
-      "usageTitle": "How We Use Information",
-      "usageItem1": "To authenticate users and secure accounts.",
-      "usageItem2": "To deliver file conversion, editing, OCR, and collaboration workflows.",
-      "usageItem3": "To detect abuse, fraud, and legal or sanctions violations.",
-      "usageItem4": "To maintain uptime, quality, observability, and service performance.",
-      "usageItem5": "To comply with legal obligations and enforce our agreements.",
-      "noSaleTitle": "No Sale, No File Profiling, No AI Training",
-      "noSaleBody": "We do not sell personal information. We do not analyze the contents of user files for advertising purposes, and we do not use user files to train general-purpose AI or machine learning models. File contents are processed only to deliver the functionality explicitly requested by the user.",
-      "sharingTitle": "Sharing and Processors",
-      "sharingBody": "We may share limited information with infrastructure providers, payment vendors, authentication services, analytics or observability vendors, and other processors acting on our behalf, solely as needed to operate the service, maintain security, or comply with law. We may also disclose information when legally required or when necessary to protect rights, safety, or platform integrity.",
-      "retentionTitle": "Retention and Deletion",
-      "retentionBody": "We retain personal information only for as long as necessary to provide the service, preserve account integrity, meet legal obligations, resolve disputes, and enforce our terms. Where cloud file processing is used, files are subject to strict short-lived deletion windows as described in our Security page.",
-      "rightsTitle": "International Privacy Rights",
-      "rightsBody": "Depending on your jurisdiction, you may have rights to access, correct, delete, restrict, or object to certain processing of your personal information. This includes the right to erasure and the right to request export of eligible account data, subject to applicable law and identity verification requirements.",
-      "securityTitle": "Security Safeguards",
-      "securityBody": "We use technical and organizational safeguards designed to protect information in transit and at rest, restrict internal access, reduce abuse risk, and preserve service integrity. No system can guarantee absolute security, but we aim to minimize data exposure through local-first architecture and short-lived cloud retention.",
-      "cookiesTitle": "Cookies and Local Storage",
-      "cookiesBody": "MegaConvert uses cookies, local storage, and similar technologies for sessions, authentication, language preferences, and service analytics. For a detailed explanation, please review our Cookie Policy.",
-      "changesTitle": "Changes to This Policy",
-      "changesBody": "We may update this Privacy Policy to reflect legal changes, product development, or operational needs. If we make material changes, we will update the effective date and provide additional notice where appropriate.",
-      "contactTitle": "Contact",
-      "contactBody": "Privacy-related requests, including deletion and data export requests, may be submitted through the support or contact channels made available within MegaConvert."
+      "intro": "В настоящей Политике конфиденциальности объясняется, как MegaConvert собирает, использует, защищает и удаляет личную информацию, связанную с нашим веб-сайтом, браузерными инструментами, системой учетных записей, конечными точками облачной обработки и соответствующими продуктами.",
+      "regulatoryTitle": "Область регулирования",
+      "regulatoryBody": "MegaConvert разработан в соответствии с основными режимами конфиденциальности, включая Общий регламент по защите данных (GDPR) в Европейском Союзе, Калифорнийский закон о конфиденциальности потребителей и Калифорнийский закон о правах на конфиденциальность (CCPA/CPRA), а также Закон Бразилии о защите данных (Lei Geral de Protecao de Dados). (LGPD), в той степени, в которой эти законы применимы к нашей деятельности и пользователям.",
+      "collectTitle": "Информация, которую мы собираем",
+      "collectBody": "Мы можем собирать информацию, которую вы предоставляете напрямую, например, ваше имя, адрес электронной почты, учетные данные учетной записи, запросы на поддержку, а также метаданные о выставлении счетов или подписке, где это применимо. Мы также можем обрабатывать ограниченную техническую информацию, такую ​​как тип браузера, диагностика устройства, языковые предпочтения, события аутентификации и служебную телеметрию, необходимую для обеспечения надежности и безопасности.",
+      "localFirstTitle": "Сначала локально Processing",
+      "localFirstBody": "Многие рабочие процессы MegaConvert выполняются локально внутри браузера с использованием WASM и искусственного интеллекта на устройстве. В таких случаях файл вообще может никогда не быть загружен на наши серверы. Если рабочий процесс требует выполнения в облаке, мы обрабатываем только минимальный файл и метаданные, необходимые для выполнения запрошенной задачи.",
+      "usageTitle": "Как мы используем информацию",
+      "usageItem1": "Для аутентификации пользователей и защиты учетных записей.",
+      "usageItem2": "Для обеспечения преобразования файлов, редактирования, OCR и рабочих процессов совместной работы.",
+      "usageItem3": "Для обнаружения злоупотреблений, мошенничества, а также нарушений закона или санкций.",
+      "usageItem4": "Для поддержания бесперебойной работы, качества, наблюдаемости и производительности обслуживания.",
+      "usageItem5": "Для соблюдения юридических обязательств и обеспечения соблюдения наших соглашений.",
+      "noSaleTitle": "Нет продажи, нет файлов Proподача, нет обучения искусственному интеллекту",
+      "noSaleBody": "Мы не продаем личную информацию. Мы не анализируем содержимое пользовательских файлов в рекламных целях и не используем пользовательские файлы для обучения моделей искусственного интеллекта или машинного обучения общего назначения. Содержимое файла обрабатывается только для предоставления функций, явно запрошенных пользователем.",
+      "sharingTitle": "Совместное использование и Processors",
+      "sharingBody": "Мы можем передавать ограниченную информацию поставщикам инфраструктуры, поставщикам платежей, службам аутентификации, поставщикам аналитики или наблюдения, а также другим процессорам, действующим от нашего имени, исключительно в случае необходимости для работы службы, обеспечения безопасности или соблюдения закона. Мы также можем раскрывать информацию, когда это требуется по закону или когда это необходимо для защиты прав, безопасности или целостности платформы.",
+      "retentionTitle": "Хранение и удаление",
+      "retentionBody": "Мы храним личную информацию только до тех пор, пока это необходимо для предоставления услуги, сохранения целостности учетной записи, выполнения юридических обязательств, разрешения споров и обеспечения соблюдения наших условий. Если используется облачная обработка файлов, файлы подлежат строгому кратковременному удалению, как описано на нашей странице «Безопасность».",
+      "rightsTitle": "Международные права на конфиденциальность",
+      "rightsBody": "В зависимости от вашей юрисдикции вы можете иметь права на доступ, исправление, удаление, ограничение или возражение против определенной обработки вашей личной информации. Это включает в себя право на удаление и право запросить экспорт соответствующих данных учетной записи в соответствии с применимым законодательством и требованиями проверки личности.",
+      "securityTitle": "Меры безопасности",
+      "securityBody": "Мы используем технические и организационные меры безопасности, предназначенные для защиты информации при передаче и хранении, ограничения внутреннего доступа, снижения риска злоупотреблений и сохранения целостности сервиса. Ни одна система не может гарантировать абсолютную безопасность, но мы стремимся свести к минимуму раскрытие данных за счет локальной архитектуры и кратковременного хранения в облаке.",
+      "cookiesTitle": "Файлы cookie и локальное хранилище",
+      "cookiesBody": "MegaConvert использует файлы cookie, локальное хранилище и аналогичные технологии для сеансов, аутентификации, языковых предпочтений и аналитики услуг. Для получения подробной информации ознакомьтесь с нашей Политикой использования файлов cookie.",
+      "changesTitle": "Изменения в этой Политике",
+      "changesBody": "Мы можем обновлять настоящую Политику конфиденциальности, чтобы отразить правовые изменения, разработку продукта или операционные потребности. Если мы внесем существенные изменения, мы обновим дату вступления в силу и при необходимости предоставим дополнительное уведомление.",
+      "contactTitle": "Контакт",
+      "contactBody": "Запросы, связанные с конфиденциальностью, включая запросы на удаление и экспорт данных, можно отправлять через каналы поддержки или связи, доступные в MegaConvert."
     },
     "terms": {
-      "intro": "These Terms of Service govern your access to and use of MegaConvert, including our local-first file conversion tools, document workflows, AI-assisted features, and direct device-to-device handoff experiences.",
-      "acceptanceTitle": "Acceptance of Terms",
-      "acceptanceBody": "By accessing or using MegaConvert, you agree to be bound by these Terms. If you do not agree, you must not use the service.",
-      "eligibilityTitle": "Eligibility and Accounts",
-      "eligibilityBody": "You must use MegaConvert only in compliance with applicable law and only if you have legal capacity to enter into these Terms. You are responsible for maintaining the confidentiality of your account credentials and for activity occurring under your account.",
-      "permittedTitle": "Permitted Use",
-      "permittedBody": "You may use MegaConvert for lawful file processing, document editing, OCR, compression, and related workflows. You may not use the service to violate intellectual property rights, distribute unlawful content, evade security controls, or interfere with the platform or other users.",
-      "localTitle": "Local Processing and Output",
-      "localBody": "Many MegaConvert features operate locally in the browser using WASM, AI models, and device-native capabilities. You remain responsible for the source files you process and for verifying the accuracy, legality, and fitness of any generated output before relying on it.",
-      "sanctionsTitle": "Sanctions & Export Control",
-      "sanctionsBody1": "MegaConvert is subject to export control, sanctions, and trade compliance laws, including restrictions administered under OFAC frameworks, applicable European Union sanctions programs, and related local laws. The service is strictly prohibited in sanctioned or restricted jurisdictions and may not be used from, by, or for the benefit of persons located in or ordinarily resident in Russia, China, Iran, North Korea, Syria, or Cuba.",
-      "sanctionsBody2": "Belarus is explicitly EXEMPTED from these restrictions and service is fully available in this region. We may suspend, block, or terminate access where needed to maintain sanctions compliance, export control compliance, anti-abuse defenses, or broader legal risk management.",
-      "availabilityTitle": "Service Availability",
-      "availabilityBody": "We may modify, suspend, or discontinue features at any time, including for security, maintenance, legal compliance, infrastructure migration, or product evolution. We do not guarantee uninterrupted availability.",
-      "disclaimersTitle": "Disclaimers",
-      "disclaimersBody": "MegaConvert is provided on an \"as is\" and \"as available\" basis. To the maximum extent permitted by law, we disclaim warranties of merchantability, fitness for a particular purpose, non-infringement, and uninterrupted service.",
-      "liabilityTitle": "Limitation of Liability",
-      "liabilityBody": "To the fullest extent permitted by law, MegaConvert and its operators will not be liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for any loss of data, revenue, profits, business opportunity, or goodwill arising from your use of the service. You use MegaConvert at your own risk, and the service is provided strictly on an \"AS IS\" and \"AS AVAILABLE\" basis.",
-      "terminationTitle": "Termination",
-      "terminationBody": "We may suspend or terminate your access if we believe you violated these Terms, created legal or security risk, or used the service in a way that harms the platform, our partners, or other users.",
-      "contactTitle": "Contact",
-      "contactBody": "Questions about these Terms may be directed through the product support channels made available in MegaConvert."
+      "intro": "Настоящие Условия обслуживания регулируют ваш доступ к MegaConvert и его использование, включая наши локальные инструменты преобразования файлов, рабочие процессы документов, функции с использованием искусственного интеллекта и прямую передачу управления между устройствами.",
+      "acceptanceTitle": "Принятие Условий",
+      "acceptanceBody": "Получая доступ или используя MegaConvert, вы соглашаетесь соблюдать настоящие Условия. Если вы не согласны, вы не должны использовать услугу.",
+      "eligibilityTitle": "Право на участие и учетные записи",
+      "eligibilityBody": "Вы должны использовать MegaConvert только в соответствии с действующим законодательством и только в том случае, если у вас есть правоспособность принимать настоящие Условия. Вы несете ответственность за сохранение конфиденциальности учетных данных вашей учетной записи и за действия, происходящие под вашей учетной записью.",
+      "permittedTitle": "Разрешенное использование",
+      "permittedBody": "Вы можете использовать MegaConvert для законной обработки файлов, редактирования документов, OCR, сжатия и связанных с ними рабочих процессов. Вы не можете использовать службу для нарушения прав интеллектуальной собственности, распространения незаконного контента, обхода контроля безопасности или вмешательства в работу платформы или других пользователей.",
+      "localTitle": "Локальный Proцессинг и вывод",
+      "localBody": "Многие функции MegaConvert работают локально в браузере с использованием WASM, моделей искусственного интеллекта и собственных возможностей устройства. Вы несете ответственность за исходные файлы, которые вы обрабатываете, а также за проверку точности, законности и пригодности любых сгенерированных результатов, прежде чем полагаться на них.",
+      "sanctionsTitle": "Санкции и экспортный контроль",
+      "sanctionsBody1": "MegaConvert подпадает под действие законов об экспортном контроле, санкциях и соблюдении правил торговли, включая ограничения, вводимые в рамках OFAC, применимых программ санкций Европейского Союза и соответствующих местных законов. Эта услуга строго запрещена в санкционированных или ограниченных юрисдикциях и не может использоваться лицами, находящимися или постоянно проживающими в России, Китае, Иране, Северной Корее, Сирии или Кубе, или в их интересах.",
+      "sanctionsBody2": "Беларусь явно ОСВОБОЖДЕНА от этих ограничений, и услуга полностью доступна в этом регионе. Мы можем приостановить, заблокировать или прекратить доступ, если это необходимо для обеспечения соблюдения санкций, соблюдения экспортного контроля, защиты от злоупотреблений или более широкого управления юридическими рисками.",
+      "availabilityTitle": "Доступность услуги",
+      "availabilityBody": "Мы можем изменять, приостанавливать или прекращать работу функций в любое время, в том числе в целях безопасности, обслуживания, соблюдения законодательства, миграции инфраструктуры или развития продукта. Мы не гарантируем бесперебойную доступность.",
+      "disclaimersTitle": "Отказ от ответственности",
+      "disclaimersBody": "MegaConvert предоставляется на условиях «как есть» и «по мере доступности». В максимальной степени, разрешенной законом, мы отказываемся от гарантий коммерческой ценности, пригодности для определенной цели, ненарушения прав и бесперебойного обслуживания.",
+      "liabilityTitle": "Ограничение ответственности",
+      "liabilityBody": "В максимальной степени, разрешенной законом, MegaConvert и его операторы не несут ответственности за косвенные, случайные, особые, косвенные, штрафные или штрафные убытки, а также за любую потерю данных, доходов, прибыли, деловых возможностей или деловой репутации, возникшую в результате использования вами услуги. Вы используете MegaConvert на свой страх и риск, и услуга предоставляется строго на условиях «КАК ЕСТЬ» и «КАК ДОСТУПНО».",
+      "terminationTitle": "Прекращение",
+      "terminationBody": "Мы можем приостановить или прекратить ваш доступ, если мы считаем, что вы нарушили настоящие Условия, создали угрозу юридическому праву или безопасности или использовали услугу таким образом, что это причинило вред платформе, нашим партнерам или другим пользователям.",
+      "contactTitle": "Контакт",
+      "contactBody": "Вопросы по настоящим Условиям можно задать через каналы поддержки продукта, доступные в MegaConvert."
     },
     "cookies": {
-      "intro": "This Cookie Policy explains how MegaConvert uses cookies, local storage, and related browser technologies to provide secure access, maintain product state, and improve service reliability.",
-      "necessaryTitle": "Strictly Necessary Technologies",
-      "necessaryBody": "Strictly necessary cookies and equivalent browser storage mechanisms are used to support authentication, session continuity, abuse prevention, CSRF protection, language preferences, and security-sensitive product behavior. These technologies are required for core product functions and cannot be disabled without affecting essential service operation.",
-      "analyticsTitle": "Analytics Technologies",
-      "analyticsBody": "Where enabled, MegaConvert may use privacy-conscious analytics technologies to measure reliability, feature usage, conversion performance, PWA behavior, and product health. These analytics workflows may involve event telemetry pipelines, including ClickHouse-backed analytics or similar observability systems, and are used to improve stability rather than to profile the contents of user files.",
-      "localStateTitle": "Local Storage and Offline State",
-      "localStateBody": "Because MegaConvert includes local-first workflows and PWA capabilities, the application may store interface state, selected language, recent tool context, and other non-sensitive runtime preferences on the device to improve continuity across sessions.",
-      "preferencesTitle": "Managing Preferences",
-      "preferencesBody": "You can control cookies and local storage through your browser settings. Please note that blocking strictly necessary technologies may prevent login, session continuity, or secure operation of certain parts of the service.",
-      "changesTitle": "Changes to This Policy",
-      "changesBody": "We may update this Cookie Policy from time to time to reflect legal requirements, product changes, or measurement practices. Material changes will be reflected by updating the effective date above."
+      "intro": "В настоящей Политике использования файлов cookie объясняется, как MegaConvert использует файлы cookie, локальное хранилище и соответствующие технологии браузера для обеспечения безопасного доступа, поддержания состояния продукта и повышения надежности обслуживания.",
+      "necessaryTitle": "Строго необходимые технологии",
+      "necessaryBody": "Строго необходимые файлы cookie и эквивалентные механизмы хранения браузера используются для поддержки аутентификации, непрерывности сеанса, предотвращения злоупотреблений, защиты CSRF, языковых предпочтений и поведения продукта, чувствительного к безопасности. Эти технологии необходимы для основных функций продукта, и их нельзя отключить, не повлияв на работу основных служб.",
+      "analyticsTitle": "Технологии аналитики",
+      "analyticsBody": "Если эта функция включена, MegaConvert может использовать технологии аналитики с учетом конфиденциальности для измерения надежности, использования функций, эффективности преобразования, поведения PWA и работоспособности продукта. Эти рабочие процессы аналитики могут включать конвейеры телеметрии событий, включая аналитику на основе ClickHouse или аналогичные системы наблюдения, и используются для повышения стабильности, а не для профилирования содержимого пользовательских файлов.",
+      "localStateTitle": "Локальное хранилище и автономное состояние",
+      "localStateBody": "Поскольку MegaConvert включает в себя локальные рабочие процессы и возможности PWA, приложение может хранить на устройстве состояние интерфейса, выбранный язык, недавний контекст инструмента и другие неконфиденциальные настройки времени выполнения, чтобы улучшить непрерывность между сеансами.",
+      "preferencesTitle": "Управление настройками",
+      "preferencesBody": "Вы можете управлять файлами cookie и локальным хранилищем через настройки браузера. Обратите внимание, что блокировка строго необходимых технологий может помешать входу в систему, непрерывности сеанса или безопасной работе определенных частей службы.",
+      "changesTitle": "Изменения в этой Политике",
+      "changesBody": "Мы можем время от времени обновлять настоящую Политику использования файлов cookie, чтобы отразить юридические требования, изменения продукта или методы измерения. Существенные изменения будут отражены путем обновления даты вступления в силу, указанной выше."
     }
   },
   "errorBoundary": {
-    "title": "Something went wrong",
-    "unexpected": "Unexpected error",
-    "reload": "Reload"
+    "title": "Что-то пошло не так",
+    "unexpected": "Непредвиденная ошибка",
+    "reload": "Перезагрузить"
   },
   "authModal": {
-    "closeOverlayAria": "Close auth modal",
-    "closeButtonAria": "Close"
+    "closeOverlayAria": "Закрыть модальное окно аутентификации",
+    "closeButtonAria": "Закрыть"
   },
   "authCallback": {
-    "eyebrow": "Identity Callback",
-    "errorTitle": "Sign-in failed",
-    "successTitle": "Finishing secure access",
-    "successSubtitle": "Signed in successfully. Redirecting to MegaConvert...",
+    "eyebrow": "Обратный вызов удостоверения",
+    "errorTitle": "Не удалось войти в систему",
+    "successTitle": "Завершение безопасного доступа",
+    "successSubtitle": "Вход выполнен успешно. Перенаправление на MegaConvert...",
     "sideLabel": "Auth Bridge",
-    "sideTitle": "We are reconnecting your identity to the workspace.",
-    "sideCopy": "This callback route finalizes social or external auth and restores the same local-first product session.",
-    "point1Title": "Session continuity",
-    "point1Copy": "The callback writes your session locally, then returns you to the main product flow.",
-    "point2Title": "One secure handoff",
-    "point2Copy": "OAuth, passkeys and classic auth now converge into the same post-login experience.",
-    "progress": "Completing secure sign-in...",
-    "defaultError": "OAuth callback did not return a valid session."
+    "sideTitle": "Мы повторно подключаем вашу личность к рабочей области.",
+    "sideCopy": "Этот маршрут обратного вызова завершает социальную или внешнюю аутентификацию и восстанавливает тот же локальный сеанс продукта.",
+    "point1Title": "Непрерывность сеанса",
+    "point1Copy": "Обратный вызов записывает ваш сеанс локально, а затем возвращает вас к основному потоку продукта.",
+    "point2Title": "Одна безопасная передача обслуживания",
+    "point2Copy": "OAuth, ключи доступа и классическая аутентификация теперь объединены в один и тот же процесс после входа в систему.",
+    "progress": "Завершение безопасного входа...",
+    "defaultError": "Обратный вызов OAuth не возвратил действительный сеанс."
   },
   "localeSwitcher": {
-    "ariaLabel": "Locale switcher"
+    "ariaLabel": "Переключатель локали"
   },
   "seoPage": {
-    "defaultMetaTitle": "Convert files online | MegaConvert",
-    "defaultMetaDescription": "Convert files online with MegaConvert. Fast, secure, and free.",
-    "metaTitle": "{from} to {to} Converter | MegaConvert",
-    "metaDescription": "Convert {from} files to {to} online in seconds. Fast, secure, and high-quality conversions.",
-    "howToTitle": "How to convert {from} to {to}",
-    "howToUpload": "Upload your {from} file",
-    "howToConvert": "Convert to {to}",
-    "howToDownload": "Download the result file",
-    "faqFreeQuestion": "Is {from} to {to} conversion free?",
-    "faqFreeAnswer": "Yes, free conversion is available with optional PRO capabilities.",
-    "faqSpeedQuestion": "How long does conversion take?",
-    "faqSpeedAnswer": "Most files finish in seconds. Large files may take longer depending on size and format.",
-    "faqSafetyQuestion": "Are my files secure?",
-    "faqSafetyAnswer": "Files are processed over secure channels and are not published publicly.",
-    "notFoundTitle": "Conversion not found",
-    "notFoundSubtitle": "Try one of our popular conversions:",
-    "openConverter": "Open converter",
+    "defaultMetaTitle": "Конвертировать файлы онлайн | MegaConvert",
+    "defaultMetaDescription": "Конвертируйте файлы онлайн с помощью MegaConvert. Быстро, безопасно и бесплатно. Конвертер",
+    "metaTitle": "{from} в {to} | MegaConvert",
+    "metaDescription": "Конвертируйте файлы {from} в {to} онлайн за считанные секунды. Быстрая, безопасная и качественная конвертация.",
+    "howToTitle": "Как преобразовать {from} в {to}",
+    "howToUpload": "Загрузите файл {from}",
+    "howToConvert": "Преобразуйте в {to}",
+    "howToDownload": "Загрузите файл результата",
+    "faqFreeQuestion": "Бесплатно ли конвертировать {from} в {to}?",
+    "faqFreeAnswer": "Да, бесплатное преобразование доступно с дополнительными возможностями PRO.",
+    "faqSpeedQuestion": "Сколько времени занимает конвертация?",
+    "faqSpeedAnswer": "Большинство файлов завершаются за секунды. Большие файлы могут занять больше времени в зависимости от размера и формата.",
+    "faqSafetyQuestion": "Мои файлы в безопасности?",
+    "faqSafetyAnswer": "Файлы обрабатываются по защищенным каналам и не публикуются публично.",
+    "notFoundTitle": "Конверсия не найдена",
+    "notFoundSubtitle": "Попробуйте одно из наших популярных преобразований:",
+    "openConverter": "Открыть конвертер",
     "brand": "MegaConvert",
-    "heroTitle": "{from} to {to} Converter",
-    "heroSubtitle": "Convert {from} files to {to} in seconds. High quality, fast processing, and secure uploads.",
-    "convertNow": "Convert Now",
-    "browseConverters": "Browse Available Converters",
-    "backHome": "Back to Home",
-    "toolAvailabilityNote": "This conversion page is live for discovery and SEO. Runtime processing for this exact format is being expanded.",
-    "howItWorksTitle": "How it works",
-    "stepUpload": "Upload your {from} file.",
-    "stepSettings": "Pick settings (optional).",
-    "stepDownload": "Download your {to} file.",
-    "whyTitle": "Why MegaConvert",
-    "whyItem1": "Fast conversions at scale",
-    "whyItem2": "Secure processing",
-    "whyItem3": "Batch conversion supported",
-    "supportedFormatsTitle": "Supported formats",
+    "heroTitle": "Конвертер {from} в {to}",
+    "heroSubtitle": "Конвертируйте файлы {from} в {to} за секунды. Высокое качество, быстрая обработка и безопасная загрузка.",
+    "convertNow": "Конвертировать сейчас",
+    "browseConverters": "Просмотрите доступные конвертеры",
+    "backHome": "Вернуться домой",
+    "toolAvailabilityNote": "Эта конверсионная страница открыта для поиска и SEO. Обработка времени выполнения именно для этого формата расширяется.",
+    "howItWorksTitle": "Как это работает",
+    "stepUpload": "Загрузите файл {from}.",
+    "stepSettings": "Выберите настройки (необязательно).",
+    "stepDownload": "Загрузите файл {to}.",
+    "whyTitle": "Почему MegaConvert",
+    "whyItem1": "Быстрые преобразования в масштабе",
+    "whyItem2": "Безопасная обработка",
+    "whyItem3": "Поддерживается пакетное преобразование",
+    "supportedFormatsTitle": "Поддерживаемые форматы",
     "faqTitle": "FAQ",
-    "faqCardFreeQuestion": "Is it free?",
-    "faqCardFreeAnswer": "Yes. Free conversions with optional PRO features.",
-    "faqCardSpeedQuestion": "How fast is it?",
-    "faqCardSpeedAnswer": "Most files finish in seconds. Large files can take longer.",
-    "faqCardSafetyQuestion": "Are my files safe?",
-    "faqCardSafetyAnswer": "We process files securely and don't expose them publicly.",
-    "relatedTitle": "Related conversions"
+    "faqCardFreeQuestion": "Это бесплатно?",
+    "faqCardFreeAnswer": "Да. Бесплатные преобразования с дополнительными функциями PRO.",
+    "faqCardSpeedQuestion": "Насколько это быстро?",
+    "faqCardSpeedAnswer": "Большинство файлов завершаются за секунды. Большие файлы могут занять больше времени.",
+    "faqCardSafetyQuestion": "Мои файлы в безопасности?",
+    "faqCardSafetyAnswer": "Мы обрабатываем файлы безопасно и не раскрываем их публично.",
+    "relatedTitle": "Связанные конверсии"
   },
   "pdfEditor": {
-    "eyebrow": "Visual PDF Editor",
-    "title": "PDF Editor",
-    "back": "Back",
-    "dropTitle": "Drop one or more PDF files",
-    "dropBody": "Pages are expanded into a visual ribbon directly in the browser. No server-side processing.",
-    "pagesBadge": "{count} pages",
+    "eyebrow": "Визуальный PDF Редактор",
+    "title": "PDF Редактор",
+    "back": "Назад",
+    "dropTitle": "Удалите один или несколько файлов PDF.",
+    "dropBody": "Страницы разворачиваются в визуальную ленту прямо в браузере. Никакой обработки на стороне сервера.",
+    "pagesBadge": "{count} страниц",
     "pdfBadge": "{count} PDF",
-    "selectedPageBadge": "Selected page {pageNumber}",
-    "pageAlt": "{name} page {pageNumber}",
-    "pageLabel": "Page {pageNumber}",
-    "addPdf": "Add PDF",
-    "exportToOcr": "Export to OCR",
-    "downloadPdf": "Download PDF",
+    "selectedPageBadge": "Выбранная страница {pageNumber}",
+    "pageAlt": "{name} страница {pageNumber}",
+    "pageLabel": "Страница {pageNumber}",
+    "addPdf": "Добавить PDF",
+    "exportToOcr": "Экспорт в OCR",
+    "downloadPdf": "Скачать PDF",
     "progress": {
-      "preparingFile": "Preparing {name}...",
-      "buildingPdf": "Building new PDF...",
-      "preparingDocument": "Preparing document..."
+      "preparingFile": "Подготовка {name}...",
+      "buildingPdf": "Строим новый PDF...",
+      "preparingDocument": "Готовим документ..."
     },
     "errors": {
-      "invalidFiles": "PDF files are required. Images and other formats are not supported here.",
-      "openFailed": "Could not open PDF locally.",
-      "buildFailed": "Could not assemble PDF locally.",
-      "handoffExpired": "The temporary PDF is no longer available. Drop the document into the editor again.",
-      "handoffImportFailed": "Could not import PDF from Zen Portal."
+      "invalidFiles": "Требуются файлы PDF. Изображения и другие форматы здесь не поддерживаются.",
+      "openFailed": "Не удалось открыть PDF локально.",
+      "buildFailed": "Не удалось собрать PDF локально.",
+      "handoffExpired": "Временный PDF больше недоступен. Снова поместите документ в редактор.",
+      "handoffImportFailed": "Не удалось импортировать PDF с Zen Portal."
     }
   },
   "smartOcr": {
-    "eyebrow": "Local Smart OCR",
+    "eyebrow": "Локальный смарт OCR",
     "title": "Smart OCR",
-    "sessionRestored": "Session restored",
-    "dropTitle": "Drop a scan, photo, or PDF here",
-    "dropBody": "Or just press Ctrl+V. OCR runs fully in the browser and sends nothing to the server.",
-    "capabilityClipboard": "Clipboard",
-    "capabilityLanguages": "rus + eng",
+    "sessionRestored": "Сеанс восстановлен",
+    "dropTitle": "Перетащите сюда скан, фотографию или PDF.",
+    "dropBody": "Или просто нажмите Ctrl+V. OCR полностью работает в браузере и ничего не отправляет на сервер.",
+    "capabilityClipboard": "Буфер обмена",
+    "capabilityLanguages": "рус + англ",
     "sourceKindPdf": "PDF OCR",
-    "sourceKindImage": "Image OCR",
-    "sourceAlt": "OCR source",
-    "previewMissing": "Preview was not retained in browser memory, but the text and session metadata were restored.",
-    "extractedTitle": "Extracted Text",
-    "extractedSubtitle": "The locally recognized text can be edited, saved, or copied right away.",
-    "copy": "Copy text",
-    "copied": "Copied",
-    "placeholder": "Recognized text will appear here...",
+    "sourceKindImage": "Изображение OCR",
+    "sourceAlt": "OCR источник",
+    "previewMissing": "Предварительный просмотр не сохранился в памяти браузера, но текст и метаданные сеанса были восстановлены.",
+    "extractedTitle": "Извлеченный текст",
+    "extractedSubtitle": "Локально распознанный текст можно сразу редактировать, сохранять или копировать.",
+    "copy": "Копировать текст",
+    "copied": "Скопировано",
+    "placeholder": "Здесь появится распознанный текст...",
     "progress": {
-      "pdf": "Reading PDF... {progress}%",
-      "document": "Reading document... {progress}%"
+      "pdf": "Чтение PDF... {progress}%",
+      "document": "Чтение документа... {progress}%"
     },
     "errors": {
-      "pagePreviewFailed": "Could not build page preview.",
-      "imagePreviewFailed": "Could not prepare image preview.",
-      "clipboardDirectReadUnavailable": "The browser did not allow direct clipboard reading. Use Ctrl+V inside the OCR window.",
-      "clipboardEmpty": "No image or PDF was found in the clipboard.",
-      "copyFailed": "Could not copy text to clipboard.",
-      "recognitionFailed": "Could not recognize text locally.",
-      "handoffExpired": "The temporary OCR file is no longer available. Drop the PDF again.",
-      "externalImportFailed": "Could not import external source into OCR."
+      "pagePreviewFailed": "Не удалось создать предварительный просмотр страницы.",
+      "imagePreviewFailed": "Не удалось подготовить предварительный просмотр изображения.",
+      "clipboardDirectReadUnavailable": "Браузер не разрешал прямое чтение из буфера обмена. Используйте Ctrl+V внутри окна OCR.",
+      "clipboardEmpty": "В буфере обмена не найдено изображение или PDF.",
+      "copyFailed": "Не удалось скопировать текст в буфер обмена.",
+      "recognitionFailed": "Не удалось распознать текст локально.",
+      "handoffExpired": "Временный файл OCR больше недоступен. Снова отбросьте PDF.",
+      "externalImportFailed": "Не удалось импортировать внешний источник в OCR."
     }
   },
   "toolsPortal": {
@@ -1272,37 +1272,37 @@
     "strictPdfA": {
       "description": "Нормализует сложные документы в архивные пакеты PDF/A для судов, регуляторов и закупочных команд.",
       "paletteCaption": "Комплаенс-конвертация в PDF/A",
-      "title": "Convert to Strict PDF/A",
+      "title": "Преобразование в строгие PDF/A",
       "badge": "Архивный комплаенс"
     },
     "exifMetadataStripper": {
       "description": "Удаляет геометки, отпечатки устройства и скрытые метаданные до того, как файлы покинут вашу организацию.",
       "paletteCaption": "Удаление метаданных перед отправкой",
-      "title": "EXIF/Metadata Stripper",
+      "title": "Средство удаления EXIF/метаданных",
       "badge": "Щит приватности"
     },
     "redactSensitiveData": {
       "description": "Находит имена, суммы и конфиденциальные сущности, а затем подготавливает AI-редактирование для безопасного обмена.",
       "paletteCaption": "ИИ-редактирование чувствительных данных",
-      "title": "Redact Sensitive Data",
+      "title": "Удаление конфиденциальных данных",
       "badge": "Чувствительные данные"
     },
     "autoSubtitleGenerator": {
       "description": "Транскрибирует аудио или видео в аккуратные субтитры и текст, готовый для глобального распространения.",
       "paletteCaption": "Создание субтитров и транскриптов",
-      "title": "Auto-Subtitle Generator",
+      "title": "Генератор автоматических субтитров",
       "badge": "Речь в текст"
     },
     "smartBrandWatermark": {
       "description": "Накладывает единые логотипы на пакеты медиафайлов, сохраняя презентационное качество для клиентской выдачи.",
       "paletteCaption": "Пакетное брендирование медиа",
-      "title": "Smart Brand Watermark",
+      "title": "Умный фирменный водяной знак",
       "badge": "Бренд-операции"
     },
     "invoiceScanner": {
       "description": "Извлекает поставщиков, суммы, налоговые поля и позиции счета в JSON, готовый для аудита и финансовых операций.",
       "paletteCaption": "Извлечение данных из инвойсов в JSON",
-      "title": "AI Invoice Scanner",
+      "title": "Сканер счетов AI",
       "badge": "Финансовый ИИ"
     }
   },
@@ -1312,12 +1312,12 @@
     "description": "Генерируйте API-ключи, отслеживайте использование и готовьте монетизацию для local-first и cloud-fallback сценариев конвертации.",
     "accessBadge": "B2B API-доступ",
     "currentPlan": "Текущий план",
-    "gatewayStatus": "Cloud-first gateway",
+    "gatewayStatus": "Облачный шлюз",
     "gatewayTitle": "Готово к production-интеграциям",
     "gatewayDescription": "Выпускайте scoped-ключи, измеряйте объём запросов и ограничивайте доступ платными тарифами до публичного запуска API.",
     "usageWindow": "Окно использования",
     "plans": {
-      "free": "Free",
+      "free": "Бесплатно",
       "pro": "Pro",
       "enterprise": "Enterprise"
     },
@@ -1396,10 +1396,10 @@
     "quickLook": {
       "loadingPreview": "Загружаем предпросмотр...",
       "imageAlt": "Предпросмотр Quick Look",
-      "iframeTitle": "Quick Look",
+      "iframeTitle": "Быстрый просмотр",
       "emptyFile": "Файл пустой.",
       "unavailable": "Предпросмотр для этого формата недоступен.",
-      "label": "Quick Look",
+      "label": "Быстрый просмотр",
       "fallbackTitle": "Предпросмотр",
       "closePreviewAria": "Закрыть предпросмотр"
     },
@@ -1460,7 +1460,7 @@
       "dropTitle": "Перетащите файл, чтобы открыть AI-слой",
       "dropDescription": "Добавьте один файл или небольшой пакет, опишите желаемый результат и позвольте MegaConvert собрать следующий workflow вокруг него.",
       "capabilities": {
-        "webgpu": "WebGPU-ready",
+        "webgpu": "Поддержка WebGPU",
         "privateFlow": "Приватность по умолчанию"
       },
       "batchLaneReady": "Пакетный режим готов",
@@ -1471,7 +1471,7 @@
       "standingBy": "Готовы к следующей инструкции.",
       "promptPlaceholder": "Опишите желаемый результат простыми словами...",
       "runPipeline": "Запустить пайплайн",
-      "quickLook": "Quick Look",
+      "quickLook": "Быстрый просмотр",
       "newRequest": "Новый запрос",
       "capabilityRack": "Стойка возможностей",
       "intentDrivenPresets": "Пресеты по намерению",
@@ -1491,17 +1491,17 @@
       },
       "capabilityModules": {
         "crystalClear": {
-          "title": "Crystal Clear",
+          "title": "Кристально чистый",
           "copy": "Улучшает статичные изображения, нормализует форматы выдачи и подготавливает более чистый визуальный актив.",
           "prompt": "Улучши это изображение и экспортируй более чистую версию"
         },
         "silence": {
-          "title": "Silence Control",
+          "title": "Контроль тишины",
           "copy": "Очищает речь, подавляет шум и подготавливает более аккуратный аудиорезультат.",
           "prompt": "Очисти аудио и экспортируй более качественную версию"
         },
         "smartCrop": {
-          "title": "Smart Crop",
+          "title": "Умная обрезка",
           "copy": "Подготавливает клипы для коротких форматов выдачи и более лёгких медиа-результатов.",
           "prompt": "Обрежь и оптимизируй этот медиафайл для короткого финального ролика"
         }
@@ -1520,8 +1520,8 @@
   },
   "legacyTools": {
     "batchWatermark": {
-      "eyebrow": "Media / Batch Watermark",
-      "title": "Batch Watermark",
+      "eyebrow": "Медиа/пакетный водяной знак",
+      "title": "Пакетный водяной знак",
       "description": "Накладывайте аккуратный текстовый watermark на пакет изображений и выгружайте обработанный набор в виде ZIP-архива.",
       "defaultWatermark": "MegaConvert",
       "dropTitle": "Перетащите изображения для watermark-пакета",
@@ -1563,7 +1563,7 @@
       }
     },
     "exifScrubber": {
-      "eyebrow": "Privacy / EXIF",
+      "eyebrow": "Конфиденциальность/EXIF",
       "title": "EXIF Scrubber",
       "privacyMode": "Режим приватности",
       "description": "Удаляйте EXIF-метаданные из фотографий до того, как файл покинет устройство или организацию.",
@@ -1591,8 +1591,8 @@
       }
     },
     "imageCompressor": {
-      "eyebrow": "Media / Image Compression",
-      "title": "Image Optimizer",
+      "eyebrow": "Сжатие медиа/изображений",
+      "title": "Оптимизатор изображений",
       "description": "Настраивайте сжатие визуально, сравнивайте до и после и выгружайте более лёгкое изображение без потери контроля.",
       "dropTitle": "Перетащите изображение для оптимизации",
       "dropHint": "Для локального предпросмотра сжатия поддерживаются JPEG, PNG, WEBP, GIF и BMP.",
@@ -1620,9 +1620,9 @@
       }
     },
     "localMediaConverter": {
-      "eyebrow": "Media / WebAssembly",
+      "eyebrow": "Медиа/WebAssembly",
       "engineLabel": "FFmpeg Worker",
-      "title": "Local Media Converter",
+      "title": "Локальный медиаконвертер",
       "description": "Запускайте браузерную конвертацию видео и аудио через локальный FFmpeg-воркер и при желании добавляйте AI-очистку аудиодорожки.",
       "dropTitle": "Перетащите аудио или видео для локальной конвертации",
       "dropHint": "Конвертация остаётся на устройстве, если браузер поддерживает движок.",
@@ -1638,7 +1638,7 @@
       "downloadResult": "Скачать результат",
       "dismissError": "Скрыть",
       "openCloudFallback": "Открыть облачный fallback",
-      "aiEyebrow": "Neural Edge / Audio",
+      "aiEyebrow": "Neural Edge/Audio",
       "aiSectionTitle": "Опциональная AI-очистка аудио",
       "aiSectionDescription": "Для аудиоисточников можно убрать шум и стабилизировать речь до экспорта.",
       "aiEnabled": "AI-очистка включена",
@@ -1651,10 +1651,10 @@
       "voiceEstimated": "Покрытие речи оценено локально.",
       "modelReady": "Модель готова",
       "trackCoverage": "Покрытие речи: {percent}%",
-      "inferenceLabel": "Inference",
+      "inferenceLabel": "Вывод",
       "deviceLabels": {
         "webgpu": "WebGPU",
-        "wasmFallback": "WASM fallback",
+        "wasmFallback": "WASM резервный вариант",
         "wasm": "WASM"
       },
       "formats": {
@@ -1671,7 +1671,7 @@
     },
     "ocrRecognition": {
       "eyebrow": "AI / OCR",
-      "title": "OCR Recognition",
+      "title": "OCR Распознавание",
       "description": "Запускайте OCR в браузере, следите за прогрессом, редактируйте распознанный текст и выгружайте plain text результат.",
       "dropTitle": "Перетащите изображение для распознавания текста",
       "dropHint": "Лучший результат дают чёткие сканы, скриншоты и контрастные фотографии.",
@@ -1688,7 +1688,7 @@
       "downloadTxt": "Скачать TXT",
       "languages": {
         "russian": "Русский",
-        "english": "English"
+        "english": "Английский"
       },
       "statuses": {
         "ready": "Готово к распознаванию текста.",
@@ -1710,8 +1710,8 @@
       }
     },
     "pdfEditor": {
-      "eyebrow": "PDF / Editor",
-      "title": "PDF Editor",
+      "eyebrow": "PDF / Редактор",
+      "title": "PDF Редактор",
       "description": "Визуально собирайте PDF-стек, проверяйте первую страницу каждого документа и локально объединяйте всё в один экспорт.",
       "dropTitle": "Перетащите один или несколько PDF-файлов",
       "dropHint": "Каждый документ локально получает предпросмотр до объединения.",
@@ -1747,9 +1747,9 @@
       }
     },
     "mediaTrimmer": {
-      "eyebrow": "Media / Timeline",
+      "eyebrow": "Медиа/временная шкала",
       "engineLabel": "FFmpeg",
-      "title": "Media Trimmer",
+      "title": "Медиа-триммер",
       "description": "Обрезайте точный фрагмент локального медиафайла и экспортируйте его без перекодирования всего исходника.",
       "dropTitle": "Перетащите аудио или видео для обрезки",
       "dropHint": "Загрузите медиафайл, изучите таймлайн и экспортируйте только нужный фрагмент.",
@@ -1876,12 +1876,12 @@
       "currentJobFormat": "Текущий формат",
       "segmentTime": "Длина сегмента",
       "formats": {
-        "mp4": "Distributed MP4",
-        "webm": "Distributed WEBM"
+        "mp4": "Распределенный MP4",
+        "webm": "Распределенный WEBM"
       },
       "workerNodeFallback": "Worker-узел",
       "workerNodeWithPlatform": "Worker-узел ({platform})",
-      "workerFallback": "Worker {id}",
+      "workerFallback": "Рабочий {id}",
       "errors": {
         "finalizeFailed": "Не удалось собрать финальный распределённый результат.",
         "workerDropped": "Один из worker-узлов покинул кластер до завершения сегмента.",
@@ -1943,6 +1943,26 @@
     }
   },
   "workspaceV3": {
-    "title": "Workspace 3.0"
+    "title": "Рабочая область 3.0"
+  },
+  "planIndividualName": "Индивидуальный",
+  "planIndividualPrice": "Промодоступ",
+  "planIndividualDesc": "Для независимых специалистов, которым нужен премиальный workflow через одобренные промо, академические предложения или партнёрские программы.",
+  "planIndividualFeature1": "Доступ к премиум-инструментам",
+  "planIndividualFeature2": "Приоритетная очередь конвертации",
+  "planIndividualFeature3": "Расширенные настройки и локальный ИИ",
+  "planIndividualFeature4": "Требуется промо- или подтверждённый доступ",
+  "pricingPage": {
+    "eyebrow": "Планы и доступ",
+    "subtitle": "Выберите тариф для личной работы, премиальной пропускной способности или индивидуального доступа по промо-модели.",
+    "popularBadge": "Самый популярный"
+  },
+  "pricing": {
+    "student": {
+      "title": "Вы студент или преподаватель?",
+      "description": "Получите все возможности MegaConvert Pro с огромной скидкой 50%. Подтвердите свой статус, чтобы открыть академический workflow.",
+      "cta": "Подтвердить через SheerID",
+      "redirecting": "Переадресация на верификацию SheerID..."
+    }
   }
 }

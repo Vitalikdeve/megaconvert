@@ -1944,5 +1944,25 @@
   },
   "workspaceV3": {
     "title": "Workspace 3.0"
+  },
+  "planIndividualName": "個人向け",
+  "planIndividualPrice": "プロモアクセス",
+  "planIndividualDesc": "承認済みプロモーション、教育向け特典、またはパートナープログラムを通じてプレミアムワークフローを利用する個人専門職向け。",
+  "planIndividualFeature1": "プレミアムツールへのアクセス",
+  "planIndividualFeature2": "優先変換キュー",
+  "planIndividualFeature3": "高度な設定とローカル AI",
+  "planIndividualFeature4": "プロモまたは認証済みアクセスが必要です",
+  "pricingPage": {
+    "eyebrow": "プランとアクセス",
+    "subtitle": "個人利用、プレミアム処理性能、またはプロモベースの個人アクセス向けに設計されたプランを選択してください。",
+    "popularBadge": "最も人気"
+  },
+  "pricing": {
+    "student": {
+      "title": "学生または教育関係者ですか？",
+      "description": "MegaConvert Pro のすべての機能を 50% 割引で利用できます。ステータスを確認して、学術ワークフローを有効にしてください。",
+      "cta": "SheerID で確認",
+      "redirecting": "SheerID の確認にリダイレクトしています..."
+    }
   }
 }

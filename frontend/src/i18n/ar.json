@@ -1944,5 +1944,25 @@
   },
   "workspaceV3": {
     "title": "Workspace 3.0"
+  },
+  "planIndividualName": "فردي",
+  "planIndividualPrice": "وصول ترويجي",
+  "planIndividualDesc": "للمتخصصين المستقلين الذين يفعّلون مسارات عمل مميزة عبر عروض ترويجية معتمدة أو مزايا تعليمية أو برامج الشركاء.",
+  "planIndividualFeature1": "الوصول إلى الأدوات المميزة",
+  "planIndividualFeature2": "قائمة تحويل ذات أولوية",
+  "planIndividualFeature3": "إعدادات متقدمة وذكاء اصطناعي محلي",
+  "planIndividualFeature4": "يتطلب وصولاً ترويجياً أو تحققاً",
+  "pricingPage": {
+    "eyebrow": "الخطط وإمكانية الوصول",
+    "subtitle": "اختر خطة مصممة للعمل الشخصي أو الأداء المتميز أو الوصول الفردي المعتمد على العروض الترويجية.",
+    "popularBadge": "الأكثر شيوعًا"
+  },
+  "pricing": {
+    "student": {
+      "title": "هل أنت طالب أو مُعلّم؟",
+      "description": "احصل على كامل قوة MegaConvert Pro بخصم كبير قدره 50%. تحقّق من حالتك لفتح سير عملك الأكاديمي.",
+      "cta": "تحقّق عبر SheerID",
+      "redirecting": "جارٍ تحويلك إلى التحقق عبر SheerID..."
+    }
   }
 }

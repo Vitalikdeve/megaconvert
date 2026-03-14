@@ -1944,5 +1944,25 @@
   },
   "workspaceV3": {
     "title": "Workspace 3.0"
+  },
+  "planIndividualName": "Indywidualny",
+  "planIndividualPrice": "Dostęp promocyjny",
+  "planIndividualDesc": "Dla niezależnych specjalistów odblokowujących premium workflows dzięki zatwierdzonym promocjom, ofertom edukacyjnym lub programom partnerskim.",
+  "planIndividualFeature1": "Dostęp do narzędzi premium",
+  "planIndividualFeature2": "Priorytetowa kolejka konwersji",
+  "planIndividualFeature3": "Zaawansowane ustawienia i lokalna AI",
+  "planIndividualFeature4": "Wymagany dostęp promocyjny lub zweryfikowany",
+  "pricingPage": {
+    "eyebrow": "Plany i dostęp",
+    "subtitle": "Wybierz plan do pracy osobistej, premium throughput lub indywidualnego dostępu opartego na promocji.",
+    "popularBadge": "Najpopularniejszy"
+  },
+  "pricing": {
+    "student": {
+      "title": "Czy jesteś studentem lub nauczycielem?",
+      "description": "Zyskaj pełną moc MegaConvert Pro z ogromną zniżką 50%. Zweryfikuj swój status, aby odblokować swój akademicki workflow.",
+      "cta": "Zweryfikuj przez SheerID",
+      "redirecting": "Przekierowanie do weryfikacji SheerID..."
+    }
   }
 }

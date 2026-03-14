@@ -9,7 +9,6 @@ import React, {
 import { AnimatePresence } from 'framer-motion';
 import {
   Archive,
-  ArrowRight,
   Code2,
   FileText,
   Film,
@@ -58,6 +57,7 @@ const MegaGrid = lazy(() => import('./components/tools/MegaGrid.jsx'));
 const ToolsPortalPage = lazy(() => import('./pages/ToolsPortalPage.jsx'));
 const BusinessWorkflowPage = lazy(() => import('./pages/BusinessWorkflowPage.jsx'));
 const ApiDashboard = lazy(() => import('./pages/ApiDashboard.jsx'));
+const PricingPage = lazy(() => import('./pages/PricingPage.jsx'));
 
 function RouteFallback() {
   const { t } = useTranslation();
@@ -68,57 +68,6 @@ function RouteFallback() {
         <div className="h-16 w-16 animate-pulse rounded-full border border-white/[0.08] bg-white/[0.04]" />
         <div className="text-sm uppercase tracking-[0.28em] text-white/28">
           {t('appShell.loadingModule')}
-        </div>
-      </GlassPanel>
-    </div>
-  );
-}
-
-function SpotlightPage({
-  eyebrow,
-  title,
-  description,
-  primaryAction,
-  secondaryAction,
-  onNavigate,
-}) {
-  return (
-    <div className="flex min-h-[calc(100vh-4rem)] w-full items-center justify-center bg-[#030303] px-4 text-white">
-      <GlassPanel className="flex w-[min(780px,calc(100vw-2rem))] flex-col gap-8 px-8 py-10 text-center sm:px-10">
-        <div className="mx-auto inline-flex rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-white/42">
-          {eyebrow}
-        </div>
-
-        <div className="space-y-4">
-          <h1 className="text-3xl font-medium tracking-tight text-white sm:text-4xl">
-            {title}
-          </h1>
-          <p className="mx-auto max-w-2xl text-sm leading-7 text-white/58 sm:text-base">
-            {description}
-          </p>
-        </div>
-
-        <div className="flex flex-col justify-center gap-3 sm:flex-row">
-          {primaryAction ? (
-            <button
-              type="button"
-              onClick={() => onNavigate(primaryAction.to)}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition-transform hover:scale-[1.02] hover:bg-white/90"
-            >
-              {primaryAction.label}
-              <ArrowRight className="h-4 w-4" strokeWidth={1.8} />
-            </button>
-          ) : null}
-
-          {secondaryAction ? (
-            <button
-              type="button"
-              onClick={() => onNavigate(secondaryAction.to)}
-              className="inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white"
-            >
-              {secondaryAction.label}
-            </button>
-          ) : null}
         </div>
       </GlassPanel>
     </div>
@@ -370,16 +319,7 @@ export default function App() {
               />
               <Route
                 path="/pricing"
-                element={(
-                  <SpotlightPage
-                    eyebrow={t('appShell.pricingSpotlight.eyebrow')}
-                    title={t('appShell.pricingSpotlight.title')}
-                    description={t('appShell.pricingSpotlight.description')}
-                    primaryAction={{ label: t('appShell.pricingSpotlight.primaryAction'), to: '/register' }}
-                    secondaryAction={{ label: t('appShell.pricingSpotlight.secondaryAction'), to: '/tools' }}
-                    onNavigate={navigate}
-                  />
-                )}
+                element={<PricingPage />}
               />
               <Route
                 path="/login"

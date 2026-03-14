@@ -1944,5 +1944,25 @@
   },
   "workspaceV3": {
     "title": "Workspace 3.0"
+  },
+  "planIndividualName": "個人版",
+  "planIndividualPrice": "促銷權限",
+  "planIndividualDesc": "適合透過核准促銷、教育優惠或合作夥伴方案解鎖進階工作流程的獨立專業人士。",
+  "planIndividualFeature1": "進階工具存取權",
+  "planIndividualFeature2": "優先轉換佇列",
+  "planIndividualFeature3": "進階設定與本機 AI",
+  "planIndividualFeature4": "需要促銷資格或已驗證資格",
+  "pricingPage": {
+    "eyebrow": "方案與存取",
+    "subtitle": "選擇適合個人工作、進階吞吐量或以促銷為基礎的個人存取方案。",
+    "popularBadge": "最受歡迎"
+  },
+  "pricing": {
+    "student": {
+      "title": "你是學生或教育工作者嗎？",
+      "description": "以 50% 的大幅折扣取得 MegaConvert Pro 的完整能力。驗證你的身分以解鎖你的學術工作流程。",
+      "cta": "透過 SheerID 驗證",
+      "redirecting": "正在重新導向至 SheerID 驗證..."
+    }
   }
 }

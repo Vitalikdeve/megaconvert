@@ -1944,5 +1944,25 @@
   },
   "workspaceV3": {
     "title": "Workspace 3.0"
+  },
+  "planIndividualName": "个人版",
+  "planIndividualPrice": "促销权益",
+  "planIndividualDesc": "适合通过获批优惠码、教育优惠或合作伙伴计划解锁高级工作流的独立专业人士。",
+  "planIndividualFeature1": "高级工具访问权限",
+  "planIndividualFeature2": "优先转换队列",
+  "planIndividualFeature3": "高级设置与本地 AI",
+  "planIndividualFeature4": "需要优惠资格或验证资格",
+  "pricingPage": {
+    "eyebrow": "方案与权限",
+    "subtitle": "选择适合个人工作、高级吞吐量或基于优惠资格的个人访问方案。",
+    "popularBadge": "最受欢迎"
+  },
+  "pricing": {
+    "student": {
+      "title": "你是学生或教育工作者吗？",
+      "description": "以 5 折优惠获得 MegaConvert Pro 的全部能力。验证你的身份以解锁你的学术工作流。",
+      "cta": "通过 SheerID 验证",
+      "redirecting": "正在跳转到 SheerID 验证..."
+    }
   }
 }

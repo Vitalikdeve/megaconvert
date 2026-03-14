@@ -1944,5 +1944,25 @@
   },
   "workspaceV3": {
     "title": "Workspace 3.0"
+  },
+  "planIndividualName": "Individual",
+  "planIndividualPrice": "Promo-toegang",
+  "planIndividualDesc": "Voor zelfstandige specialisten die premium workflows vrijschakelen via goedgekeurde promo's, onderwijsaanbiedingen of partnerprogramma's.",
+  "planIndividualFeature1": "Toegang tot premium-tools",
+  "planIndividualFeature2": "Prioriteitswachtrij voor conversie",
+  "planIndividualFeature3": "Geavanceerde instellingen & lokale AI",
+  "planIndividualFeature4": "Promo- of geverifieerde toegang vereist",
+  "pricingPage": {
+    "eyebrow": "Plannen & toegang",
+    "subtitle": "Kies een plan voor persoonlijk werk, premium doorvoer of individuele toegang op basis van promo's.",
+    "popularBadge": "Meest populair"
+  },
+  "pricing": {
+    "student": {
+      "title": "Ben je student of docent?",
+      "description": "Krijg alle kracht van MegaConvert Pro met maar liefst 50% korting. Verifieer je status om je academische workflow te ontgrendelen.",
+      "cta": "Verifiëren met SheerID",
+      "redirecting": "Doorsturen naar SheerID-verificatie..."
+    }
   }
 }

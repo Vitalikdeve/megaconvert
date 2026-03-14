@@ -2818,6 +2818,7 @@ function applyFormatStateFromWorkerChecks(checks, workerId) {
 const normalizeApiKeyPlan = (raw) => {
   const value = String(raw || '').trim().toLowerCase();
   if (value === 'enterprise') return 'enterprise';
+  if (value === 'student_pro') return 'pro';
   if (value === 'pro') return 'pro';
   return 'free';
 };
@@ -4907,6 +4908,7 @@ function normalizePlanTier(value, fallback = '') {
 function formatPlanTitle(planTier) {
   const normalized = normalizePlanTier(planTier, 'pro');
   if (normalized === 'pro') return 'Pro Plan';
+  if (normalized === 'student_pro') return 'Student Pro Plan';
   if (normalized === 'team') return 'Team Plan';
   if (normalized === 'individual') return 'Individual Plan';
   const words = normalized

@@ -1944,5 +1944,25 @@
   },
   "workspaceV3": {
     "title": "Workspace 3.0"
+  },
+  "planIndividualName": "Individual",
+  "planIndividualPrice": "Acesso promocional",
+  "planIndividualDesc": "Para profissionais independentes que liberam fluxos de trabalho premium por meio de promoções aprovadas, benefícios acadêmicos ou programas de parceiros.",
+  "planIndividualFeature1": "Acesso às ferramentas premium",
+  "planIndividualFeature2": "Fila de conversão prioritária",
+  "planIndividualFeature3": "Configurações avançadas e IA local",
+  "planIndividualFeature4": "Acesso promocional ou verificado obrigatório",
+  "pricingPage": {
+    "eyebrow": "Planos e acesso",
+    "subtitle": "Escolha um plano pensado para trabalho pessoal, throughput premium ou acesso individual baseado em promoção.",
+    "popularBadge": "Mais popular"
+  },
+  "pricing": {
+    "student": {
+      "title": "Você é estudante ou educador?",
+      "description": "Tenha todo o poder do MegaConvert Pro com um enorme desconto de 50%. Verifique seu status para desbloquear seu fluxo de trabalho acadêmico.",
+      "cta": "Verificar com SheerID",
+      "redirecting": "Redirecionando para a verificação SheerID..."
+    }
   }
 }
