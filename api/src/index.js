@@ -435,6 +435,8 @@ const MEGADROP_ROOM_CODE_LENGTH = Math.max(4, Number(process.env.MEGADROP_ROOM_C
 const MEGADROP_ROOM_TTL_MS = Math.max(10 * 60 * 1000, Number(process.env.MEGADROP_ROOM_TTL_MS || 2 * 60 * 60 * 1000));
 const MEGADROP_CLEANUP_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.MEGADROP_CLEANUP_INTERVAL_MS || 5 * 60 * 1000));
 const generateMegaDropRoomCode = customAlphabet('0123456789', MEGADROP_ROOM_CODE_LENGTH);
+const MEGAMEET_ROOM_ID_LENGTH = Math.max(4, Number(process.env.MEGAMEET_ROOM_ID_LENGTH || 64));
+const MEGAMEET_DISPLAY_NAME_LENGTH = Math.max(2, Number(process.env.MEGAMEET_DISPLAY_NAME_LENGTH || 48));
 const MEGAGRID_SESSION_CODE_LENGTH = Math.max(4, Number(process.env.MEGAGRID_SESSION_CODE_LENGTH || 6));
 const MEGAGRID_SESSION_TTL_MS = Math.max(10 * 60 * 1000, Number(process.env.MEGAGRID_SESSION_TTL_MS || 2 * 60 * 60 * 1000));
 const MEGAGRID_CLEANUP_INTERVAL_MS = Math.max(60 * 1000, Number(process.env.MEGAGRID_CLEANUP_INTERVAL_MS || 5 * 60 * 1000));
@@ -442,6 +444,8 @@ const generateMegaGridSessionCode = customAlphabet('0123456789', MEGAGRID_SESSIO
 
 const twofaCodes = new Map(); // email -> { code, expiresAt }
 const twofaTokens = new Map(); // token -> { email, expiresAt }
+const megaMeetRooms = new Map(); // roomId -> { id, createdAt, updatedAt, participants: Map() }
+const megaMeetSocketIndex = new Map(); // socketId -> { roomId }
 const megaDropRooms = new Map(); // roomCode -> { code, hostSocketId, guestSocketId, createdAt, updatedAt }
 const megaDropSocketIndex = new Map(); // socketId -> { roomCode, role }
 const megaGridSessions = new Map(); // sessionCode -> { code, masterSocketId, createdAt, updatedAt, workers: Map() }
@@ -3195,6 +3199,77 @@ function startShareCleanupLoop() {
   });
 }
 
+function normalizeMegaMeetRoomId(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^a-z0-9_-]+/gi, '')
+    .slice(0, MEGAMEET_ROOM_ID_LENGTH)
+    .toLowerCase();
+}
+
+function normalizeMegaMeetDisplayName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, MEGAMEET_DISPLAY_NAME_LENGTH);
+}
+
+function getMegaMeetRoomName(roomId) {
+  return `meet:${normalizeMegaMeetRoomId(roomId)}`;
+}
+
+function getOrCreateMegaMeetRoom(roomId) {
+  const normalizedRoomId = normalizeMegaMeetRoomId(roomId);
+  if (!normalizedRoomId) return null;
+
+  let room = megaMeetRooms.get(normalizedRoomId);
+  if (room) {
+    return room;
+  }
+
+  const now = Date.now();
+  room = {
+    id: normalizedRoomId,
+    createdAt: now,
+    updatedAt: now,
+    participants: new Map(),
+  };
+  megaMeetRooms.set(normalizedRoomId, room);
+  return room;
+}
+
+function removeSocketFromMegaMeetRoom(socket, reason = 'left_room') {
+  if (!socket?.id) return;
+  const membership = megaMeetSocketIndex.get(socket.id);
+  if (!membership) return;
+
+  megaMeetSocketIndex.delete(socket.id);
+
+  const room = megaMeetRooms.get(membership.roomId);
+  try {
+    socket.leave(getMegaMeetRoomName(membership.roomId));
+  } catch {
+    // ignore leave failures during disconnect
+  }
+
+  if (!room) return;
+
+  const participant = room.participants.get(socket.id);
+  room.participants.delete(socket.id);
+  room.updatedAt = Date.now();
+
+  socket.to(getMegaMeetRoomName(room.id)).emit('user-disconnected', {
+    roomId: room.id,
+    socketId: socket.id,
+    displayName: participant?.displayName || '',
+    reason,
+  });
+
+  if (room.participants.size === 0) {
+    megaMeetRooms.delete(room.id);
+  }
+}
+
 function normalizeMegaDropRoomCode(value) {
   return String(value || '')
     .trim()
@@ -3533,6 +3608,138 @@ io.on('connection', (socket) => {
   log({
     type: 'megadrop_socket_connected',
     socketId: socket.id
+  });
+
+  socket.on('join-meet-room', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const roomId = normalizeMegaMeetRoomId(payload?.roomId);
+    const displayName = normalizeMegaMeetDisplayName(payload?.displayName) || `Guest-${socket.id.slice(-4)}`;
+
+    if (!roomId) {
+      reply({
+        ok: false,
+        code: 'ROOM_ID_REQUIRED',
+        message: 'Meet room id is required'
+      });
+      return;
+    }
+
+    try {
+      removeSocketFromMegaMeetRoom(socket, 'switch_room');
+      const room = getOrCreateMegaMeetRoom(roomId);
+      if (!room) {
+        reply({
+          ok: false,
+          code: 'ROOM_CREATE_FAILED',
+          message: 'Unable to allocate meet room'
+        });
+        return;
+      }
+
+      room.participants.set(socket.id, {
+        socketId: socket.id,
+        displayName,
+        joinedAt: Date.now(),
+        updatedAt: Date.now()
+      });
+      room.updatedAt = Date.now();
+
+      megaMeetSocketIndex.set(socket.id, {
+        roomId: room.id
+      });
+      socket.join(getMegaMeetRoomName(room.id));
+
+      reply({
+        ok: true,
+        roomId: room.id,
+        participantCount: room.participants.size
+      });
+
+      socket.to(getMegaMeetRoomName(room.id)).emit('user-connected', {
+        roomId: room.id,
+        socketId: socket.id,
+        displayName
+      });
+
+      log({
+        type: 'megameet_room_joined',
+        roomId: room.id,
+        socketId: socket.id,
+        participantCount: room.participants.size
+      });
+    } catch (error) {
+      logError({
+        type: 'megameet_join_room_failed',
+        socketId: socket.id,
+        roomId,
+        error: error?.message || 'unknown'
+      });
+      reply({
+        ok: false,
+        code: 'JOIN_FAILED',
+        message: 'Unable to join MegaMeet room'
+      });
+    }
+  });
+
+  socket.on('signal', (payload, callback) => {
+    const reply = typeof callback === 'function' ? callback : () => {};
+    const membership = megaMeetSocketIndex.get(socket.id);
+    const roomId = normalizeMegaMeetRoomId(payload?.roomId || membership?.roomId);
+    const targetSocketId = String(payload?.targetSocketId || '').trim();
+
+    if (!membership || !roomId || membership.roomId !== roomId) {
+      reply({
+        ok: false,
+        code: 'ROOM_MEMBERSHIP_REQUIRED',
+        message: 'Socket is not attached to this meet room'
+      });
+      return;
+    }
+
+    const room = megaMeetRooms.get(roomId);
+    if (!room) {
+      reply({
+        ok: false,
+        code: 'ROOM_NOT_FOUND',
+        message: 'MegaMeet room not found'
+      });
+      return;
+    }
+
+    if (!targetSocketId || !room.participants.has(targetSocketId)) {
+      reply({
+        ok: false,
+        code: 'TARGET_NOT_FOUND',
+        message: 'Target peer is not available in this room'
+      });
+      return;
+    }
+
+    const sender = room.participants.get(socket.id);
+    if (sender) {
+      sender.updatedAt = Date.now();
+    }
+    room.updatedAt = Date.now();
+
+    io.to(targetSocketId).emit('signal', {
+      roomId,
+      fromSocketId: socket.id,
+      fromDisplayName: sender?.displayName || '',
+      signal: payload?.signal || null
+    });
+
+    reply({ ok: true });
+  });
+
+  socket.on('leave-meet-room', (_payload, callback) => {
+    removeSocketFromMegaMeetRoom(socket, 'left_room');
+    const reply = typeof callback === 'function' ? callback : () => {};
+    reply({ ok: true });
+  });
+
+  socket.on('disconnect', () => {
+    removeSocketFromMegaMeetRoom(socket, 'disconnect');
   });
 
   socket.on('megadrop:create-room', (_payload, callback) => {

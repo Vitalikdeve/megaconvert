@@ -62,6 +62,7 @@ const AccountBillingPage = lazy(() => import('./pages/AccountBillingPage.jsx'));
 const BlogIndex = lazy(() => import('./pages/blog/BlogIndex.jsx'));
 const BlogPost = lazy(() => import('./pages/blog/BlogPost.jsx'));
 const StudioLayout = lazy(() => import('./pages/editors/StudioLayout.jsx'));
+const MegaMeetRoom = lazy(() => import('./pages/workspace/MegaMeetRoom.jsx'));
 
 function RouteFallback({ fullScreen = false }) {
   const { t } = useTranslation();
@@ -88,6 +89,8 @@ export default function App() {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
   const isStudioRoute = location.pathname === '/editors' || location.pathname.startsWith('/editors/');
+  const isMeetRoute = location.pathname.startsWith('/meet/');
+  const isImmersiveRoute = isStudioRoute || isMeetRoute;
   const apiBase = useMemo(
     () => String(import.meta.env.VITE_API_BASE || '/api').trim() || '/api',
     [],
@@ -282,7 +285,7 @@ export default function App() {
 
   const routeShell = (
     <AnimatePresence mode="wait">
-      <Suspense fallback={<RouteFallback fullScreen={isStudioRoute} />}>
+      <Suspense fallback={<RouteFallback fullScreen={isImmersiveRoute} />}>
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<HomeDashboard />} />
           <Route path="/receive" element={<ZenPortal />} />
@@ -351,6 +354,10 @@ export default function App() {
             element={<StudioLayout />}
           />
           <Route
+            path="/meet/:roomId"
+            element={<MegaMeetRoom />}
+          />
+          <Route
             path="/account/billing"
             element={<AccountBillingPage />}
           />
@@ -382,9 +389,9 @@ export default function App() {
 
   return (
     <>
-      {isStudioRoute ? routeShell : <MainLayout>{routeShell}</MainLayout>}
+      {isImmersiveRoute ? routeShell : <MainLayout>{routeShell}</MainLayout>}
 
-      {isStudioRoute ? null : (
+      {isImmersiveRoute ? null : (
         <CommandPalette
           open={isPaletteOpen}
           onOpenChange={setIsPaletteOpen}
