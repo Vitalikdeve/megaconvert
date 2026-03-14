@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Check, Globe } from 'lucide-react';
+import { Check, Globe, Video } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 import logoImage from '../../assets/logo.jpg';
@@ -101,6 +101,16 @@ export default function Header() {
       </nav>
 
       <div className="flex items-center gap-2 sm:gap-3">
+        <Link
+          to={{ pathname: '/', hash: '#meet-launcher' }}
+          className="inline-flex h-10 min-w-[3rem] items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 text-white/72 transition-colors duration-300 hover:bg-white/[0.08] hover:text-white sm:min-w-[7.5rem]"
+        >
+          <Video className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+          <span className="hidden text-sm sm:inline">
+            {t('headerMeet', 'Meet')}
+          </span>
+        </Link>
+
         <div
           ref={menuRef}
           className="relative"
