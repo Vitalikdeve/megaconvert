@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowRight,
   AudioLines,
@@ -61,17 +62,17 @@ function CatSilhouette({ sleeping = false }) {
   );
 }
 
-function ProgressCatBar({ progress, pipelineStage, etaSeconds, sleeping }) {
+function ProgressCatBar({ progress, pipelineStage, etaSeconds, sleeping, t }) {
   return (
     <div className="portal-progress-card">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">Quantum Tube</div>
+          <div className="text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">{t('legacySingularity.progress.quantumTube')}</div>
           <div className="mt-2 text-lg font-semibold text-white">{Math.round(progress)}%</div>
         </div>
         <div className="text-right">
-          <div className="text-sm text-white/80">{pipelineStage || 'Орбитальная обработка'}</div>
-          <div className="mt-1 text-xs text-white/45">{etaSeconds !== null ? `ETA ${etaSeconds}s` : 'Stable orbit'}</div>
+          <div className="text-sm text-white/80">{pipelineStage || t('legacySingularity.progress.orbitProcessing')}</div>
+          <div className="mt-1 text-xs text-white/45">{etaSeconds !== null ? t('legacySingularity.progress.eta', { seconds: etaSeconds }) : t('legacySingularity.progress.stableOrbit')}</div>
         </div>
       </div>
       <div className="portal-progress-track mt-5">
@@ -82,9 +83,9 @@ function ProgressCatBar({ progress, pipelineStage, etaSeconds, sleeping }) {
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-white/38">
-        <span className="portal-mini-chip">Analyze</span>
-        <span className="portal-mini-chip">Morph</span>
-        <span className="portal-mini-chip">Finalize</span>
+        <span className="portal-mini-chip">{t('legacySingularity.progress.analyze')}</span>
+        <span className="portal-mini-chip">{t('legacySingularity.progress.morph')}</span>
+        <span className="portal-mini-chip">{t('legacySingularity.progress.finalize')}</span>
       </div>
     </div>
   );
@@ -255,10 +256,10 @@ function getQualityValue(kind, settings) {
   return 58;
 }
 
-function getQualityLabel(value) {
-  if (value >= 84) return 'Studio';
-  if (value >= 58) return 'Balanced';
-  return 'Light';
+function getQualityLabel(value, t) {
+  if (value >= 84) return t('legacySingularity.qualityLabels.studio');
+  if (value >= 58) return t('legacySingularity.qualityLabels.balanced');
+  return t('legacySingularity.qualityLabels.light');
 }
 
 function applyQualityPreset(kind, value, setSettings) {
@@ -285,25 +286,25 @@ function applyQualityPreset(kind, value, setSettings) {
   });
 }
 
-function humanizeActionLabel(kind, ext, target) {
+function humanizeActionLabel(kind, ext, target, t) {
   const upperTarget = String(target || '').toUpperCase();
-  if (kind === 'image' && (ext === 'heic' || ext === 'heif') && target === 'jpg') return 'Превратить в обычное фото (JPG)';
-  if (kind === 'image' && target === 'webp') return 'Сделать web-ready (WEBP)';
-  if (kind === 'image' && target === 'pdf') return 'Собрать в PDF';
-  if (kind === 'video' && target === 'mp4') return 'Сделать универсальное видео (MP4)';
-  if (kind === 'video' && target === 'gif') return 'Сделать GIF';
-  if ((kind === 'video' || kind === 'audio') && target === 'mp3') return 'Вытащить только музыку';
-  if (kind === 'audio' && target === 'wav') return 'Сделать студийный WAV';
-  if (kind === 'doc' && target === 'pdf') return 'Сделать удобный PDF';
-  if (kind === 'doc' && target === 'docx') return 'Открыть для редактирования (DOCX)';
-  return `В ${upperTarget}`;
+  if (kind === 'image' && (ext === 'heic' || ext === 'heif') && target === 'jpg') return t('legacySingularity.actions.heicToJpg');
+  if (kind === 'image' && target === 'webp') return t('legacySingularity.actions.imageToWebp');
+  if (kind === 'image' && target === 'pdf') return t('legacySingularity.actions.imageToPdf');
+  if (kind === 'video' && target === 'mp4') return t('legacySingularity.actions.videoToMp4');
+  if (kind === 'video' && target === 'gif') return t('legacySingularity.actions.videoToGif');
+  if ((kind === 'video' || kind === 'audio') && target === 'mp3') return t('legacySingularity.actions.extractAudio');
+  if (kind === 'audio' && target === 'wav') return t('legacySingularity.actions.audioToWav');
+  if (kind === 'doc' && target === 'pdf') return t('legacySingularity.actions.docToPdf');
+  if (kind === 'doc' && target === 'docx') return t('legacySingularity.actions.docToDocx');
+  return t('legacySingularity.actions.generic', { target: upperTarget });
 }
 
 function findMatchingTool(tools, from, to) {
   return tools.find((tool) => tool.fromFormats.includes(from) && tool.toFormats.includes(to)) || null;
 }
 
-function buildPortalIntent({ file, files, tools, smartSuggestion }) {
+function buildPortalIntent({ file, files, tools, smartSuggestion, t }) {
   if (!file) return null;
 
   const { kind, ext } = detectFileKind(file);
@@ -316,7 +317,7 @@ function buildPortalIntent({ file, files, tools, smartSuggestion }) {
     actions.push({
       id: tool.id,
       toolId: tool.id,
-      label: humanizeActionLabel(kind, ext, target),
+      label: humanizeActionLabel(kind, ext, target, t),
       caption: `${ext.toUpperCase()} → ${String(target || '').toUpperCase()}`,
       tone
     });
@@ -348,19 +349,19 @@ function buildPortalIntent({ file, files, tools, smartSuggestion }) {
     isBatch,
     actions: actions.slice(0, 4),
     headline: isBatch
-      ? 'Франкенштейн-мод активирован'
+      ? t('legacySingularity.intent.batchHeadline')
       : kind === 'image'
-        ? 'Фото распознано без вопросов'
+        ? t('legacySingularity.intent.imageHeadline')
         : kind === 'video'
-          ? 'Видео готово к перевоплощению'
+          ? t('legacySingularity.intent.videoHeadline')
           : kind === 'audio'
-            ? 'Аудио распознано мгновенно'
+            ? t('legacySingularity.intent.audioHeadline')
             : kind === 'doc'
-              ? 'Документ понятен с первого взгляда'
-              : 'Файл захвачен сингулярностью',
+              ? t('legacySingularity.intent.docHeadline')
+              : t('legacySingularity.intent.genericHeadline'),
     subline: isBatch
-      ? `Мы уже видим ${files.length} файлов и готовим пакетный сценарий без лишних экранов.`
-      : 'Ваш файл не покидал ваш компьютер. Абсолютная приватность и скорость света.'
+      ? t('legacySingularity.intent.batchSubline', { count: files.length })
+      : t('legacySingularity.intent.genericSubline')
   };
 }
 
@@ -422,6 +423,7 @@ export default function SingularityHomePage({
   prepareMegaDrop,
   trustedBy = []
 }) {
+  const { t } = useTranslation();
   const previousStatusRef = useRef(status);
   const [isDragOver, setIsDragOver] = useState(false);
   const [rippleToken, setRippleToken] = useState(0);
@@ -431,8 +433,8 @@ export default function SingularityHomePage({
 
   const primaryFile = file || files[0] || null;
   const intent = useMemo(
-    () => buildPortalIntent({ file: primaryFile, files, tools, smartSuggestion }),
-    [files, primaryFile, smartSuggestion, tools]
+    () => buildPortalIntent({ file: primaryFile, files, tools, smartSuggestion, t }),
+    [files, primaryFile, smartSuggestion, t, tools]
   );
   const qualityValue = useMemo(
     () => getQualityValue(intent?.kind || 'other', settings),
@@ -496,7 +498,7 @@ export default function SingularityHomePage({
     const targetToolId = selectedAction?.toolId || '';
     await handleProcess({
       toolId: targetToolId,
-      initialStage: 'Сингулярность перестраивает файл...'
+      initialStage: t('legacySingularity.statuses.rebuilding')
     });
   };
 
@@ -520,8 +522,8 @@ export default function SingularityHomePage({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="singularity-eyebrow">The Portal</div>
-          <h1 className="singularity-title">Брось сюда что угодно</h1>
+          <div className="singularity-eyebrow">{t('legacySingularity.portalBadge')}</div>
+          <h1 className="singularity-title">{t('legacySingularity.heroTitle')}</h1>
         </motion.div>
 
         <motion.div
@@ -573,7 +575,7 @@ export default function SingularityHomePage({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                <div className="portal-orbit-badge">Tap / Drop</div>
+                <div className="portal-orbit-badge">{t('legacySingularity.tapDrop')}</div>
               </motion.div>
             ) : (
               <motion.div
@@ -590,13 +592,13 @@ export default function SingularityHomePage({
                     <div>
                       <div className="portal-file-name">{primaryFile.name}</div>
                       <div className="portal-file-meta">
-                        {files.length > 1 ? `${files.length} files` : formatBytes(primaryFile.size)} • {intent?.ext?.toUpperCase() || 'FILE'}
+                        {files.length > 1 ? t('legacySingularity.filesCount', { count: files.length }) : formatBytes(primaryFile.size)} • {intent?.ext?.toUpperCase() || t('legacySingularity.fileFallback')}
                       </div>
                     </div>
                   </div>
                   <div className="portal-file-actions">
-                    <HomeButton variant="ghost" onClick={(event) => { event.stopPropagation(); openFilePicker(); }}>Заменить</HomeButton>
-                    <HomeButton variant="ghost" onClick={(event) => { event.stopPropagation(); reset(); }}>Сбросить</HomeButton>
+                    <HomeButton variant="ghost" onClick={(event) => { event.stopPropagation(); openFilePicker(); }}>{t('btnReplaceFile')}</HomeButton>
+                    <HomeButton variant="ghost" onClick={(event) => { event.stopPropagation(); reset(); }}>{t('legacySingularity.reset')}</HomeButton>
                   </div>
                 </div>
 
@@ -626,8 +628,8 @@ export default function SingularityHomePage({
                       <div className="portal-quality-card">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">Tactile Quality</div>
-                            <div className="mt-2 text-lg font-semibold text-white">{getQualityLabel(qualityValue)}</div>
+                            <div className="text-[11px] uppercase tracking-[0.22em] text-white/45">{t('legacySingularity.tactileQuality')}</div>
+                            <div className="mt-2 text-lg font-semibold text-white">{getQualityLabel(qualityValue, t)}</div>
                           </div>
                           <div className="portal-quality-pill" style={{ '--portal-quality-color': `hsl(${qualityHue} 88% 58%)` }}>
                             {qualityValue}
@@ -655,7 +657,7 @@ export default function SingularityHomePage({
                         }}
                       >
                         <Zap size={16} />
-                        {selectedAction?.label || 'Конвертировать'}
+                        {selectedAction?.label || t('btnConvert')}
                       </HomeButton>
                       <HomeButton
                         variant="outline"
@@ -666,7 +668,7 @@ export default function SingularityHomePage({
                         }}
                       >
                         <Wand2 size={16} />
-                        AI Magic
+                        {t('legacySingularity.aiMagic')}
                       </HomeButton>
                     </div>
                   </>
@@ -678,22 +680,23 @@ export default function SingularityHomePage({
                     pipelineStage={pipelineStage}
                     etaSeconds={etaSeconds}
                     sleeping={sleepingCat}
+                    t={t}
                   />
                 )}
 
                 {status === 'done' && (
                   <div className="portal-result-panel">
-                    <div className="portal-result-badge">Singularity complete</div>
-                    <div className="portal-result-title">Файл уже готов. Дальше только удовольствие.</div>
+                    <div className="portal-result-badge">{t('legacySingularity.doneBadge')}</div>
+                    <div className="portal-result-title">{t('legacySingularity.doneTitle')}</div>
                     <div className="portal-result-actions">
                       <HomeButton onClick={(event) => { event.stopPropagation(); download(); }}>
                         <Download size={16} />
-                        Скачать
+                        {t('download')}
                       </HomeButton>
                       {canOpenQuickLook && (
                         <HomeButton variant="secondary" onClick={(event) => { event.stopPropagation(); void openQuickLook(); }}>
                           <Eye size={16} />
-                          Quick Look
+                          {t('legacySingularity.quickLook')}
                         </HomeButton>
                       )}
                       <HomeButton
@@ -705,7 +708,7 @@ export default function SingularityHomePage({
                         disabled={!downloadUrl || isPreparingShare}
                       >
                         <QrCode size={16} />
-                        {isPreparingShare ? 'Готовим MegaDrop...' : 'MegaDrop QR'}
+                        {isPreparingShare ? t('legacySingularity.preparingMegaDrop') : t('legacySingularity.megaDropQr')}
                       </HomeButton>
                       <HomeButton
                         variant="outline"
@@ -715,23 +718,23 @@ export default function SingularityHomePage({
                         }}
                       >
                         <ArrowRight size={16} />
-                        Public Link
+                        {t('legacySingularity.publicLink')}
                       </HomeButton>
                     </div>
-                    {shareLink ? <div className="portal-result-hint">Публичная ссылка готова: {shareLink}</div> : null}
+                    {shareLink ? <div className="portal-result-hint">{t('legacySingularity.publicLinkReady', { link: shareLink })}</div> : null}
                     {shareHint ? <div className="portal-result-hint">{shareHint}</div> : null}
                   </div>
                 )}
 
                 {status === 'error' && (
                   <div className="portal-error-panel">
-                    <div className="portal-result-title">Сингулярность споткнулась, но файл в безопасности.</div>
+                    <div className="portal-result-title">{t('legacySingularity.errorTitle')}</div>
                     <div className="portal-result-actions">
                       <HomeButton variant="secondary" onClick={(event) => { event.stopPropagation(); reset(); }}>
-                        Начать заново
+                        {t('legacySingularity.startOver')}
                       </HomeButton>
                       <HomeButton onClick={(event) => { event.stopPropagation(); void runSelectedAction(); }}>
-                        Повторить
+                        {t('btnRetry')}
                       </HomeButton>
                     </div>
                   </div>
@@ -747,26 +750,26 @@ export default function SingularityHomePage({
           {
             id: 'turbo',
             icon: ShieldCheck,
-            title: 'Режим Турбо-Вкладка',
-            body: 'WASM и клиентские пайплайны держат файл у пользователя. Без очередей, без поездок на сервер, без потери темпа.'
+            title: t('legacySingularity.features.turbo.title'),
+            body: t('legacySingularity.features.turbo.body')
           },
           {
             id: 'magic',
             icon: Sparkles,
-            title: 'AI Magic',
-            body: 'Открывает AI Studio уже с твоим файлом в памяти приложения. Следующий шаг чувствуется как продолжение, а не новый сценарий.'
+            title: t('legacySingularity.features.magic.title'),
+            body: t('legacySingularity.features.magic.body')
           },
           {
             id: 'megadrop',
             icon: QrCode,
-            title: 'MegaDrop',
-            body: 'После готовности результата можно одним кликом развернуть WebRTC-шаринг с QR-кодом и перекинуть файл напрямую.'
+            title: t('legacySingularity.features.megadrop.title'),
+            body: t('legacySingularity.features.megadrop.body')
           },
           {
             id: 'frankenstein',
             icon: Layers3,
-            title: 'Франкенштейн-мод',
-            body: 'Если в портал летит пачка файлов, мы сразу переключаемся в пакетную логику и не заставляем пользователя вручную собирать конвейер.'
+            title: t('legacySingularity.features.frankenstein.title'),
+            body: t('legacySingularity.features.frankenstein.body')
           }
         ].map((item) => {
           const Icon = item.icon;
@@ -791,7 +794,7 @@ export default function SingularityHomePage({
 
       <section className="singularity-trust-strip">
         <div className="singularity-trust-stat">
-          <div className="singularity-trust-label">Files touched</div>
+          <div className="singularity-trust-label">{t('legacySingularity.filesTouched')}</div>
           <div className="singularity-trust-value">{Number(filesConvertedCount || 0).toLocaleString()}</div>
         </div>
         <div className="singularity-trust-brands">

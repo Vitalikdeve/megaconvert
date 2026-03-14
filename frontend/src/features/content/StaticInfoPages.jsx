@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function StaticInfoPages({
   page,
@@ -11,6 +12,7 @@ export default function StaticInfoPages({
   legalContactEmail,
   ui: UI
 }) {
+  const { t: translate } = useTranslation();
   const contactLink = (
     <a href={`mailto:${legalContactEmail}`} className="text-blue-700 hover:underline">
       {legalContactEmail}
@@ -231,15 +233,15 @@ export default function StaticInfoPages({
 
     case 'mission':
       return (
-        <UI.Page title="Mission" subtitle="Build the most secure and intelligent file workspace on the web.">
+        <UI.Page title={translate('legacyStaticInfo.mission.title')} subtitle={translate('legacyStaticInfo.mission.subtitle')}>
           <div className="grid md:grid-cols-2 gap-6">
             <UI.PageCard>
-              <div className="font-semibold mb-2">What we build</div>
-              <div className="text-sm text-slate-600">Conversion, automation, observability and trust in one platform.</div>
+              <div className="font-semibold mb-2">{translate('legacyStaticInfo.mission.whatWeBuildTitle')}</div>
+              <div className="text-sm text-slate-600">{translate('legacyStaticInfo.mission.whatWeBuildBody')}</div>
             </UI.PageCard>
             <UI.PageCard>
-              <div className="font-semibold mb-2">How we build</div>
-              <div className="text-sm text-slate-600">Reliability-first architecture with transparent status and explainable AI.</div>
+              <div className="font-semibold mb-2">{translate('legacyStaticInfo.mission.howWeBuildTitle')}</div>
+              <div className="text-sm text-slate-600">{translate('legacyStaticInfo.mission.howWeBuildBody')}</div>
             </UI.PageCard>
           </div>
         </UI.Page>
@@ -247,24 +249,24 @@ export default function StaticInfoPages({
 
     case 'careers':
       return (
-        <UI.Page title="Careers" subtitle="Join the team building enterprise-grade file infrastructure.">
+        <UI.Page title={translate('legacyStaticInfo.careers.title')} subtitle={translate('legacyStaticInfo.careers.subtitle')}>
           <UI.PageCard>
-            <div className="text-sm text-slate-600">Open roles: Product Engineer, Platform Engineer, Security Engineer.</div>
-            <div className="mt-3 text-sm text-slate-600">Send portfolio and CV to {contactLink}.</div>
+            <div className="text-sm text-slate-600">{translate('legacyStaticInfo.careers.openRoles')}</div>
+            <div className="mt-3 text-sm text-slate-600">{translate('legacyStaticInfo.careers.sendCvPrefix')} {contactLink}.</div>
           </UI.PageCard>
         </UI.Page>
       );
 
     case 'press':
       return (
-        <UI.Page title="Press Kit" subtitle="Brand assets, product screenshots, and company facts for media.">
+        <UI.Page title={translate('legacyStaticInfo.press.title')} subtitle={translate('legacyStaticInfo.press.subtitle')}>
           <div className="grid md:grid-cols-2 gap-6">
             <UI.PageCard>
-              <div className="font-semibold mb-2">Assets</div>
-              <div className="text-sm text-slate-600">Logos, screenshots, and product overview available on request.</div>
+              <div className="font-semibold mb-2">{translate('legacyStaticInfo.press.assetsTitle')}</div>
+              <div className="text-sm text-slate-600">{translate('legacyStaticInfo.press.assetsBody')}</div>
             </UI.PageCard>
             <UI.PageCard>
-              <div className="font-semibold mb-2">Media Contact</div>
+              <div className="font-semibold mb-2">{translate('legacyStaticInfo.press.mediaContactTitle')}</div>
               <div className="text-sm text-slate-600">{contactLink}</div>
             </UI.PageCard>
           </div>
@@ -273,21 +275,21 @@ export default function StaticInfoPages({
 
     case 'resources':
       return (
-        <UI.Page title="Resources" subtitle="Documentation, guides, roadmap and security materials.">
+        <UI.Page title={translate('legacyStaticInfo.resources.title')} subtitle={translate('legacyStaticInfo.resources.subtitle')}>
           <div className="grid md:grid-cols-2 gap-6">
             {[
-              { title: 'API Docs', path: '/api' },
-              { title: 'Developer Portal', path: '/developer-portal' },
-              { title: 'Roadmap', path: '/roadmap' },
-              { title: 'Changelog', path: '/changelog' },
-              { title: 'Status', path: '/status' },
-              { title: 'Security Whitepaper', path: '/security-whitepaper' },
-              { title: 'Bug Bounty', path: '/bug-bounty' },
-              { title: 'Help Center', path: '/faq' }
+              { title: translate('legacyStaticInfo.resources.items.apiDocs'), path: '/api' },
+              { title: translate('legacyStaticInfo.resources.items.developerPortal'), path: '/developer-portal' },
+              { title: translate('legacyStaticInfo.resources.items.roadmap'), path: '/roadmap' },
+              { title: translate('legacyStaticInfo.resources.items.changelog'), path: '/changelog' },
+              { title: translate('legacyStaticInfo.resources.items.status'), path: '/status' },
+              { title: translate('legacyStaticInfo.resources.items.securityWhitepaper'), path: '/security-whitepaper' },
+              { title: translate('legacyStaticInfo.resources.items.bugBounty'), path: '/bug-bounty' },
+              { title: translate('legacyStaticInfo.resources.items.helpCenter'), path: '/faq' }
             ].map((item) => (
               <UI.PageCard key={item.title}>
                 <div className="font-semibold">{item.title}</div>
-                <UI.Button className="mt-3" variant="secondary" onClick={() => navigate(item.path)}>Open</UI.Button>
+                <UI.Button className="mt-3" variant="secondary" onClick={() => navigate(item.path)}>{translate('btnOpen')}</UI.Button>
               </UI.PageCard>
             ))}
           </div>
@@ -296,19 +298,19 @@ export default function StaticInfoPages({
 
     case 'bug-bounty':
       return (
-        <UI.Page title="Bug Bounty" subtitle="Responsible disclosure process for security researchers.">
+        <UI.Page title={translate('legacyStaticInfo.bugBounty.title')} subtitle={translate('legacyStaticInfo.bugBounty.subtitle')}>
           <UI.PageCard>
-            <div className="text-sm text-slate-600">Report vulnerabilities to {contactLink}. Include reproduction steps, impact and proof of concept.</div>
+            <div className="text-sm text-slate-600">{translate('legacyStaticInfo.bugBounty.bodyPrefix')} {contactLink}. {translate('legacyStaticInfo.bugBounty.bodySuffix')}</div>
           </UI.PageCard>
         </UI.Page>
       );
 
     case 'security-whitepaper':
       return (
-        <UI.Page title="Security Whitepaper" subtitle="Processing model, encryption and retention controls.">
+        <UI.Page title={translate('legacyStaticInfo.securityWhitepaper.title')} subtitle={translate('legacyStaticInfo.securityWhitepaper.subtitle')}>
           <UI.PageCard>
-            <div className="text-sm text-slate-600">Request PDF whitepaper from security team. Includes architecture, controls, and incident process.</div>
-            <UI.Button className="mt-3" onClick={() => navigate('/contact')}>Request whitepaper</UI.Button>
+            <div className="text-sm text-slate-600">{translate('legacyStaticInfo.securityWhitepaper.body')}</div>
+            <UI.Button className="mt-3" onClick={() => navigate('/contact')}>{translate('legacyStaticInfo.securityWhitepaper.cta')}</UI.Button>
           </UI.PageCard>
         </UI.Page>
       );

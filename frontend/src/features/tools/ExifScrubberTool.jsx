@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import piexif from 'piexifjs';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Download,
@@ -53,6 +54,7 @@ const buildDownloadName = (fileName) => {
 };
 
 export default function ExifScrubberTool() {
+  const { t } = useTranslation();
   const [isDragOver, setIsDragOver] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(true);
   const [sourceFile, setSourceFile] = useState(null);
@@ -61,7 +63,7 @@ export default function ExifScrubberTool() {
   const [processedUrl, setProcessedUrl] = useState('');
   const [detectedTags, setDetectedTags] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [statusText, setStatusText] = useState('Включите Privacy Mode и загрузите JPEG для очистки EXIF');
+  const [statusText, setStatusText] = useState(() => t('legacyTools.exifScrubber.statuses.initial'));
   const [error, setError] = useState('');
 
   const fileInputRef = useRef(null);
@@ -96,7 +98,7 @@ export default function ExifScrubberTool() {
     setProcessedBlob(null);
     setProcessedUrl('');
     setError('');
-    setStatusText('Файл загружен. Запустите обработку.');
+    setStatusText(t('legacyTools.exifScrubber.statuses.fileLoaded'));
 
     if (!isJpeg(file)) {
       setDetectedTags(0);
@@ -110,13 +112,13 @@ export default function ExifScrubberTool() {
     } catch {
       setDetectedTags(0);
     }
-  }, [clearProcessedUrl, clearSourceUrl]);
+  }, [clearProcessedUrl, clearSourceUrl, t]);
 
   const runScrub = useCallback(async () => {
     if (!sourceFile || isProcessing) return;
     setError('');
     setIsProcessing(true);
-    setStatusText('Обрабатываем изображение...');
+    setStatusText(t('legacyTools.exifScrubber.statuses.processing'));
 
     try {
       if (!privacyMode) {
@@ -125,7 +127,7 @@ export default function ExifScrubberTool() {
         const url = URL.createObjectURL(sourceFile);
         processedUrlRef.current = url;
         setProcessedUrl(url);
-        setStatusText('Privacy Mode выключен. Возвращен исходный файл.');
+        setStatusText(t('legacyTools.exifScrubber.statuses.privacyOff'));
         return;
       }
 
@@ -135,7 +137,7 @@ export default function ExifScrubberTool() {
         const url = URL.createObjectURL(sourceFile);
         processedUrlRef.current = url;
         setProcessedUrl(url);
-        setStatusText('EXIF-очистка применяется только к JPEG. Файл готов без изменений.');
+        setStatusText(t('legacyTools.exifScrubber.statuses.nonJpeg'));
         return;
       }
 
@@ -147,14 +149,14 @@ export default function ExifScrubberTool() {
       const cleanedUrl = URL.createObjectURL(cleanedBlob);
       processedUrlRef.current = cleanedUrl;
       setProcessedUrl(cleanedUrl);
-      setStatusText('EXIF удален. Файл готов к скачиванию.');
+      setStatusText(t('legacyTools.exifScrubber.statuses.done'));
     } catch {
-      setError('Не удалось очистить метаданные. Попробуйте другой JPEG.');
-      setStatusText('Ошибка очистки EXIF');
+      setError(t('legacyTools.exifScrubber.errors.scrubFailed'));
+      setStatusText(t('legacyTools.exifScrubber.statuses.failed'));
     } finally {
       setIsProcessing(false);
     }
-  }, [clearProcessedUrl, isProcessing, privacyMode, sourceFile]);
+  }, [clearProcessedUrl, isProcessing, privacyMode, sourceFile, t]);
 
   const onDrop = (event) => {
     event.preventDefault();
@@ -176,7 +178,7 @@ export default function ExifScrubberTool() {
           EXIF Scrubber
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-3xl">
-          Privacy Mode удаляет EXIF-метаданные из JPEG перед скачиванием, чтобы исключить геоданные и служебную информацию.
+          {t('legacyTools.exifScrubber.description')}
         </p>
       </div>
 
@@ -212,15 +214,15 @@ export default function ExifScrubberTool() {
         <div className="mx-auto h-12 w-12 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-200">
           <Upload size={18} />
         </div>
-        <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Перетащите изображение сюда</div>
-        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">лучший результат для JPEG</div>
+        <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyTools.exifScrubber.dropTitle')}</div>
+        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('legacyTools.exifScrubber.dropHint')}</div>
         <div className="mt-4">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-300 ease-out hover:scale-[1.02]"
           >
-            Выбрать файл
+            {t('btnSelect')}
           </button>
         </div>
       </div>
@@ -242,7 +244,7 @@ export default function ExifScrubberTool() {
             <div>
               <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{sourceFile.name}</div>
               <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Размер: {formatBytes(sourceFile.size)} · EXIF тегов обнаружено: {detectedTags}
+                {t('legacyTools.exifScrubber.fileStats', { size: formatBytes(sourceFile.size), count: detectedTags })}
               </div>
             </div>
             <button
@@ -254,12 +256,12 @@ export default function ExifScrubberTool() {
               {isProcessing ? (
                 <>
                   <Loader2 size={15} className="animate-spin" />
-                  Обработка...
+                  {t('processing')}
                 </>
               ) : (
                 <>
                   <EyeOff size={15} />
-                  Очистить EXIF
+                  {t('legacyTools.exifScrubber.run')}
                 </>
               )}
             </button>
@@ -271,18 +273,18 @@ export default function ExifScrubberTool() {
       {(sourceUrl || processedUrl) && (
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl p-3">
-            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Исходник</div>
+            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.exifScrubber.sourceLabel')}</div>
             {sourceUrl ? (
               <img src={sourceUrl} alt="source-preview" className="mt-2 h-56 w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-900" />
             ) : null}
           </div>
           <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl p-3">
-            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">После обработки</div>
+            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.exifScrubber.processedLabel')}</div>
             {processedUrl ? (
               <img src={processedUrl} alt="processed-preview" className="mt-2 h-56 w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-900" />
             ) : (
               <div className="mt-2 h-56 w-full rounded-xl border border-slate-200/70 dark:border-white/10 bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">
-                Результат появится после обработки
+                {t('legacyTools.exifScrubber.resultPending')}
               </div>
             )}
           </div>
@@ -297,7 +299,7 @@ export default function ExifScrubberTool() {
             className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/60 dark:border-emerald-300/30 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
           >
             <Download size={15} />
-            Скачать приватный файл ({formatBytes(processedBlob?.size || 0)})
+            {t('legacyTools.exifScrubber.downloadPrivate', { size: formatBytes(processedBlob?.size || 0) })}
           </a>
         </div>
       )}

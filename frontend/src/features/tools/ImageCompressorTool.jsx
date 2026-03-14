@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import imageCompression from 'browser-image-compression';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Download,
@@ -50,6 +51,7 @@ const isImageFile = (file) => {
 };
 
 export default function ImageCompressorTool() {
+  const { t } = useTranslation();
   const [isDragOver, setIsDragOver] = useState(false);
   const [sourceFile, setSourceFile] = useState(null);
   const [sourceUrl, setSourceUrl] = useState('');
@@ -60,7 +62,7 @@ export default function ImageCompressorTool() {
   const [lastComputedQuality, setLastComputedQuality] = useState(null);
   const [comparePosition, setComparePosition] = useState(50);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [statusText, setStatusText] = useState('Загрузите фото для интерактивного сжатия');
+  const [statusText, setStatusText] = useState(() => t('legacyTools.imageCompressor.statuses.initial'));
   const [error, setError] = useState('');
 
   const fileInputRef = useRef(null);
@@ -88,7 +90,7 @@ export default function ImageCompressorTool() {
   const setSelectedFile = useCallback((file) => {
     if (!file) return;
     if (!isImageFile(file)) {
-      setError('Поддерживаются только изображения (JPG, PNG, WEBP, GIF).');
+      setError(t('legacyTools.imageCompressor.errors.unsupportedFiles'));
       return;
     }
     clearSourceUrl();
@@ -104,8 +106,8 @@ export default function ImageCompressorTool() {
     setDraftQuality(0.8);
     setComparePosition(50);
     setError('');
-    setStatusText('Передвиньте ползунок и отпустите его, чтобы пересчитать сжатие');
-  }, [clearCompressedUrl, clearSourceUrl]);
+    setStatusText(t('legacyTools.imageCompressor.statuses.fileLoaded'));
+  }, [clearCompressedUrl, clearSourceUrl, t]);
 
   const clearAll = useCallback(() => {
     setSourceFile(null);
@@ -118,16 +120,16 @@ export default function ImageCompressorTool() {
     setComparePosition(50);
     setIsProcessing(false);
     setError('');
-    setStatusText('Редактор очищен');
+    setStatusText(t('legacyTools.imageCompressor.statuses.cleared'));
     clearSourceUrl();
     clearCompressedUrl();
-  }, [clearCompressedUrl, clearSourceUrl]);
+  }, [clearCompressedUrl, clearSourceUrl, t]);
 
   const runCompressionPreview = useCallback(async (file, targetQuality, jobId) => {
     if (!file) return;
     setIsProcessing(true);
     setError('');
-    setStatusText('Пересчитываем сжатие...');
+    setStatusText(t('legacyTools.imageCompressor.statuses.recomputing'));
     try {
       const originalMb = Math.max(0.01, Number(file.size || 0) / (1024 * 1024));
       const resultFile = await imageCompression(file, {
@@ -144,15 +146,15 @@ export default function ImageCompressorTool() {
       setCompressedFile(resultFile);
       setCompressedUrl(nextUrl);
       setLastComputedQuality(Number(targetQuality.toFixed(2)));
-      setStatusText('Превью и размер обновлены');
+      setStatusText(t('legacyTools.imageCompressor.statuses.updated'));
     } catch {
       if (jobId !== jobRef.current) return;
-      setError('Не удалось выполнить сжатие. Попробуйте другой файл.');
-      setStatusText('Ошибка сжатия');
+      setError(t('legacyTools.imageCompressor.errors.compressionFailed'));
+      setStatusText(t('legacyTools.imageCompressor.statuses.failed'));
     } finally {
       if (jobId === jobRef.current) setIsProcessing(false);
     }
-  }, [clearCompressedUrl]);
+  }, [clearCompressedUrl, t]);
 
   useEffect(() => {
     if (!sourceFile) return;
@@ -195,10 +197,10 @@ export default function ImageCompressorTool() {
       <div>
         <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / Image Compression</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-          Интерактивное сжатие изображений
+          {t('legacyTools.imageCompressor.title')}
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-3xl">
-          Настраивайте качество и сразу сравнивайте исходник с результатом на split-экране.
+          {t('legacyTools.imageCompressor.description')}
         </p>
       </div>
 
@@ -219,15 +221,15 @@ export default function ImageCompressorTool() {
         <div className="mx-auto h-12 w-12 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-200">
           <Upload size={18} />
         </div>
-        <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Перетащите фото сюда</div>
-        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">или выберите изображение вручную</div>
+        <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyTools.imageCompressor.dropTitle')}</div>
+        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('legacyTools.imageCompressor.dropHint')}</div>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-300 ease-out hover:scale-[1.02]"
           >
-            Выбрать изображение
+            {t('legacyTools.imageCompressor.selectImage')}
           </button>
           {sourceFile && (
             <button
@@ -235,7 +237,7 @@ export default function ImageCompressorTool() {
               onClick={clearAll}
               className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]"
             >
-              Очистить
+              {t('btnClear')}
             </button>
           )}
         </div>
@@ -254,7 +256,7 @@ export default function ImageCompressorTool() {
           <div className="mt-6 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl p-4">
             <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
               <SlidersHorizontal size={13} />
-              Качество
+              {t('labelQuality')}
             </div>
             <div className="mt-3 flex items-center gap-3">
               <input
@@ -275,12 +277,12 @@ export default function ImageCompressorTool() {
               </div>
             </div>
             <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-              Оригинал: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatHumanSize(sourceFile.size)}</span>
+              {t('legacyTools.imageCompressor.originalLabel')} <span className="font-semibold text-slate-900 dark:text-slate-100">{formatHumanSize(sourceFile.size)}</span>
               {' -> '}
-              Сжатый: <span className="font-semibold text-slate-900 dark:text-slate-100">{formatHumanSize(shownCompressedSize)}</span>
+              {t('legacyTools.imageCompressor.compressedLabel')} <span className="font-semibold text-slate-900 dark:text-slate-100">{formatHumanSize(shownCompressedSize)}</span>
             </div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Реальное сжатие запускается после отпускания ползунка.
+              {t('legacyTools.imageCompressor.sliderHint')}
             </div>
           </div>
 
@@ -308,8 +310,8 @@ export default function ImageCompressorTool() {
                   className="absolute top-0 h-full w-[2px] bg-white/80 shadow-[0_0_0_1px_rgba(15,23,42,0.22)]"
                   style={{ left: `calc(${comparePosition}% - 1px)` }}
                 />
-                <div className="absolute left-3 top-3 rounded-lg bg-black/45 px-2 py-1 text-xs font-semibold text-white">До</div>
-                <div className="absolute right-3 top-3 rounded-lg bg-cyan-500/80 px-2 py-1 text-xs font-semibold text-white">После</div>
+                <div className="absolute left-3 top-3 rounded-lg bg-black/45 px-2 py-1 text-xs font-semibold text-white">{t('legacyTools.imageCompressor.before')}</div>
+                <div className="absolute right-3 top-3 rounded-lg bg-cyan-500/80 px-2 py-1 text-xs font-semibold text-white">{t('legacyTools.imageCompressor.after')}</div>
               </div>
             </div>
             <div className="mt-4">
@@ -321,7 +323,7 @@ export default function ImageCompressorTool() {
                 onChange={(event) => setComparePosition(clamp(Number(event.target.value || 50), 0, 100))}
                 className="w-full accent-cyan-600"
               />
-              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Ползунок До/После</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('legacyTools.imageCompressor.compareSlider')}</div>
             </div>
           </div>
 
@@ -337,7 +339,7 @@ export default function ImageCompressorTool() {
                 className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/60 dark:border-emerald-300/30 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
               >
                 <Download size={15} />
-                Скачать сжатое ({formatBytes(compressedFile?.size || 0)})
+                {t('legacyTools.imageCompressor.downloadCompressed', { size: formatBytes(compressedFile?.size || 0) })}
               </a>
             )}
           </div>

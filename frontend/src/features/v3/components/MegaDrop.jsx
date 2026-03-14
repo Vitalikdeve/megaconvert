@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Peer from 'simple-peer/simplepeer.min.js';
 import QRCode from 'qrcode';
+import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import {
   AlertTriangle,
@@ -17,7 +18,6 @@ import {
   Wifi,
   WifiOff
 } from 'lucide-react';
-import useWorkspaceLocale from '../lib/useWorkspaceLocale.js';
 
 const CHUNK_SIZE = 64 * 1024;
 const MAX_BUFFERED_AMOUNT = 512 * 1024;
@@ -164,7 +164,7 @@ const waitForPeerBuffer = async (peer) => {
 };
 
 export default function MegaDrop({ initialFile = null, onInitialFileConsumed = null }) {
-  const { pick } = useWorkspaceLocale();
+  const { t } = useTranslation();
   const socketBase = useMemo(() => resolveRealtimeBase(), []);
   const initialRoomCode = useMemo(() => getRoomCodeFromLocation(), []);
   const webRtcSupported = typeof window !== 'undefined'
@@ -202,8 +202,8 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
   const [error, setError] = useState('');
   const [statusText, setStatusText] = useState(
     initialRoomCode
-      ? 'Подключаемся к комнате MegaDrop...'
-      : 'Создайте комнату или введите код, чтобы начать прямую передачу.'
+      ? t('legacyV3.megaDrop.statuses.connectingRoom')
+      : t('legacyV3.megaDrop.statuses.createOrJoin')
   );
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
@@ -220,10 +220,10 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
   useEffect(() => {
     if (!(initialFile instanceof File)) return;
     setSelectedFile(initialFile);
-    setStatusText('Файл уже загружен из сингулярности. Подготавливаем MegaDrop-комнату...');
+    setStatusText(t('legacyV3.megaDrop.statuses.fileFromSingularity'));
     autoPreparedRoomRef.current = true;
     onInitialFileConsumed?.();
-  }, [initialFile, onInitialFileConsumed]);
+  }, [initialFile, onInitialFileConsumed, t]);
 
   const syncRoomInLocation = useCallback((nextRoomCode) => {
     if (typeof window === 'undefined') return;
@@ -300,7 +300,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setReceiveProgress(0);
       setReceivedBytes(0);
       setError('');
-      setStatusText('Получаем файл напрямую через WebRTC. Сервер не хранит данные.');
+      setStatusText(t('legacyV3.megaDrop.statuses.receivingDirect'));
       return;
     }
 
@@ -315,7 +315,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setDownloadName(transfer.name);
       setTransferState('complete');
       setReceiveProgress(100);
-      setStatusText('Файл получен напрямую. Можно скачать локально.');
+      setStatusText(t('legacyV3.megaDrop.statuses.fileReceived'));
       incomingTransferRef.current = null;
       if (peerRef.current?.connected) {
         peerRef.current.send(JSON.stringify({
@@ -329,9 +329,9 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
     if (message.type === 'file-received') {
       setTransferState('sent');
       setSendProgress(100);
-      setStatusText('Получатель подтвердил прием файла. Передача завершена.');
+      setStatusText(t('legacyV3.megaDrop.statuses.receiverConfirmed'));
     }
-  }, [updateDownloadUrl]);
+  }, [t, updateDownloadUrl]);
 
   const handlePeerData = useCallback((packet) => {
     if (typeof packet === 'string') {
@@ -360,9 +360,9 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
     setReceivedBytes(transfer.receivedBytes);
     setReceiveProgress(progress);
     if (transfer.receivedChunks === 1) {
-      setStatusText('Канал активен. Получаем чанки и собираем Blob локально...');
+      setStatusText(t('legacyV3.megaDrop.statuses.channelActive'));
     }
-  }, [handleControlMessage]);
+  }, [handleControlMessage, t]);
 
   const createPeer = useCallback((initiator) => {
     if (peerRef.current) return peerRef.current;
@@ -396,8 +396,8 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setError('');
       setStatusText(
         initiator
-          ? 'P2P-соединение установлено. Можно отправлять файл на второе устройство.'
-          : 'P2P-соединение установлено. Ждем файл от отправителя.'
+          ? t('legacyV3.megaDrop.statuses.peerConnectedHost')
+          : t('legacyV3.megaDrop.statuses.peerConnectedGuest')
       );
     });
 
@@ -413,8 +413,8 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       if (roomCodeRef.current) {
         setStatusText(
           roleRef.current === 'host'
-            ? 'Соединение закрыто. Можно дождаться нового подключения по той же ссылке.'
-            : 'Соединение завершено. Если нужно, откройте ссылку заново.'
+            ? t('legacyV3.megaDrop.statuses.connectionClosedHost')
+            : t('legacyV3.megaDrop.statuses.connectionClosedGuest')
         );
       }
     });
@@ -425,8 +425,8 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
         peerRef.current = null;
       }
       setPeerConnected(false);
-      setError('Не удалось удержать прямое соединение. Попробуйте переподключиться.');
-      setStatusText('P2P-соединение оборвалось. Можно создать новую комнату или повторить вход.');
+      setError(t('legacyV3.megaDrop.errors.peerFailed'));
+      setStatusText(t('legacyV3.megaDrop.statuses.peerDropped'));
       try {
         peer.destroy();
       } catch {
@@ -447,7 +447,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
     }
 
     return peer;
-  }, [handlePeerData, webRtcSupported]);
+  }, [handlePeerData, t, webRtcSupported]);
 
   const leaveRoom = useCallback(async () => {
     const socket = socketRef.current;
@@ -468,15 +468,15 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
     setShareLink('');
     setCopied(false);
     setError('');
-    setStatusText('Сеанс завершен. Можно создать новую комнату или подключиться снова.');
+    setStatusText(t('legacyV3.megaDrop.statuses.sessionEnded'));
     syncRoomInLocation('');
-  }, [destroyPeer, resetTransferState, syncRoomInLocation]);
+  }, [destroyPeer, resetTransferState, syncRoomInLocation, t]);
 
   const createRoom = useCallback(async () => {
     setIsCreatingRoom(true);
     setError('');
     setCopied(false);
-    setStatusText('Создаем комнату MegaDrop и резервируем код...');
+    setStatusText(t('legacyV3.megaDrop.statuses.creatingRoom'));
 
     try {
       destroyPeer('create_room');
@@ -490,27 +490,27 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setRoomState(response.room || null);
       setShareLink(buildShareLink(nextRoomCode));
       syncRoomInLocation(nextRoomCode);
-      setStatusText('Комната создана. Откройте ссылку или QR-код на втором устройстве.');
+      setStatusText(t('legacyV3.megaDrop.statuses.roomCreated'));
     } catch (createError) {
       console.error('[MegaDrop] create-room-failed', createError);
-      setError('Не удалось создать комнату MegaDrop. Проверьте соединение и попробуйте еще раз.');
-      setStatusText('Создание комнаты не удалось.');
+      setError(t('legacyV3.megaDrop.errors.createRoomFailed'));
+      setStatusText(t('legacyV3.megaDrop.statuses.createRoomFailed'));
     } finally {
       setIsCreatingRoom(false);
     }
-  }, [buildShareLink, destroyPeer, resetTransferState, syncRoomInLocation]);
+  }, [buildShareLink, destroyPeer, resetTransferState, syncRoomInLocation, t]);
 
   const joinRoom = useCallback(async (rawCode, { silent = false } = {}) => {
     const normalized = normalizeRoomCode(rawCode);
     if (!normalized) {
-      setError('Введите корректный 6-значный код комнаты.');
+      setError(t('legacyV3.megaDrop.errors.invalidRoomCode'));
       return false;
     }
 
     if (!silent) setIsJoiningRoom(true);
     setError('');
     setCopied(false);
-    setStatusText('Подключаемся к комнате MegaDrop...');
+    setStatusText(t('legacyV3.megaDrop.statuses.connectingRoom'));
 
     try {
       destroyPeer('join_room');
@@ -524,17 +524,17 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setRoomState(response.room || null);
       setShareLink(buildShareLink(nextRoomCode));
       syncRoomInLocation(nextRoomCode);
-      setStatusText('Комната найдена. Инициализируем защищенное соединение...');
+      setStatusText(t('legacyV3.megaDrop.statuses.roomFound'));
       return true;
     } catch (joinError) {
       console.error('[MegaDrop] join-room-failed', joinError);
-      setError('Не удалось подключиться к комнате. Проверьте код и попробуйте снова.');
-      setStatusText('Подключение к комнате не удалось.');
+      setError(t('legacyV3.megaDrop.errors.joinRoomFailed'));
+      setStatusText(t('legacyV3.megaDrop.statuses.joinRoomFailed'));
       return false;
     } finally {
       if (!silent) setIsJoiningRoom(false);
     }
-  }, [buildShareLink, destroyPeer, resetTransferState, syncRoomInLocation]);
+  }, [buildShareLink, destroyPeer, resetTransferState, syncRoomInLocation, t]);
 
   const copyShareLink = useCallback(async () => {
     if (!shareLink) return;
@@ -546,9 +546,9 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setCopied(true);
       setError('');
     } catch {
-      setError('Не удалось скопировать ссылку в буфер обмена.');
+      setError(t('legacyV3.megaDrop.errors.copyFailed'));
     }
-  }, [shareLink]);
+  }, [shareLink, t]);
 
   const handleSelectFile = useCallback((file) => {
     if (!file) return;
@@ -557,20 +557,20 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
     setError('');
     setStatusText(
       peerConnected
-        ? 'Файл выбран. Можно отправлять напрямую без загрузки на сервер.'
-        : 'Файл выбран. Ждем подключение второго устройства.'
+        ? t('legacyV3.megaDrop.statuses.fileSelectedReady')
+        : t('legacyV3.megaDrop.statuses.fileSelectedWaiting')
     );
-  }, [peerConnected]);
+  }, [peerConnected, t]);
 
   const sendFile = useCallback(async () => {
     if (role !== 'host') return;
     if (!selectedFile) {
-      setError('Сначала выберите файл для передачи.');
+      setError(t('legacyV3.megaDrop.errors.selectFile'));
       return;
     }
     const peer = peerRef.current;
     if (!peer || !peer.connected) {
-      setError('P2P-соединение еще не готово. Подождите второе устройство.');
+      setError(t('legacyV3.megaDrop.errors.peerNotReady'));
       return;
     }
 
@@ -582,7 +582,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
     setTransferState('sending');
     setSendProgress(0);
     setError('');
-    setStatusText('Передаем файл чанками через WebRTC Data Channel...');
+    setStatusText(t('legacyV3.megaDrop.statuses.sendingChunks'));
 
     try {
       peer.send(JSON.stringify({
@@ -613,14 +613,14 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       }));
       setSendProgress(100);
       setTransferState('awaiting-confirmation');
-      setStatusText('Файл передан в защищенный канал. Ждем подтверждение от получателя...');
+      setStatusText(t('legacyV3.megaDrop.statuses.awaitingConfirmation'));
     } catch (sendError) {
       console.error('[MegaDrop] send-failed', sendError);
       setTransferState('idle');
-      setError('Передача прервалась. Попробуйте еще раз или пересоздайте комнату.');
-      setStatusText('Не удалось завершить передачу.');
+      setError(t('legacyV3.megaDrop.errors.sendFailed'));
+      setStatusText(t('legacyV3.megaDrop.statuses.sendFailed'));
     }
-  }, [role, selectedFile]);
+  }, [role, selectedFile, t]);
 
   useEffect(() => {
     if (!webRtcSupported || !socketBase) return undefined;
@@ -637,21 +637,21 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
     const handleConnect = () => {
       setSocketState('connected');
       setError('');
-      setStatusText((current) => (roomCodeRef.current ? current : 'Сигнальный сервер подключен. Можно создать комнату MegaDrop.'));
+      setStatusText((current) => (roomCodeRef.current ? current : t('legacyV3.megaDrop.statuses.signalConnected')));
     };
 
     const handleDisconnect = (reason) => {
       setSocketState('disconnected');
       if (reason !== 'io client disconnect') {
-        setStatusText('Сигнальный сервер переподключается. Уже созданный P2P-канал может продолжить работу.');
+        setStatusText(t('legacyV3.megaDrop.statuses.signalReconnecting'));
       }
     };
 
     const handleConnectError = (connectError) => {
       console.error('[MegaDrop] socket-connect-error', connectError);
       setSocketState('error');
-      setError('Не удалось подключиться к сигнальному серверу MegaDrop.');
-      setStatusText('Socket.io пока недоступен. Проверьте сеть и конфигурацию API.');
+      setError(t('legacyV3.megaDrop.errors.signalFailed'));
+      setStatusText(t('legacyV3.megaDrop.statuses.signalUnavailable'));
     };
 
     const handleRoomState = (nextRoomState) => {
@@ -663,9 +663,9 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setShareLink(buildShareLink(normalized));
       if (normalized) syncRoomInLocation(normalized);
       if (nextRoomState.ready) {
-        setStatusText('Оба устройства в комнате. Инициализируем прямой канал связи...');
+        setStatusText(t('legacyV3.megaDrop.statuses.bothDevicesReady'));
       } else if (roleRef.current === 'host') {
-        setStatusText('Комната активна. Ждем второе устройство по ссылке или QR-коду.');
+        setStatusText(t('legacyV3.megaDrop.statuses.roomActiveWaiting'));
       }
     };
 
@@ -680,20 +680,20 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       setShareLink('');
       syncRoomInLocation('');
       setError(payload?.reason === 'host_disconnected'
-        ? 'Отправитель вышел из комнаты.'
-        : 'Сеанс MegaDrop завершен.');
-      setStatusText('Комната закрыта. Создайте новую или подключитесь к другой.');
+        ? t('legacyV3.megaDrop.errors.hostLeft')
+        : t('legacyV3.megaDrop.errors.sessionClosed'));
+      setStatusText(t('legacyV3.megaDrop.statuses.roomClosed'));
     };
 
     const handlePeerLeft = () => {
       destroyPeer('peer_left');
       setPeerConnected(false);
       setRoomState((current) => (current ? { ...current, guestConnected: false, ready: false } : current));
-      setStatusText('Второе устройство отключилось. Можно дождаться переподключения.');
+      setStatusText(t('legacyV3.megaDrop.statuses.secondDeviceLeft'));
     };
 
     const handleGuestJoined = () => {
-      setStatusText('Второе устройство вошло в комнату. Запускаем защищенное соединение...');
+      setStatusText(t('legacyV3.megaDrop.statuses.secondDeviceJoined'));
     };
 
     const handleSignal = (payload) => {
@@ -726,7 +726,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [buildShareLink, destroyPeer, resetTransferState, socketBase, syncRoomInLocation, webRtcSupported]);
+  }, [buildShareLink, destroyPeer, resetTransferState, socketBase, syncRoomInLocation, t, webRtcSupported]);
 
   useEffect(() => {
     if (!roomState?.ready || !roomCode || !role || peerRef.current) return;
@@ -734,10 +734,10 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
       createPeer(role === 'host');
     } catch (peerError) {
       console.error('[MegaDrop] peer-init-failed', peerError);
-      setError('Не удалось инициализировать WebRTC. Проверьте поддержку браузера.');
-      setStatusText('WebRTC недоступен для текущей сессии.');
+      setError(t('legacyV3.megaDrop.errors.webrtcInitFailed'));
+      setStatusText(t('legacyV3.megaDrop.statuses.webrtcUnavailable'));
     }
-  }, [createPeer, role, roomCode, roomState]);
+  }, [createPeer, role, roomCode, roomState, t]);
 
   useEffect(() => {
     if (!initialRoomCode || autoJoinAttemptedRef.current || socketState !== 'connected') return;
@@ -793,10 +793,10 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
             MegaDrop / P2P
           </div>
           <h2 className="mt-4 text-3xl md:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            Прямая передача файлов между устройствами
+            {t('legacyV3.megaDrop.title')}
           </h2>
           <p className="mt-3 max-w-3xl text-sm md:text-base text-slate-600 dark:text-slate-300">
-            Файл идет напрямую по WebRTC Data Channel. Сигнальный сервер нужен только для рукопожатия, а данные не сохраняются в облаке.
+            {t('legacyV3.megaDrop.description')}
           </p>
         </div>
       </div>
@@ -805,7 +805,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
         <div className="mt-6 rounded-3xl border border-red-300/70 dark:border-red-400/20 bg-red-100/70 dark:bg-red-500/10 px-4 py-4 text-sm text-red-700 dark:text-red-200">
           <div className="flex items-start gap-2">
             <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-            <span>Текущий браузер не поддерживает WebRTC Data Channels. Для MegaDrop нужен современный Chrome, Edge, Safari или Firefox.</span>
+            <span>{t('legacyV3.megaDrop.errors.unsupportedBrowser')}</span>
           </div>
         </div>
       )}
@@ -816,14 +816,14 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
             <div className="flex flex-wrap items-center gap-3">
               <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${connectionTone}`}>
                 {peerConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
-                {peerConnected ? pick('P2P активен', 'P2P online') : pick('Ожидание канала', 'Waiting for channel')}
+                {peerConnected ? t('legacyV3.megaDrop.p2pActive') : t('legacyV3.megaDrop.waitingChannel')}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                 <ShieldCheck size={14} />
-                {pick('Прямой защищенный маршрут', 'End-to-end path')}
+                {t('legacyV3.megaDrop.securePath')}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
-                {pick('Сокет', 'Socket')}: {socketState}
+                {t('legacyV3.megaDrop.socketLabel')}: {socketState}
               </span>
             </div>
 
@@ -831,12 +831,12 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
 
             {roomCode ? (
               <div className="mt-5 rounded-2xl border border-cyan-200/60 dark:border-cyan-300/20 bg-cyan-50/70 dark:bg-cyan-500/10 p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-cyan-700 dark:text-cyan-100">{pick('Код комнаты', 'Room code')}</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-cyan-700 dark:text-cyan-100">{t('legacyV3.megaDrop.roomCode')}</div>
                 <div className="mt-2 text-3xl font-semibold tracking-[0.32em] text-slate-900 dark:text-slate-100">{roomCode}</div>
                 <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
                   {role === 'host'
-                    ? 'Этот код можно ввести вручную на втором устройстве.'
-                    : 'Вы подключены как принимающая сторона.'}
+                    ? t('legacyV3.megaDrop.roomCodeHostHint')
+                    : t('legacyV3.megaDrop.roomCodeGuestHint')}
                 </div>
               </div>
             ) : null}
@@ -849,7 +849,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                 className="rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-cyan-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center justify-center gap-2"
               >
                 {isCreatingRoom ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
-                Создать комнату
+                {t('legacyV3.megaDrop.createRoom')}
               </button>
 
               <button
@@ -858,18 +858,18 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                 disabled={!roomCode}
                 className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01]"
               >
-                Завершить сеанс
+                {t('legacyV3.megaDrop.endSession')}
               </button>
             </div>
 
             <div className="mt-5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Подключение по коду', 'Join by code')}</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('legacyV3.megaDrop.joinByCode')}</div>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <input
                   value={joinCode}
                   onChange={(event) => setJoinCode(normalizeRoomCode(event.target.value))}
                   inputMode="numeric"
-                  placeholder="Введите 6 цифр"
+                  placeholder={t('legacyV3.megaDrop.enterCode')}
                   className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-950/40 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-cyan-400"
                 />
                 <button
@@ -879,7 +879,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                   className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center justify-center gap-2"
                 >
                   {isJoiningRoom ? <Loader2 size={16} className="animate-spin" /> : <Radio size={16} />}
-                  Подключиться
+                  {t('legacyV3.megaDrop.connect')}
                 </button>
               </div>
             </div>
@@ -888,7 +888,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Upload size={16} />
-              Отправка файла
+              {t('legacyV3.megaDrop.sendFileSection')}
             </div>
 
             <div
@@ -915,12 +915,12 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                 <Upload size={18} />
               </div>
               <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">
-                {role === 'host' ? 'Перетащите файл для прямой отправки' : 'Файлы отправляет устройство-хост'}
+                {role === 'host' ? t('legacyV3.megaDrop.hostDropTitle') : t('legacyV3.megaDrop.guestDropTitle')}
               </div>
               <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 {role === 'host'
-                  ? 'MegaDrop нарежет поток по 64 KB и передаст его напрямую.'
-                  : 'На этой стороне файл будет собран в Blob и предложен к скачиванию.'}
+                  ? t('legacyV3.megaDrop.hostDropHint')
+                  : t('legacyV3.megaDrop.guestDropHint')}
               </div>
               <div className="mt-4">
                 <button
@@ -929,7 +929,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                   disabled={role !== 'host'}
                   className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02]"
                 >
-                  Выбрать файл
+                  {t('btnSelect')}
                 </button>
               </div>
             </div>
@@ -955,7 +955,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                   />
                 </div>
                 <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  {transferState === 'sent' ? 'Передача подтверждена получателем.' : `Отправлено: ${sendProgress.toFixed(0)}%`}
+                  {transferState === 'sent' ? t('legacyV3.megaDrop.transferConfirmed') : t('legacyV3.megaDrop.sentLabel', { progress: sendProgress.toFixed(0) })}
                 </div>
                 <button
                   type="button"
@@ -964,7 +964,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                   className="mt-4 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center gap-2"
                 >
                   {transferState === 'sending' ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                  Отправить напрямую
+                  {t('legacyV3.megaDrop.sendDirect')}
                 </button>
               </div>
             ) : null}
@@ -975,16 +975,16 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <QrCode size={16} />
-              {pick('Ссылка и QR', 'Invite / QR')}
+              {t('legacyV3.megaDrop.inviteQr')}
             </div>
             <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-              Создайте комнату на основном устройстве и откройте ссылку на втором. Если удобно, можно просто ввести код вручную.
+              {t('legacyV3.megaDrop.inviteDescription')}
             </div>
 
             {shareLink ? (
               <div className="mt-4 space-y-4">
                 <div className="rounded-2xl border border-cyan-200/60 dark:border-cyan-300/20 bg-cyan-50/70 dark:bg-cyan-500/10 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-100">{pick('Ссылка комнаты', 'Room link')}</div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-100">{t('legacyV3.megaDrop.roomLink')}</div>
                   <div className="mt-2 break-all text-sm text-slate-800 dark:text-slate-100">{shareLink}</div>
                   <button
                     type="button"
@@ -992,7 +992,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                     className="mt-3 inline-flex items-center gap-2 rounded-xl border border-cyan-200/70 dark:border-cyan-300/20 bg-white/85 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-cyan-800 dark:text-cyan-100 transition-all duration-300 ease-out hover:scale-[1.02]"
                   >
                     <Copy size={14} />
-                    {copied ? 'Скопировано' : 'Скопировать ссылку'}
+                    {copied ? t('legacyV3.megaDrop.copied') : t('legacyV3.megaDrop.copyLink')}
                   </button>
                 </div>
 
@@ -1000,14 +1000,14 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                   <div className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/85 dark:bg-slate-950/40 p-4">
                     <img src={qrCodeUrl} alt="MegaDrop QR" className="mx-auto h-48 w-48 rounded-2xl" />
                     <div className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
-                      Сканируйте QR на втором устройстве для быстрого входа в комнату.
+                      {t('legacyV3.megaDrop.qrHint')}
                     </div>
                   </div>
                 ) : null}
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-slate-400">
-                Ссылка и QR появятся после создания комнаты.
+                {t('legacyV3.megaDrop.linkPending')}
               </div>
             )}
           </div>
@@ -1015,7 +1015,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Download size={16} />
-              Прием файла
+              {t('legacyV3.megaDrop.receiveFileSection')}
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200/80 dark:bg-white/10">
               <div
@@ -1024,7 +1024,7 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
               />
             </div>
             <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Получено: {receiveProgress.toFixed(0)}% {receivedBytes > 0 ? `(${formatBytes(receivedBytes)})` : ''}
+              {t('legacyV3.megaDrop.receivedLabel', { progress: receiveProgress.toFixed(0), size: receivedBytes > 0 ? `(${formatBytes(receivedBytes)})` : '' })}
             </div>
 
             {receivedMeta ? (
@@ -1041,11 +1041,11 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
                 className="mt-4 inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-emerald-600 transition-all duration-300 ease-out hover:scale-[1.01]"
               >
                 <Download size={15} />
-                Скачать полученный файл
+                {t('legacyV3.megaDrop.downloadReceived')}
               </a>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-slate-400">
-                Когда второй участник отправит файл, он соберется здесь локально и станет доступен для скачивания.
+                {t('legacyV3.megaDrop.waitingForFile')}
               </div>
             )}
           </div>
@@ -1054,9 +1054,9 @@ export default function MegaDrop({ initialFile = null, onInitialFileConsumed = n
             <div className="flex items-start gap-2">
               <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
               <div>
-                <div className="font-semibold">Как это работает</div>
+                <div className="font-semibold">{t('legacyV3.megaDrop.howItWorksTitle')}</div>
                 <div className="mt-1 text-emerald-800/90 dark:text-emerald-100/90">
-                  Хост создает комнату, второе устройство открывает ссылку, дальше `simple-peer` поднимает WebRTC-канал, а файл идет чанками по 64 KB.
+                  {t('legacyV3.megaDrop.howItWorksBody')}
                 </div>
               </div>
             </div>

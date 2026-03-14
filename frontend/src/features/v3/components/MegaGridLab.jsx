@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Peer from 'simple-peer/simplepeer.min.js';
 import QRCode from 'qrcode';
+import { useTranslation } from 'react-i18next';
 import { io } from 'socket.io-client';
 import {
   AlertTriangle,
@@ -21,7 +22,6 @@ import {
   WifiOff
 } from 'lucide-react';
 import useMegaGridEngine from '../../../hooks/useMegaGridEngine.js';
-import useWorkspaceLocale from '../lib/useWorkspaceLocale.js';
 
 const CHUNK_SIZE = 64 * 1024;
 const MAX_BUFFERED_AMOUNT = 512 * 1024;
@@ -202,16 +202,16 @@ const buildPeerStateTone = (connected) => (
     : 'border-slate-200/70 bg-white/80 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200'
 );
 
-const getDefaultWorkerLabel = (isRussian = false) => {
-  if (typeof navigator === 'undefined') return isRussian ? 'Воркер-нода' : 'Worker Node';
+const getDefaultWorkerLabel = (t) => {
+  if (typeof navigator === 'undefined') return t('legacyV3.megaGrid.workerNodeFallback');
   const platform = String(navigator.platform || '').trim();
   return platform
-    ? `${isRussian ? 'Воркер' : 'Worker'} ${platform}`
-    : (isRussian ? 'Воркер-нода' : 'Worker Node');
+    ? t('legacyV3.megaGrid.workerNodeWithPlatform', { platform })
+    : t('legacyV3.megaGrid.workerNodeFallback');
 };
 
 export default function MegaGridLab() {
-  const { isRussian, pick } = useWorkspaceLocale();
+  const { t } = useTranslation();
   const socketBase = useMemo(() => resolveRealtimeBase(), []);
   const initialSessionCode = useMemo(() => getInitialSessionCode(), []);
   const webRtcSupported = typeof window !== 'undefined'
@@ -241,12 +241,12 @@ export default function MegaGridLab() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [segmentSeconds, setSegmentSeconds] = useState(5);
   const [selectedFormat, setSelectedFormat] = useState(GRID_FORMAT_OPTIONS[0].id);
-  const [workerLabel, setWorkerLabel] = useState(() => getDefaultWorkerLabel(isRussian));
+  const [workerLabel, setWorkerLabel] = useState(() => getDefaultWorkerLabel(t));
   const [workerReady, setWorkerReady] = useState(false);
   const [statusText, setStatusText] = useState(
     initialSessionCode
-      ? 'Подключаемся к MegaGrid-сессии как worker...'
-      : 'Создайте распределенную сессию или подключитесь как worker-node.'
+      ? t('legacyV3.megaGrid.statuses.connectingWorker')
+      : t('legacyV3.megaGrid.statuses.createOrJoin')
   );
   const [error, setError] = useState('');
   const [shareLink, setShareLink] = useState('');
@@ -369,10 +369,10 @@ export default function MegaGridLab() {
     setQrCodeUrl('');
     setCopied(false);
     setError('');
-    setStatusText('Сессия MegaGrid завершена. Можно создать новую или войти в другую.');
+    setStatusText(t('legacyV3.megaGrid.statuses.sessionEnded'));
     resetJobState();
     syncSessionInLocation('');
-  }, [destroyMasterPeer, destroyWorkerPeer, resetJobState, syncSessionInLocation]);
+  }, [destroyMasterPeer, destroyWorkerPeer, resetJobState, syncSessionInLocation, t]);
 
   const sendBufferOverPeer = useCallback(async (peer, meta, buffer, onProgress) => {
     if (!peer?.connected) {
@@ -402,10 +402,10 @@ export default function MegaGridLab() {
     GRID_FORMAT_OPTIONS.map((option) => ({
       ...option,
       label: option.id === 'mp4'
-        ? pick('Распределенный MP4', 'Distributed MP4')
-        : pick('Распределенный WebM', 'Distributed WebM')
+        ? t('legacyV3.megaGrid.formats.mp4')
+        : t('legacyV3.megaGrid.formats.webm')
     }))
-  ), [pick]);
+  ), [t]);
 
   const getSelectedFormat = useCallback(() => (
     localizedGridFormatOptions.find((option) => option.id === selectedFormat) || localizedGridFormatOptions[0]
@@ -438,7 +438,7 @@ export default function MegaGridLab() {
     activeJob.finalizing = true;
 
     try {
-      setStatusText('Все сегменты готовы. Склеиваем распределенный результат...');
+      setStatusText(t('legacyV3.megaGrid.statuses.finalizing'));
       setMasterProgress(92);
       const orderedSegments = activeJob.results
         .filter(Boolean)
@@ -463,15 +463,15 @@ export default function MegaGridLab() {
         size: merged.size
       });
       setMasterProgress(100);
-      setStatusText('MegaGrid завершил распределенную обработку. Файл готов к скачиванию.');
+      setStatusText(t('legacyV3.megaGrid.statuses.done'));
       jobRef.current = null;
     } catch (finalizeError) {
       console.error('[MegaGrid] finalize-failed', finalizeError);
-      setError('Не удалось склеить итоговый файл. Проверьте одинаковость формата сегментов.');
-      setStatusText('Финальная сборка завершилась с ошибкой.');
+      setError(t('legacyV3.megaGrid.errors.finalizeFailed'));
+      setStatusText(t('legacyV3.megaGrid.statuses.finalizeFailed'));
       jobRef.current = null;
     }
-  }, [gridEngine, updateDownload]);
+  }, [gridEngine, t, updateDownload]);
 
   const dispatchAvailableTasks = useCallback(() => {
     const activeJob = jobRef.current;
@@ -492,7 +492,11 @@ export default function MegaGridLab() {
 
       void (async () => {
         try {
-          setStatusText(`Отправляем сегмент ${nextTask.index + 1}/${activeJob.totalTasks} на worker ${worker.socketId.slice(-4)}...`);
+          setStatusText(t('legacyV3.megaGrid.statuses.sendingSegment', {
+            current: nextTask.index + 1,
+            total: activeJob.totalTasks,
+            worker: worker.socketId.slice(-4)
+          }));
           await sendBufferOverPeer(
             peer,
             {
@@ -515,7 +519,7 @@ export default function MegaGridLab() {
           activeJob.activeTasks.delete(worker.socketId);
           activeJob.pendingTasks.unshift(nextTask);
           destroyMasterPeer(worker.socketId, 'task_transfer_failed');
-          setError('Один из worker-нод отвалился во время передачи сегмента.');
+          setError(t('legacyV3.megaGrid.errors.workerDropped'));
         }
       })();
     }
@@ -527,7 +531,7 @@ export default function MegaGridLab() {
     ) {
       void finalizeDistributedJob();
     }
-  }, [destroyMasterPeer, finalizeDistributedJob, sendBufferOverPeer, sessionSnapshot?.workers]);
+  }, [destroyMasterPeer, finalizeDistributedJob, sendBufferOverPeer, sessionSnapshot?.workers, t]);
 
   const handleMasterResultReady = useCallback((workerSocketId, meta, buffer) => {
     const activeJob = jobRef.current;
@@ -547,9 +551,12 @@ export default function MegaGridLab() {
       completed: completedCount
     });
     setMasterProgress(Math.min(90, (completedCount / activeJob.totalTasks) * 90));
-    setStatusText(`Получен результат сегмента ${meta.index + 1}/${activeJob.totalTasks}. Продолжаем распределение...`);
+    setStatusText(t('legacyV3.megaGrid.statuses.segmentReceived', {
+      current: meta.index + 1,
+      total: activeJob.totalTasks
+    }));
     dispatchAvailableTasks();
-  }, [dispatchAvailableTasks]);
+  }, [dispatchAvailableTasks, t]);
 
   const handleMasterPeerData = useCallback((workerSocketId, packet) => {
     if (typeof packet === 'string') {
@@ -584,7 +591,7 @@ export default function MegaGridLab() {
 
   const processWorkerTask = useCallback(async (meta, buffer) => {
     try {
-      setStatusText(`Worker обрабатывает сегмент ${meta.index + 1} через FFmpeg.wasm...`);
+      setStatusText(t('legacyV3.megaGrid.statuses.workerProcessing', { current: meta.index + 1 }));
       await updateWorkerState({
         ready: true,
         status: 'busy',
@@ -619,7 +626,7 @@ export default function MegaGridLab() {
         index: meta.index
       }));
 
-      setStatusText(`Worker отправил результат сегмента ${meta.index + 1} обратно в кластер.`);
+      setStatusText(t('legacyV3.megaGrid.statuses.workerReturned', { current: meta.index + 1 }));
       await updateWorkerState({
         ready: workerReady,
         status: workerReady ? 'idle' : 'paused',
@@ -627,14 +634,14 @@ export default function MegaGridLab() {
       });
     } catch (taskError) {
       console.error('[MegaGrid] worker-task-failed', taskError);
-      setError('Worker не смог обработать сегмент. Проверьте FFmpeg.wasm и соединение.');
+      setError(t('legacyV3.megaGrid.errors.workerProcessFailed'));
       await updateWorkerState({
         ready: workerReady,
         status: workerReady ? 'idle' : 'paused',
         assignedTaskId: null
       });
     }
-  }, [gridEngine, sendBufferOverPeer, updateWorkerState, workerReady]);
+  }, [gridEngine, sendBufferOverPeer, t, updateWorkerState, workerReady]);
 
   const handleWorkerPeerData = useCallback((packet) => {
     if (typeof packet === 'string') {
@@ -693,7 +700,7 @@ export default function MegaGridLab() {
     });
 
     peer.on('connect', () => {
-      setStatusText(`Grid-канал к worker ${workerSocketId.slice(-4)} готов.`);
+      setStatusText(t('legacyV3.megaGrid.statuses.gridChannelReady', { worker: workerSocketId.slice(-4) }));
       dispatchAvailableTasks();
     });
 
@@ -713,7 +720,7 @@ export default function MegaGridLab() {
     });
 
     return peer;
-  }, [destroyMasterPeer, dispatchAvailableTasks, handleMasterPeerData]);
+  }, [destroyMasterPeer, dispatchAvailableTasks, handleMasterPeerData, t]);
 
   const ensureWorkerPeer = useCallback((masterSocketId) => {
     if (workerPeerRef.current) return workerPeerRef.current;
@@ -740,7 +747,7 @@ export default function MegaGridLab() {
     });
 
     peer.on('connect', () => {
-      setStatusText('Worker привязан к master-ноде. Можно принимать задачи.');
+      setStatusText(t('legacyV3.megaGrid.statuses.workerBound'));
     });
 
     peer.on('data', (packet) => {
@@ -757,12 +764,12 @@ export default function MegaGridLab() {
     });
 
     return peer;
-  }, [destroyWorkerPeer, handleWorkerPeerData]);
+  }, [destroyWorkerPeer, handleWorkerPeerData, t]);
 
   const createSession = useCallback(async () => {
     setIsCreatingSession(true);
     setError('');
-    setStatusText('Создаем MegaGrid-сессию и поднимаем координатор...');
+    setStatusText(t('legacyV3.megaGrid.statuses.creatingSession'));
 
     try {
       resetJobState();
@@ -775,26 +782,26 @@ export default function MegaGridLab() {
       setSessionSnapshot(response.session || null);
       setShareLink(buildShareLink(response.sessionCode));
       syncSessionInLocation(response.sessionCode);
-      setStatusText('MegaGrid-сессия создана. Подключайте worker-ноды по ссылке или QR.');
+      setStatusText(t('legacyV3.megaGrid.statuses.sessionCreated'));
     } catch (createError) {
       console.error('[MegaGrid] create-session-failed', createError);
-      setError('Не удалось создать MegaGrid-сессию.');
-      setStatusText('Создание MegaGrid-сессии завершилось с ошибкой.');
+      setError(t('legacyV3.megaGrid.errors.createSessionFailed'));
+      setStatusText(t('legacyV3.megaGrid.statuses.createSessionFailed'));
     } finally {
       setIsCreatingSession(false);
     }
-  }, [buildShareLink, resetJobState, syncSessionInLocation, updateDownload]);
+  }, [buildShareLink, resetJobState, syncSessionInLocation, t, updateDownload]);
 
   const joinSessionAsWorker = useCallback(async (rawCode, { silent = false } = {}) => {
     const normalized = normalizeSessionCode(rawCode);
     if (!normalized) {
-      setError('Введите корректный 6-значный код MegaGrid-сессии.');
+      setError(t('legacyV3.megaGrid.errors.invalidSessionCode'));
       return false;
     }
 
     if (!silent) setIsJoiningSession(true);
     setError('');
-    setStatusText('Подключаемся к MegaGrid-сессии как worker...');
+    setStatusText(t('legacyV3.megaGrid.statuses.connectingWorker'));
 
     try {
       resetJobState();
@@ -814,17 +821,17 @@ export default function MegaGridLab() {
       setSessionSnapshot(response.session || null);
       setShareLink(buildShareLink(response.sessionCode));
       syncSessionInLocation(response.sessionCode);
-      setStatusText('Worker вошел в сессию. Загрузите FFmpeg и переведите ноду в ready.');
+      setStatusText(t('legacyV3.megaGrid.statuses.workerJoined'));
       return true;
     } catch (joinError) {
       console.error('[MegaGrid] join-session-failed', joinError);
-      setError('Не удалось войти в MegaGrid-сессию.');
-      setStatusText('Подключение к MegaGrid-сессии завершилось с ошибкой.');
+      setError(t('legacyV3.megaGrid.errors.joinSessionFailed'));
+      setStatusText(t('legacyV3.megaGrid.statuses.joinSessionFailed'));
       return false;
     } finally {
       if (!silent) setIsJoiningSession(false);
     }
-  }, [buildShareLink, resetJobState, syncSessionInLocation, updateDownload, webRtcSupported, workerLabel]);
+  }, [buildShareLink, resetJobState, syncSessionInLocation, t, updateDownload, webRtcSupported, workerLabel]);
 
   const toggleWorkerReady = useCallback(async () => {
     if (role !== 'worker') return;
@@ -843,32 +850,32 @@ export default function MegaGridLab() {
       });
       setStatusText(
         nextReady
-          ? 'Worker-нода готова принимать сегменты от master.'
-          : 'Worker-нода поставлена на паузу и больше не забирает задачи.'
+          ? t('legacyV3.megaGrid.statuses.workerReady')
+          : t('legacyV3.megaGrid.statuses.workerPaused')
       );
     } catch (readyError) {
       console.error('[MegaGrid] toggle-worker-ready-failed', readyError);
-      setError('Не удалось перевести worker в состояние ready.');
+      setError(t('legacyV3.megaGrid.errors.toggleReadyFailed'));
     }
-  }, [gridEngine, role, updateWorkerState, workerReady]);
+  }, [gridEngine, role, t, updateWorkerState, workerReady]);
 
   const startDistributedConversion = useCallback(async () => {
     if (role !== 'master') return;
     if (!selectedFile) {
-      setError('Сначала выберите большое видео для распределения.');
+      setError(t('legacyV3.megaGrid.errors.selectVideo'));
       return;
     }
 
     const readyWorkers = (sessionSnapshot?.workers || []).filter((worker) => worker.ready);
     if (!readyWorkers.length) {
-      setError('Нет готовых worker-нод. Подключите хотя бы одну.');
+      setError(t('legacyV3.megaGrid.errors.noReadyWorkers'));
       return;
     }
 
     try {
       setError('');
       updateDownload(null);
-      setStatusText('Master сегментирует исходное видео и формирует очередь задач...');
+      setStatusText(t('legacyV3.megaGrid.statuses.segmentingSource'));
       setMasterProgress(4);
       await gridEngine.loadEngine();
 
@@ -903,15 +910,15 @@ export default function MegaGridLab() {
         completed: 0
       });
       setMasterProgress(12);
-      setStatusText(`Сформировано ${pendingTasks.length} сегментов. Распределяем их по worker-нодам...`);
+      setStatusText(t('legacyV3.megaGrid.statuses.segmentsReady', { count: pendingTasks.length }));
       dispatchAvailableTasks();
     } catch (jobError) {
       console.error('[MegaGrid] start-distributed-conversion-failed', jobError);
-      setError('Не удалось запустить распределенную обработку.');
-      setStatusText('MegaGrid не смог стартовать текущий job.');
+      setError(t('legacyV3.megaGrid.errors.jobStartFailed'));
+      setStatusText(t('legacyV3.megaGrid.statuses.jobStartFailed'));
       resetJobState();
     }
-  }, [dispatchAvailableTasks, getSelectedFormat, gridEngine, resetJobState, role, segmentSeconds, selectedFile, sessionSnapshot?.workers, updateDownload]);
+  }, [dispatchAvailableTasks, getSelectedFormat, gridEngine, resetJobState, role, segmentSeconds, selectedFile, sessionSnapshot?.workers, t, updateDownload]);
 
   const copyShareLink = useCallback(async () => {
     if (!shareLink) return;
@@ -920,9 +927,9 @@ export default function MegaGridLab() {
       setCopied(true);
       setError('');
     } catch {
-      setError('Не удалось скопировать ссылку MegaGrid.');
+      setError(t('legacyV3.megaGrid.errors.copyFailed'));
     }
-  }, [shareLink]);
+  }, [shareLink, t]);
 
   useEffect(() => {
     if (!webRtcSupported || !socketBase) return undefined;
@@ -938,21 +945,21 @@ export default function MegaGridLab() {
     const handleConnect = () => {
       setSocketState('connected');
       if (!sessionCodeRef.current) {
-        setStatusText('Grid coordinator подключен. Можно создать распределенную сессию.');
+        setStatusText(t('legacyV3.megaGrid.statuses.coordinatorConnected'));
       }
     };
 
     const handleDisconnect = (reason) => {
       setSocketState('disconnected');
       if (reason !== 'io client disconnect') {
-        setStatusText('Grid coordinator переподключается. Peer-соединения могут восстановиться.');
+        setStatusText(t('legacyV3.megaGrid.statuses.coordinatorReconnecting'));
       }
     };
 
     const handleConnectError = (connectError) => {
       console.error('[MegaGrid] socket-connect-error', connectError);
       setSocketState('error');
-      setError('Не удалось подключиться к Socket.io coordinator для MegaGrid.');
+      setError(t('legacyV3.megaGrid.errors.coordinatorFailed'));
     };
 
     const handleSessionSnapshot = (snapshot) => {
@@ -961,8 +968,8 @@ export default function MegaGridLab() {
       masterSocketIdRef.current = String(snapshot.masterSocketId || '');
       if (roleRef.current === 'master') {
         setStatusText(snapshot.workerCount > 0
-          ? `MegaGrid видит ${snapshot.workerCount} worker-ноды. Ready: ${snapshot.readyWorkerCount}.`
-          : 'MegaGrid-сессия создана. Ждем первые worker-ноды.');
+          ? t('legacyV3.megaGrid.statuses.snapshotWithWorkers', { workers: snapshot.workerCount, ready: snapshot.readyWorkerCount })
+          : t('legacyV3.megaGrid.statuses.snapshotWaiting'));
       }
     };
 
@@ -970,8 +977,8 @@ export default function MegaGridLab() {
       console.warn('[MegaGrid] session-closed', payload);
       void leaveSession();
       setError(payload?.reason === 'master_disconnected'
-        ? 'Master-нода завершила сессию.'
-        : 'Сессия MegaGrid закрыта.');
+        ? t('legacyV3.megaGrid.errors.masterClosed')
+        : t('legacyV3.megaGrid.errors.sessionClosed'));
     };
 
     const handleSignal = (payload) => {
@@ -1007,7 +1014,7 @@ export default function MegaGridLab() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [createMasterPeer, ensureWorkerPeer, leaveSession, socketBase, webRtcSupported]);
+  }, [createMasterPeer, ensureWorkerPeer, leaveSession, socketBase, t, webRtcSupported]);
 
   useEffect(() => {
     if (role !== 'master') return undefined;
@@ -1076,10 +1083,10 @@ export default function MegaGridLab() {
             MegaGrid / Distributed FFmpeg
           </div>
           <h2 className="mt-4 text-3xl md:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            Распределенная конвертация в браузерном кластере
+            {t('legacyV3.megaGrid.title')}
           </h2>
           <p className="mt-3 max-w-3xl text-sm md:text-base text-slate-600 dark:text-slate-300">
-            Master режет видео локально на сегменты, свободные worker-ноды конвертируют куски через FFmpeg.wasm, а итоговый файл собирается обратно в браузере.
+            {t('legacyV3.megaGrid.description')}
           </p>
         </div>
       </div>
@@ -1087,15 +1094,17 @@ export default function MegaGridLab() {
       <div className="mt-6 flex flex-wrap gap-3">
         <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${peerStateTone}`}>
           {(role === 'master' ? connectedWorkerCount > 0 : Boolean(workerPeerRef.current?.connected)) ? <Wifi size={14} /> : <WifiOff size={14} />}
-          {role === 'master' ? `Peer mesh: ${connectedWorkerCount}` : (workerPeerRef.current?.connected ? 'Linked to master' : 'Waiting for peer')}
+          {role === 'master'
+            ? t('legacyV3.megaGrid.peerMesh', { count: connectedWorkerCount })
+            : (workerPeerRef.current?.connected ? t('legacyV3.megaGrid.linkedToMaster') : t('legacyV3.megaGrid.waitingForPeer'))}
         </span>
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
           <ServerCog size={14} />
-          Socket: {socketState}
+          {t('legacyV3.megaGrid.socketLabel')}: {socketState}
         </span>
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
           <ShieldCheck size={14} />
-          FFmpeg.wasm Cluster
+          {t('legacyV3.megaGrid.clusterBadge')}
         </span>
       </div>
 
@@ -1104,7 +1113,7 @@ export default function MegaGridLab() {
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-4">
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Управление сессией', 'Session control')}</div>
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.sessionControl')}</div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -1113,7 +1122,7 @@ export default function MegaGridLab() {
                 className="rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center justify-center gap-2"
               >
                 {isCreatingSession ? <Loader2 size={16} className="animate-spin" /> : <Radio size={16} />}
-                {pick('Создать master-сессию', 'Create master session')}
+                {t('legacyV3.megaGrid.createMasterSession')}
               </button>
               <button
                 type="button"
@@ -1121,18 +1130,18 @@ export default function MegaGridLab() {
                 disabled={!sessionCode}
                 className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01]"
               >
-                {pick('Покинуть сессию', 'Leave session')}
+                {t('legacyV3.megaGrid.leaveSession')}
               </button>
             </div>
 
             <div className="mt-5 rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Подключение worker-ноды', 'Join as worker')}</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.joinAsWorker')}</div>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                 <input
                   value={joinCode}
                   onChange={(event) => setJoinCode(normalizeSessionCode(event.target.value))}
                   inputMode="numeric"
-                  placeholder="Введите 6 цифр"
+                  placeholder={t('legacyV3.megaGrid.enterCode')}
                   className="w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-950/40 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-400"
                 />
                 <button
@@ -1142,17 +1151,17 @@ export default function MegaGridLab() {
                   className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center justify-center gap-2"
                 >
                   {isJoiningSession ? <Loader2 size={16} className="animate-spin" /> : <Users size={16} />}
-                  {pick('Войти как worker', 'Join worker')}
+                  {t('legacyV3.megaGrid.joinWorker')}
                 </button>
               </div>
             </div>
 
             {sessionCode ? (
               <div className="mt-5 rounded-2xl border border-emerald-200/60 dark:border-emerald-300/20 bg-emerald-50/70 dark:bg-emerald-500/10 p-4">
-                <div className="text-xs uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-100">{pick('Код сессии', 'Session code')}</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-100">{t('legacyV3.megaGrid.sessionCode')}</div>
                 <div className="mt-2 text-3xl font-semibold tracking-[0.32em] text-slate-900 dark:text-slate-100">{sessionCode}</div>
                 <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
-                  {role === 'master' ? 'Поделитесь кодом с worker-нодами.' : 'Эта нода подключена к текущему кластеру.'}
+                  {role === 'master' ? t('legacyV3.megaGrid.shareCodeHint') : t('legacyV3.megaGrid.nodeConnectedHint')}
                 </div>
               </div>
             ) : null}
@@ -1161,14 +1170,14 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Cpu size={16} />
-              {pick('Master-пайплайн', 'Master pipeline')}
+              {t('legacyV3.megaGrid.masterPipeline')}
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-[1fr_180px_220px]">
               <div>
                 <div className="rounded-3xl border-2 border-dashed border-slate-300/70 dark:border-white/15 bg-white/70 dark:bg-white/5 px-5 py-8 text-center backdrop-blur-xl">
                   {selectedFile ? (
                     <>
-                      <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Исходное видео', 'Source video')}</div>
+                      <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.sourceVideo')}</div>
                       <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100 break-all">{selectedFile.name}</div>
                       <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formatBytes(selectedFile.size)}</div>
                     </>
@@ -1177,8 +1186,8 @@ export default function MegaGridLab() {
                       <div className="mx-auto h-12 w-12 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-200">
                         <Upload size={18} />
                       </div>
-                      <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Выберите видео для MegaGrid</div>
-                      <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">Лучше всего подходит крупный файл, который выгодно разбивать на сегменты.</div>
+                      <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyV3.megaGrid.selectVideoTitle')}</div>
+                      <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.selectVideoHint')}</div>
                     </>
                   )}
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -1188,7 +1197,7 @@ export default function MegaGridLab() {
                       disabled={role !== 'master'}
                       className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02]"
                     >
-                      Выбрать файл
+                      {t('btnSelect')}
                     </button>
                     {selectedFile ? (
                       <button
@@ -1196,7 +1205,7 @@ export default function MegaGridLab() {
                         onClick={() => setSelectedFile(null)}
                         className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]"
                       >
-                        Очистить
+                        {t('btnClear')}
                       </button>
                     ) : null}
                   </div>
@@ -1211,7 +1220,7 @@ export default function MegaGridLab() {
               </div>
 
               <label className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Длина сегмента', 'Segment size')}</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.segmentSize')}</div>
                 <input
                   type="number"
                   min="2"
@@ -1220,11 +1229,11 @@ export default function MegaGridLab() {
                   onChange={(event) => setSegmentSeconds(Math.max(2, Math.min(30, Number(event.target.value || 5))))}
                   className="mt-3 w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-950/40 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-emerald-400"
                 />
-                <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">Обычно 5 секунд дают хороший баланс между overhead и параллелизмом.</div>
+                <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.segmentSizeHint')}</div>
               </label>
 
               <label className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Формат результата', 'Output format')}</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.outputFormat')}</div>
                 <select
                   value={selectedFormat}
                   onChange={(event) => setSelectedFormat(event.target.value)}
@@ -1236,7 +1245,7 @@ export default function MegaGridLab() {
                     </option>
                   ))}
                 </select>
-                <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">Сегменты будут конвертированы worker-нодами именно в этот формат.</div>
+                <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.outputFormatHint')}</div>
               </label>
             </div>
 
@@ -1247,8 +1256,8 @@ export default function MegaGridLab() {
               />
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
-              <span>{pick('Прогресс', 'Progress')}: {Math.round(masterProgress)}%</span>
-              <span>{pick('Сегменты', 'Segments')}: {masterTotals.completed}/{masterTotals.total}</span>
+              <span>{t('legacyV3.megaGrid.progressLabel')}: {Math.round(masterProgress)}%</span>
+              <span>{t('legacyV3.megaGrid.segmentsLabel')}: {masterTotals.completed}/{masterTotals.total}</span>
             </div>
 
             <button
@@ -1258,12 +1267,12 @@ export default function MegaGridLab() {
               className="mt-4 rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center gap-2"
             >
               {gridEngine.isBusy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-              {pick('Запустить распределенную задачу', 'Start distributed job')}
+              {t('legacyV3.megaGrid.startDistributedJob')}
             </button>
 
             {download ? (
               <div className="mt-4 rounded-2xl border border-emerald-300/60 dark:border-emerald-400/20 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-3">
-                <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">{pick('Распределенный результат готов', 'Distributed output ready')}</div>
+                <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">{t('legacyV3.megaGrid.distributedReady')}</div>
                 <div className="mt-1 text-xs text-emerald-700 dark:text-emerald-200">
                   {download.fileName} · {formatBytes(download.size)}
                 </div>
@@ -1273,7 +1282,7 @@ export default function MegaGridLab() {
                   className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-300/70 dark:border-emerald-300/30 bg-white/85 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
                 >
                   <Download size={14} />
-                  Скачать итоговый файл
+                  {t('legacyV3.megaGrid.downloadFinal')}
                 </a>
               </div>
             ) : null}
@@ -1282,7 +1291,7 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Users size={16} />
-              {pick('Пул worker-нод', 'Worker pool')}
+              {t('legacyV3.megaGrid.workerPool')}
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {(sessionSnapshot?.workers || []).map((worker) => (
@@ -1292,17 +1301,17 @@ export default function MegaGridLab() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${worker.ready ? 'border-emerald-300/70 bg-emerald-100/70 text-emerald-700 dark:border-emerald-300/30 dark:bg-emerald-500/10 dark:text-emerald-100' : 'border-slate-200/70 bg-white/80 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'}`}>
                       {worker.ready ? <CheckCircle2 size={12} /> : <WifiOff size={12} />}
-                      {worker.ready ? pick('Готов', 'Ready') : pick('На паузе', 'Paused')}
+                      {worker.ready ? t('legacyV3.megaGrid.ready') : t('legacyV3.megaGrid.paused')}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full border border-slate-200/70 dark:border-white/10 bg-white/80 dark:bg-white/5 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                      {pick('Статус', 'Status')}: {worker.status}
+                      {t('legacyV3.megaGrid.statusLabel')}: {worker.status}
                     </span>
                   </div>
                 </div>
               ))}
               {(!sessionSnapshot?.workers || sessionSnapshot.workers.length === 0) ? (
                 <div className="rounded-2xl border border-dashed border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-slate-400 md:col-span-2">
-                  Пока нет подключенных worker-нод. Откройте эту страницу на втором устройстве и войдите в сессию.
+                  {t('legacyV3.megaGrid.noWorkers')}
                 </div>
               ) : null}
             </div>
@@ -1313,12 +1322,12 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <QrCode size={16} />
-              {pick('Ссылка и QR', 'Invite / QR')}
+              {t('legacyV3.megaGrid.inviteQr')}
             </div>
             {shareLink ? (
               <div className="mt-4 space-y-4">
                 <div className="rounded-2xl border border-emerald-200/60 dark:border-emerald-300/20 bg-emerald-50/70 dark:bg-emerald-500/10 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-100">{pick('Ссылка для worker-ноды', 'Worker link')}</div>
+                  <div className="text-xs uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-100">{t('legacyV3.megaGrid.workerLink')}</div>
                   <div className="mt-2 break-all text-sm text-slate-800 dark:text-slate-100">{shareLink}</div>
                   <button
                     type="button"
@@ -1326,21 +1335,21 @@ export default function MegaGridLab() {
                     className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-200/70 dark:border-emerald-300/20 bg-white/85 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
                   >
                     <Copy size={14} />
-                    {copied ? 'Скопировано' : 'Скопировать ссылку'}
+                    {copied ? t('legacyV3.megaGrid.copied') : t('legacyV3.megaGrid.copyLink')}
                   </button>
                 </div>
                 {qrCodeUrl ? (
                   <div className="rounded-2xl border border-slate-200/70 dark:border-white/10 bg-white/85 dark:bg-slate-950/40 p-4">
                     <img src={qrCodeUrl} alt="MegaGrid QR" className="mx-auto h-48 w-48 rounded-2xl" />
                     <div className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
-                      Откройте QR на втором устройстве и подключите worker прямо в кластер.
+                      {t('legacyV3.megaGrid.qrHint')}
                     </div>
                   </div>
                 ) : null}
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 p-4 text-sm text-slate-500 dark:text-slate-400">
-                Создайте master-сессию, и здесь появится ссылка для подключения worker-нод.
+                {t('legacyV3.megaGrid.linkPending')}
               </div>
             )}
           </div>
@@ -1348,10 +1357,10 @@ export default function MegaGridLab() {
           <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
               <Cpu size={16} />
-              {pick('Worker-нода', 'Worker node')}
+              {t('legacyV3.megaGrid.workerNode')}
             </div>
             <label className="mt-4 block">
-              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{pick('Название ноды', 'Node label')}</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{t('legacyV3.megaGrid.nodeLabel')}</div>
               <input
                 value={workerLabel}
                 onChange={(event) => setWorkerLabel(event.target.value)}
@@ -1365,10 +1374,10 @@ export default function MegaGridLab() {
               className="mt-4 rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.01] inline-flex items-center gap-2"
             >
               {gridEngine.isBusy && role === 'worker' ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />}
-              {workerReady ? pick('Поставить worker на паузу', 'Pause worker') : pick('Загрузить движок и активировать', 'Load engine & ready')}
+              {workerReady ? t('legacyV3.megaGrid.pauseWorker') : t('legacyV3.megaGrid.loadEngineAndReady')}
             </button>
             <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              {pick('Движок', 'Engine')}: {gridEngine.engineReady ? pick('загружен', 'loaded') : pick('не загружен', 'not loaded')} · {pick('Готовых нод в кластере', 'Ready workers in cluster')}: {readyWorkers.length}
+              {t('legacyV3.megaGrid.engineLabel')}: {gridEngine.engineReady ? t('legacyV3.megaGrid.engineLoaded') : t('legacyV3.megaGrid.engineNotLoaded')} · {t('legacyV3.megaGrid.readyWorkersInCluster')}: {readyWorkers.length}
             </div>
           </div>
 
@@ -1376,12 +1385,12 @@ export default function MegaGridLab() {
             <div className="flex items-start gap-2">
               <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
               <div>
-                <div className="font-semibold">{pick('Пайплайн', 'Pipeline')}</div>
+                <div className="font-semibold">{t('legacyV3.megaGrid.pipelineTitle')}</div>
                 <div className="mt-1 text-cyan-800/90 dark:text-cyan-100/90">
-                  Master сегментирует видео локально, coordinator отслеживает ready/busy worker-нод, а сегменты и результаты идут по WebRTC Data Channels.
+                  {t('legacyV3.megaGrid.pipelineBody')}
                 </div>
                 <div className="mt-2 text-cyan-800/90 dark:text-cyan-100/90">
-                  {pick('Текущий формат задачи', 'Current job format')}: {selectedFormatMeta.label} · {pick('длина сегмента', 'segment time')}: {segmentSeconds}s
+                  {t('legacyV3.megaGrid.currentJobFormat')}: {selectedFormatMeta.label} · {t('legacyV3.megaGrid.segmentTime')}: {segmentSeconds}s
                 </div>
               </div>
             </div>

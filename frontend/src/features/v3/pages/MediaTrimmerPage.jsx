@@ -3,8 +3,8 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import coreURL from '@ffmpeg/core?url';
 import wasmURL from '@ffmpeg/core/wasm?url';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Download, Loader2, Scissors, Upload } from 'lucide-react';
-const UNSUPPORTED_SAB_MESSAGE = 'Ваш браузер не поддерживает локальную обработку FFmpeg. Откройте сайт в современной версии Chrome/Edge/Firefox.';
 
 const clamp = (value, min, max) => {
   const num = Number(value);
@@ -52,6 +52,8 @@ const getTrimmedOutputName = (sourceName, fallbackExt = 'mp4') => {
 };
 
 export default function MediaTrimmerPage() {
+  const { t } = useTranslation();
+  const unsupportedSabMessage = t('legacyTools.mediaTrimmer.errors.unsupportedBrowser');
   const supportsSharedArrayBuffer = useMemo(() => {
     if (typeof window === 'undefined') return false;
     const hasSharedArrayBuffer = typeof window.SharedArrayBuffer !== 'undefined';
@@ -65,7 +67,7 @@ export default function MediaTrimmerPage() {
   const [endTime, setEndTime] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [status, setStatus] = useState('idle');
-  const [statusText, setStatusText] = useState('Загрузите аудио или видео, затем выберите отрезок.');
+  const [statusText, setStatusText] = useState(() => t('legacyTools.mediaTrimmer.statuses.initial'));
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [ffmpegReady, setFfmpegReady] = useState(false);
@@ -128,7 +130,7 @@ export default function MediaTrimmerPage() {
 
     if (!silent) {
       setStatus('loading');
-      setStatusText('Загружаем FFmpeg ядро...');
+      setStatusText(t('legacyTools.mediaTrimmer.statuses.loadingCore'));
       setProgress(3);
       setError('');
     }
@@ -137,18 +139,18 @@ export default function MediaTrimmerPage() {
       await ffmpegRef.current.load({ coreURL, wasmURL });
       ffmpegLoadedRef.current = true;
       setFfmpegReady(true);
-      if (!silent) setStatusText('FFmpeg готов. Запускаем обрезку...');
+      if (!silent) setStatusText(t('legacyTools.mediaTrimmer.statuses.coreReady'));
       return ffmpegRef.current;
     } catch (loadError) {
       setFfmpegReady(false);
       if (!silent) {
         setStatus('error');
-        setStatusText('Не удалось загрузить FFmpeg ядро');
-        setError(String(loadError?.message || 'Ошибка инициализации FFmpeg.'));
+        setStatusText(t('legacyTools.mediaTrimmer.statuses.coreFailed'));
+        setError(String(loadError?.message || t('legacyTools.mediaTrimmer.errors.initFailed')));
       }
       throw loadError;
     }
-  }, [supportsSharedArrayBuffer]);
+  }, [supportsSharedArrayBuffer, t]);
 
   const resetFileState = useCallback(() => {
     setSourceFile(null);
@@ -158,13 +160,13 @@ export default function MediaTrimmerPage() {
     setEndTime(0);
     setProgress(0);
     setStatus('idle');
-    setStatusText('Загрузите аудио или видео, затем выберите отрезок.');
+    setStatusText(t('legacyTools.mediaTrimmer.statuses.initial'));
     setError('');
     setResult(null);
     cleanupPreviewUrl();
     cleanupResultUrl();
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [cleanupPreviewUrl, cleanupResultUrl]);
+  }, [cleanupPreviewUrl, cleanupResultUrl, t]);
 
   const handleSelectFile = useCallback((file) => {
     if (!file) return;
@@ -179,10 +181,10 @@ export default function MediaTrimmerPage() {
     setEndTime(0);
     setResult(null);
     setStatus('idle');
-    setStatusText('Файл загружен. Получаем длительность и готовим таймлайн...');
+    setStatusText(t('legacyTools.mediaTrimmer.statuses.fileLoaded'));
     setProgress(0);
     setError('');
-  }, [cleanupPreviewUrl, cleanupResultUrl]);
+  }, [cleanupPreviewUrl, cleanupResultUrl, t]);
 
   const handleLoadedMetadata = useCallback((event) => {
     const rawDuration = Number(event.currentTarget?.duration || 0);
@@ -190,8 +192,8 @@ export default function MediaTrimmerPage() {
     setDuration(nextDuration);
     setStartTime(0);
     setEndTime(nextDuration);
-    setStatusText(nextDuration > 0 ? 'Выберите начало и конец отрезка.' : 'Не удалось прочитать длительность файла.');
-  }, []);
+    setStatusText(nextDuration > 0 ? t('legacyTools.mediaTrimmer.statuses.selectRange') : t('legacyTools.mediaTrimmer.statuses.metadataFailed'));
+  }, [t]);
 
   const onDrop = useCallback((event) => {
     event.preventDefault();
@@ -218,24 +220,24 @@ export default function MediaTrimmerPage() {
     if (status === 'loading' || status === 'trimming') return;
 
     if (!supportsSharedArrayBuffer) {
-      setError(UNSUPPORTED_SAB_MESSAGE);
+      setError(unsupportedSabMessage);
       return;
     }
 
     if (!sourceFile) {
-      setError('Сначала загрузите файл.');
+      setError(t('legacyTools.mediaTrimmer.errors.selectFile'));
       return;
     }
 
     if (!duration || duration <= 0) {
-      setError('Не удалось определить длительность файла.');
+      setError(t('legacyTools.mediaTrimmer.errors.durationMissing'));
       return;
     }
 
     const safeStart = clamp(startTime, 0, duration);
     const safeEnd = clamp(endTime, 0, duration);
     if (safeEnd <= safeStart) {
-      setError('Конец должен быть больше начала.');
+      setError(t('legacyTools.mediaTrimmer.errors.invalidRange'));
       return;
     }
 
@@ -251,7 +253,7 @@ export default function MediaTrimmerPage() {
       if (jobId !== currentJobRef.current) return;
 
       setStatus('trimming');
-      setStatusText('Обрезаем медиа локально в браузере...');
+      setStatusText(t('legacyTools.mediaTrimmer.statuses.trimming'));
 
       const sourceExt = getExtension(sourceFile.name) || (mediaKind === 'audio' ? 'mp3' : 'mp4');
       const inputName = `input-${jobId}.${sourceExt}`;
@@ -285,7 +287,7 @@ export default function MediaTrimmerPage() {
       });
       setProgress(100);
       setStatus('done');
-      setStatusText('Готово: отрезок сформирован и готов к скачиванию.');
+      setStatusText(t('legacyTools.mediaTrimmer.statuses.done'));
 
       await Promise.allSettled([
         ffmpeg.deleteFile(inputName),
@@ -293,8 +295,8 @@ export default function MediaTrimmerPage() {
       ]);
     } catch (trimError) {
       setStatus('error');
-      setStatusText('Обрезка завершилась с ошибкой.');
-      setError(String(trimError?.message || 'Не удалось обрезать файл.'));
+      setStatusText(t('legacyTools.mediaTrimmer.statuses.failed'));
+      setError(String(trimError?.message || t('legacyTools.mediaTrimmer.errors.trimFailed')));
     }
   }, [
     cleanupResultUrl,
@@ -305,7 +307,9 @@ export default function MediaTrimmerPage() {
     sourceFile,
     startTime,
     status,
-    supportsSharedArrayBuffer
+    supportsSharedArrayBuffer,
+    t,
+    unsupportedSabMessage
   ]);
 
   const progressStyle = { width: `${clampProgress(progress)}%` };
@@ -318,16 +322,16 @@ export default function MediaTrimmerPage() {
         <div>
           <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / Timeline</div>
           <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            Медиа Триммер
+            {t('legacyTools.mediaTrimmer.title')}
           </h2>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
-            Обрезка видео и аудио полностью в браузере через FFmpeg.wasm без отправки исходника на сервер.
+            {t('legacyTools.mediaTrimmer.description')}
           </p>
         </div>
         <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3 text-right min-w-[190px]">
           <div className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">FFmpeg</div>
           <div className={`mt-1 text-sm font-semibold ${ffmpegReady ? 'text-emerald-700 dark:text-emerald-200' : 'text-slate-700 dark:text-slate-200'}`}>
-            {ffmpegReady ? 'Ядро загружено' : 'Инициализация...'}
+            {ffmpegReady ? t('legacyTools.mediaTrimmer.engineReady') : t('legacyTools.mediaTrimmer.engineLoading')}
           </div>
         </div>
       </div>
@@ -336,7 +340,7 @@ export default function MediaTrimmerPage() {
         <div className="mt-5 rounded-2xl border border-red-300/60 dark:border-red-400/20 bg-red-100/70 dark:bg-red-500/10 backdrop-blur-xl px-4 py-3 text-sm text-red-700 dark:text-red-200">
           <div className="flex items-start gap-2">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            <span>{UNSUPPORTED_SAB_MESSAGE}</span>
+            <span>{unsupportedSabMessage}</span>
           </div>
         </div>
       )}
@@ -357,7 +361,7 @@ export default function MediaTrimmerPage() {
       >
         {sourceFile ? (
           <div>
-            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Файл для обрезки</div>
+            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.fileForTrim')}</div>
             <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100 break-all">{sourceFile.name}</div>
             <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formatBytes(sourceFile.size)}</div>
           </div>
@@ -366,8 +370,8 @@ export default function MediaTrimmerPage() {
             <div className="mx-auto h-12 w-12 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-200">
               <Upload size={18} />
             </div>
-            <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Перетащите видео или аудио</div>
-            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">или выберите файл вручную</div>
+            <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyTools.mediaTrimmer.dropTitle')}</div>
+            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.dropHint')}</div>
           </div>
         )}
 
@@ -377,7 +381,7 @@ export default function MediaTrimmerPage() {
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-300 ease-out hover:scale-[1.02]"
           >
-            Выбрать файл
+            {t('btnSelect')}
           </button>
           {sourceFile && (
             <button
@@ -385,7 +389,7 @@ export default function MediaTrimmerPage() {
               onClick={resetFileState}
               className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]"
             >
-              Очистить
+              {t('btnClear')}
             </button>
           )}
         </div>
@@ -401,7 +405,7 @@ export default function MediaTrimmerPage() {
 
       {sourceFile && previewUrl && (
         <div className="mt-6 rounded-3xl border border-white/40 dark:border-white/10 bg-white/75 dark:bg-white/5 backdrop-blur-xl p-4">
-          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Превью исходника</div>
+          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.previewSource')}</div>
           <div className="mt-3">
             {mediaKind === 'audio' ? (
               <audio
@@ -424,7 +428,7 @@ export default function MediaTrimmerPage() {
             )}
           </div>
           <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            Общая длительность: {duration > 0 ? formatTimelineTime(duration) : 'чтение метаданных...'}
+            {t('legacyTools.mediaTrimmer.totalDuration', { duration: duration > 0 ? formatTimelineTime(duration) : t('legacyTools.mediaTrimmer.readingMetadata') })}
           </div>
         </div>
       )}
@@ -432,15 +436,15 @@ export default function MediaTrimmerPage() {
       {sourceFile && (
         <div className="mt-6 rounded-3xl border border-white/40 dark:border-white/10 bg-white/75 dark:bg-white/5 backdrop-blur-xl p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Таймлайн обрезки</div>
+            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.timelineLabel')}</div>
             <div className="text-sm text-slate-600 dark:text-slate-300">
-              Длина фрагмента: <span className="font-semibold text-slate-800 dark:text-slate-100">{formatTimelineTime(trimDuration)}</span>
+              {t('legacyTools.mediaTrimmer.clipLength')} <span className="font-semibold text-slate-800 dark:text-slate-100">{formatTimelineTime(trimDuration)}</span>
             </div>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <label className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Начало (сек)</div>
+              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.startSeconds')}</div>
               <input
                 type="number"
                 min={0}
@@ -454,7 +458,7 @@ export default function MediaTrimmerPage() {
             </label>
 
             <label className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Конец (сек)</div>
+              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.endSeconds')}</div>
               <input
                 type="number"
                 min={0}
@@ -470,7 +474,7 @@ export default function MediaTrimmerPage() {
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <label className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Сдвиг начала</div>
+              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.shiftStart')}</div>
               <input
                 type="range"
                 min={0}
@@ -484,7 +488,7 @@ export default function MediaTrimmerPage() {
             </label>
 
             <label className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
-              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Сдвиг конца</div>
+              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.mediaTrimmer.shiftEnd')}</div>
               <input
                 type="range"
                 min={0}
@@ -503,7 +507,7 @@ export default function MediaTrimmerPage() {
       <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto]">
         <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
           <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
-            <span>Прогресс</span>
+            <span>{t('legacyTools.mediaTrimmer.progressLabel')}</span>
             <span>{Math.round(clampProgress(progress))}%</span>
           </div>
           <div className="mt-3 h-[4px] rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
@@ -524,12 +528,12 @@ export default function MediaTrimmerPage() {
           {isBusy ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              {status === 'loading' ? 'Загрузка FFmpeg...' : 'Обрезаем...'}
+              {status === 'loading' ? t('legacyTools.mediaTrimmer.loadingCta') : t('legacyTools.mediaTrimmer.trimmingCta')}
             </>
           ) : (
             <>
               <Scissors size={16} />
-              Обрезать фрагмент
+              {t('legacyTools.mediaTrimmer.trimFragment')}
             </>
           )}
         </button>
@@ -543,7 +547,7 @@ export default function MediaTrimmerPage() {
 
       {result && (
         <div className="mt-4 rounded-2xl border border-emerald-300/60 dark:border-emerald-400/20 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-3">
-          <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">Фрагмент готов</div>
+          <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">{t('legacyTools.mediaTrimmer.fragmentReady')}</div>
           <div className="mt-1 text-xs text-emerald-700 dark:text-emerald-200">
             {result.fileName} · {formatBytes(result.size)}
           </div>
@@ -554,7 +558,7 @@ export default function MediaTrimmerPage() {
               className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/70 dark:border-emerald-300/30 bg-white/85 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
             >
               <Download size={14} />
-              Скачать обрезанный файл
+              {t('legacyTools.mediaTrimmer.downloadTrimmed')}
             </a>
           </div>
         </div>

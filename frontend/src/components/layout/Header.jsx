@@ -7,6 +7,18 @@ import { useAuthModal } from '../../features/auth/components/AuthModalProvider.j
 import { HEADER_LANGUAGE_OPTIONS, normalizeLang } from '../../i18n.js';
 import GlassPanel from '../ui/GlassPanel.jsx';
 
+const BRAND_LOGO_MODULES = import.meta.glob('../../assets/logo.{jpg,jpeg,png,webp,svg}', {
+  eager: true,
+  import: 'default',
+});
+
+const BRAND_LOGO_SRC = BRAND_LOGO_MODULES['../../assets/logo.jpg']
+  || BRAND_LOGO_MODULES['../../assets/logo.jpeg']
+  || BRAND_LOGO_MODULES['../../assets/logo.png']
+  || BRAND_LOGO_MODULES['../../assets/logo.webp']
+  || BRAND_LOGO_MODULES['../../assets/logo.svg']
+  || null;
+
 const NAV_ITEMS = [
   {
     labelKey: 'headerTools',
@@ -58,11 +70,21 @@ export default function Header() {
       <div className="flex min-w-0 items-center">
         <Link
           to="/"
-          className="text-sm font-medium tracking-[0.02em] text-white/90 transition-opacity duration-300 hover:opacity-90"
+          className="inline-flex items-center transition-opacity duration-300 hover:opacity-90"
         >
-          <span className="bg-gradient-to-r from-white via-white/90 to-cyan-200 bg-clip-text text-transparent drop-shadow-[0_0_14px_rgba(255,255,255,0.16)]">
-            MegaConvert
-          </span>
+          {BRAND_LOGO_SRC ? (
+            <img
+              src={BRAND_LOGO_SRC}
+              alt="MegaConvert"
+              className="h-8 w-auto object-contain mix-blend-screen transition-opacity hover:opacity-90 sm:h-10 lg:h-12"
+            />
+          ) : (
+            <span className="text-sm font-medium tracking-[0.02em] text-white/90">
+              <span className="bg-gradient-to-r from-white via-white/90 to-cyan-200 bg-clip-text text-transparent drop-shadow-[0_0_14px_rgba(255,255,255,0.16)]">
+                MegaConvert
+              </span>
+            </span>
+          )}
         </Link>
       </div>
 

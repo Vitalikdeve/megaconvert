@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Copy,
@@ -7,11 +8,6 @@ import {
   ScanText,
   Upload
 } from 'lucide-react';
-
-const LANGUAGE_OPTIONS = [
-  { value: 'rus', label: 'Русский' },
-  { value: 'eng', label: 'Английский' }
-];
 
 const clampProgress = (value) => {
   const next = Number(value || 0);
@@ -46,11 +42,16 @@ const prettifyStatus = (status) => {
 };
 
 export default function OcrRecognitionTool() {
+  const { t } = useTranslation();
+  const languageOptions = useMemo(() => ([
+    { value: 'rus', label: t('legacyTools.ocrRecognition.languages.russian') },
+    { value: 'eng', label: t('legacyTools.ocrRecognition.languages.english') }
+  ]), [t]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [sourceFile, setSourceFile] = useState(null);
-  const [language, setLanguage] = useState(LANGUAGE_OPTIONS[0].value);
+  const [language, setLanguage] = useState('rus');
   const [status, setStatus] = useState('idle');
-  const [statusText, setStatusText] = useState('Готово к распознаванию');
+  const [statusText, setStatusText] = useState(() => t('legacyTools.ocrRecognition.statuses.ready'));
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [recognizedText, setRecognizedText] = useState('');
@@ -83,10 +84,10 @@ export default function OcrRecognitionTool() {
     setError('');
     setStatus('idle');
     setProgress(0);
-    setStatusText('Файл загружен. Готово к распознаванию');
+    setStatusText(t('legacyTools.ocrRecognition.statuses.fileLoaded'));
     setRecognizedText('');
     setCopyState('idle');
-  }, []);
+  }, [t]);
 
   const onDrop = (event) => {
     event.preventDefault();
@@ -100,7 +101,7 @@ export default function OcrRecognitionTool() {
     if (!text) return;
     try {
       if (!navigator.clipboard?.writeText) {
-        throw new Error('Clipboard API недоступен');
+        throw new Error(t('legacyTools.ocrRecognition.errors.clipboardUnavailable'));
       }
       await navigator.clipboard.writeText(text);
       setCopyState('copied');
@@ -130,13 +131,13 @@ export default function OcrRecognitionTool() {
   const runOcr = useCallback(async () => {
     if (isRecognizing) return;
     if (!sourceFile) {
-      setError('Сначала загрузите изображение или скан для OCR.');
+      setError(t('legacyTools.ocrRecognition.errors.selectSource'));
       return;
     }
 
     setError('');
     setStatus('recognizing');
-    setStatusText('Инициализация OCR...');
+    setStatusText(t('legacyTools.ocrRecognition.statuses.initializing'));
     setProgress(3);
     setRecognizedText('');
     setCopyState('idle');
@@ -145,7 +146,7 @@ export default function OcrRecognitionTool() {
       const moduleRef = await import('tesseract.js');
       const createWorker = moduleRef?.createWorker || moduleRef?.default?.createWorker;
       if (typeof createWorker !== 'function') {
-        throw new Error('OCR-модуль не инициализирован.');
+        throw new Error(t('legacyTools.ocrRecognition.errors.moduleInit'));
       }
 
       const logger = (message) => {
@@ -156,7 +157,7 @@ export default function OcrRecognitionTool() {
         }
         const prettyStatus = prettifyStatus(message.status);
         if (prettyStatus) {
-          setStatusText(`OCR: ${prettyStatus}`);
+          setStatusText(t('legacyTools.ocrRecognition.statuses.ocrProgress', { status: prettyStatus }));
         }
       };
 
@@ -171,13 +172,13 @@ export default function OcrRecognitionTool() {
       }
 
       if (!workerRef.current) {
-        setStatusText('Инициализация OCR worker...');
+        setStatusText(t('legacyTools.ocrRecognition.statuses.workerInitializing'));
         setProgress(6);
         workerRef.current = await createWorker(language, 1, { logger });
         workerLangRef.current = language;
       }
 
-      setStatusText('OCR: Распознавание');
+      setStatusText(t('legacyTools.ocrRecognition.statuses.recognizing'));
       const result = await workerRef.current.recognize(sourceFile);
 
       const extractedText = String(result?.data?.text || '');
@@ -186,15 +187,15 @@ export default function OcrRecognitionTool() {
       setStatus('done');
       setStatusText(
         extractedText.trim()
-          ? 'Распознавание завершено. Вы можете отредактировать результат.'
-          : 'Распознавание завершено. Текст не обнаружен.'
+          ? t('legacyTools.ocrRecognition.statuses.done')
+          : t('legacyTools.ocrRecognition.statuses.noText')
       );
     } catch (recognitionError) {
       setStatus('error');
-      setStatusText('Распознавание завершилось с ошибкой');
-      setError(String(recognitionError?.message || 'Не удалось распознать текст.'));
+      setStatusText(t('legacyTools.ocrRecognition.statuses.failed'));
+      setError(String(recognitionError?.message || t('legacyTools.ocrRecognition.errors.recognitionFailed')));
     }
-  }, [isRecognizing, language, sourceFile]);
+  }, [isRecognizing, language, sourceFile, t]);
 
   const ringRadius = 42;
   const ringCircumference = 2 * Math.PI * ringRadius;
@@ -206,10 +207,10 @@ export default function OcrRecognitionTool() {
       <div>
         <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">AI / OCR</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-          Умное распознавание текста
+          {t('legacyTools.ocrRecognition.title')}
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-3xl">
-          Загрузите фото или скан документа и извлеките текст прямо в браузере через Tesseract.js.
+          {t('legacyTools.ocrRecognition.description')}
         </p>
       </div>
 
@@ -231,7 +232,7 @@ export default function OcrRecognitionTool() {
           >
             {sourceFile ? (
               <div>
-                <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Выбран файл</div>
+                <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.ocrRecognition.selectedFile')}</div>
                 <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100 break-all">{sourceFile.name}</div>
                 <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formatBytes(sourceFile.size)}</div>
               </div>
@@ -240,8 +241,8 @@ export default function OcrRecognitionTool() {
                 <div className="mx-auto h-12 w-12 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-200">
                   <Upload size={18} />
                 </div>
-                <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Перетащите изображение или скан</div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">или выберите файл вручную</div>
+                <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyTools.ocrRecognition.dropTitle')}</div>
+                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('legacyTools.ocrRecognition.dropHint')}</div>
               </div>
             )}
 
@@ -251,7 +252,7 @@ export default function OcrRecognitionTool() {
                 onClick={() => fileInputRef.current?.click()}
                 className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-300 ease-out hover:scale-[1.02]"
               >
-                Выбрать файл
+                {t('btnSelect')}
               </button>
               {sourceFile && (
                 <button
@@ -259,7 +260,7 @@ export default function OcrRecognitionTool() {
                   onClick={() => {
                     setSourceFile(null);
                     setStatus('idle');
-                    setStatusText('Готово к распознаванию');
+                    setStatusText(t('legacyTools.ocrRecognition.statuses.ready'));
                     setProgress(0);
                     setError('');
                     setRecognizedText('');
@@ -267,7 +268,7 @@ export default function OcrRecognitionTool() {
                   }}
                   className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]"
                 >
-                  Очистить
+                  {t('btnClear')}
                 </button>
               )}
             </div>
@@ -283,14 +284,14 @@ export default function OcrRecognitionTool() {
 
           <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto]">
             <label className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
-              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Язык распознавания</div>
+              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.ocrRecognition.languageLabel')}</div>
               <select
                 value={language}
                 onChange={(event) => setLanguage(event.target.value)}
                 className="mt-2 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-2 text-sm text-slate-800 dark:text-slate-100"
                 disabled={isRecognizing}
               >
-                {LANGUAGE_OPTIONS.map((option) => (
+                {languageOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -307,12 +308,12 @@ export default function OcrRecognitionTool() {
               {isRecognizing ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Распознаем...
+                  {t('legacyTools.ocrRecognition.recognizingCta')}
                 </>
               ) : (
                 <>
                   <ScanText size={16} />
-                  Начать распознавание
+                  {t('legacyTools.ocrRecognition.startCta')}
                 </>
               )}
             </button>
@@ -357,10 +358,10 @@ export default function OcrRecognitionTool() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Прогресс OCR</div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.ocrRecognition.progressLabel')}</div>
                   <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{statusText}</div>
                   <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Язык: {LANGUAGE_OPTIONS.find((option) => option.value === language)?.label || 'Русский'}
+                    {t('legacyTools.ocrRecognition.languageValue', { language: languageOptions.find((option) => option.value === language)?.label || t('legacyTools.ocrRecognition.languages.russian') })}
                   </div>
                 </div>
               </div>
@@ -380,15 +381,15 @@ export default function OcrRecognitionTool() {
         <div className="rounded-3xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl p-4 md:p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Результат</div>
-              <h3 className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Извлеченный текст</h3>
+              <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('stepResult')}</div>
+              <h3 className="mt-1 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyTools.ocrRecognition.extractedTitle')}</h3>
             </div>
           </div>
 
           <textarea
             value={recognizedText}
             onChange={(event) => setRecognizedText(event.target.value)}
-            placeholder="Здесь появится распознанный текст. После этого вы сможете его отредактировать."
+            placeholder={t('legacyTools.ocrRecognition.placeholder')}
             className="mt-4 h-[340px] w-full resize-y rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-3 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
           />
 
@@ -400,7 +401,7 @@ export default function OcrRecognitionTool() {
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02]"
             >
               <Copy size={14} />
-              {copyState === 'copied' ? 'Скопировано' : 'Скопировать текст'}
+              {copyState === 'copied' ? t('legacyTools.ocrRecognition.copied') : t('legacyTools.ocrRecognition.copy')}
             </button>
 
             <button
@@ -410,13 +411,13 @@ export default function OcrRecognitionTool() {
               className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/60 dark:border-cyan-300/30 bg-cyan-100/70 dark:bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-800 dark:text-cyan-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:scale-[1.02]"
             >
               <Download size={14} />
-              Скачать как .txt
+              {t('legacyTools.ocrRecognition.downloadTxt')}
             </button>
           </div>
 
           {copyState === 'error' && (
             <div className="mt-3 text-xs text-red-600 dark:text-red-300">
-              Не удалось скопировать в буфер обмена. Попробуйте вручную.
+              {t('legacyTools.ocrRecognition.errors.copyFailed')}
             </div>
           )}
         </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Cloud,
@@ -23,7 +24,7 @@ const formatBytes = (value) => {
 const FORMAT_OPTIONS = [
   {
     id: 'mp4',
-    label: 'Видео в MP4',
+    labelKey: 'legacyTools.localMediaConverter.formats.mp4',
     ext: 'mp4',
     mime: 'video/mp4',
     kind: 'video',
@@ -31,7 +32,7 @@ const FORMAT_OPTIONS = [
   },
   {
     id: 'webm',
-    label: 'Видео в WebM',
+    labelKey: 'legacyTools.localMediaConverter.formats.webm',
     ext: 'webm',
     mime: 'video/webm',
     kind: 'video',
@@ -39,7 +40,7 @@ const FORMAT_OPTIONS = [
   },
   {
     id: 'gif',
-    label: 'Видео в GIF',
+    labelKey: 'legacyTools.localMediaConverter.formats.gif',
     ext: 'gif',
     mime: 'image/gif',
     kind: 'video',
@@ -47,7 +48,7 @@ const FORMAT_OPTIONS = [
   },
   {
     id: 'mp3',
-    label: 'Аудио в MP3',
+    labelKey: 'legacyTools.localMediaConverter.formats.mp3',
     ext: 'mp3',
     mime: 'audio/mpeg',
     kind: 'audio',
@@ -55,7 +56,7 @@ const FORMAT_OPTIONS = [
   },
   {
     id: 'wav',
-    label: 'Аудио в WAV',
+    labelKey: 'legacyTools.localMediaConverter.formats.wav',
     ext: 'wav',
     mime: 'audio/wav',
     kind: 'audio',
@@ -70,6 +71,7 @@ const clampProgress = (value) => {
 };
 
 export default function LocalMediaConverterTool({ onCloudFallback }) {
+  const { t } = useTranslation();
   const [isDragOver, setIsDragOver] = useState(false);
   const [sourceFile, setSourceFile] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState(FORMAT_OPTIONS[0].id);
@@ -106,6 +108,13 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
     clearError: clearAiError
   } = useAIAudioCleanup();
 
+  const formatOptions = useMemo(() => (
+    FORMAT_OPTIONS.map((option) => ({
+      ...option,
+      label: t(option.labelKey)
+    }))
+  ), [t]);
+
   useEffect(() => {
     if (!isSupported) return undefined;
     void loadEngine({ silent: true }).catch(() => {
@@ -117,15 +126,15 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
   const allowedFormats = useMemo(() => {
     const fileType = String(sourceFile?.type || '').toLowerCase();
     if (fileType.startsWith('audio/')) {
-      return FORMAT_OPTIONS.filter((item) => item.kind === 'audio');
+      return formatOptions.filter((item) => item.kind === 'audio');
     }
-    return FORMAT_OPTIONS;
-  }, [sourceFile?.type]);
+    return formatOptions;
+  }, [formatOptions, sourceFile?.type]);
 
   const activeSelectedFormat = allowedFormats.some((item) => item.id === selectedFormat)
     ? selectedFormat
-    : (allowedFormats[0]?.id || FORMAT_OPTIONS[0].id);
-  const activeFormat = allowedFormats.find((item) => item.id === activeSelectedFormat) || allowedFormats[0] || FORMAT_OPTIONS[0];
+    : (allowedFormats[0]?.id || formatOptions[0].id);
+  const activeFormat = allowedFormats.find((item) => item.id === activeSelectedFormat) || allowedFormats[0] || formatOptions[0];
   const isAudioSource = String(sourceFile?.type || '').toLowerCase().startsWith('audio/');
   const isAICleanupAvailable = Boolean(sourceFile && isAudioSource && activeFormat?.kind === 'audio');
   const effectiveAICleanupEnabled = aiCleanupEnabled && isAICleanupAvailable;
@@ -190,14 +199,14 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
 
   const displayStatusText = status === 'idle'
     ? sourceFile
-      ? 'Файл загружен. Готово к конвертации'
-      : 'Готов к локальной обработке'
+      ? t('legacyTools.localMediaConverter.statuses.fileLoaded')
+      : t('legacyTools.localMediaConverter.statuses.ready')
     : statusText;
   const primaryProgress = isAiBusy ? aiProgress : progress;
   const primaryStatusText = isAiBusy ? aiStatusText : displayStatusText;
   const progressStyle = { width: `${clampProgress(primaryProgress)}%` };
   const aiCoverageLabel = lastCleanup?.speechCoverage != null
-    ? `${Math.round(Number(lastCleanup.speechCoverage || 0) * 100)}% дорожки`
+    ? t('legacyTools.localMediaConverter.trackCoverage', { percent: Math.round(Number(lastCleanup.speechCoverage || 0) * 100) })
     : null;
 
   return (
@@ -206,16 +215,16 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
         <div>
           <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Media / WebAssembly</div>
           <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            Локальная конвертация медиа
+            {t('legacyTools.localMediaConverter.title')}
           </h2>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
-            Обработка выполняется прямо в браузере пользователя через FFmpeg.wasm без отправки исходного файла на сервер.
+            {t('legacyTools.localMediaConverter.description')}
           </p>
         </div>
         <div className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-3 backdrop-blur-xl">
           <div className="text-[11px] uppercase tracking-widest text-slate-500 dark:text-slate-400">FFmpeg Worker</div>
           <div className={`mt-1 text-sm font-semibold ${engineReady ? 'text-emerald-700 dark:text-emerald-200' : 'text-slate-700 dark:text-slate-200'}`}>
-            {engineReady ? 'Ядро загружено' : 'Инициализация в фоне'}
+            {engineReady ? t('legacyTools.localMediaConverter.engineReady') : t('legacyTools.localMediaConverter.engineLoading')}
           </div>
         </div>
       </div>
@@ -234,7 +243,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
                 className="inline-flex items-center gap-2 rounded-xl border border-red-300/60 dark:border-red-300/30 bg-white/80 dark:bg-white/5 px-3 py-2 text-xs font-semibold transition-all duration-300 ease-out hover:scale-[1.02]"
               >
                 <Cloud size={14} />
-                Перейти в облачный конвертер
+                {t('legacyTools.localMediaConverter.openCloudFallback')}
               </button>
             </div>
           )}
@@ -257,7 +266,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
       >
         {sourceFile ? (
           <div>
-            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Выбран файл</div>
+            <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.localMediaConverter.selectedFile')}</div>
             <div className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100 break-all">{sourceFile.name}</div>
             <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{formatBytes(sourceFile.size)}</div>
           </div>
@@ -266,8 +275,8 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
             <div className="mx-auto h-12 w-12 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-200">
               <Upload size={18} />
             </div>
-            <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Перетащите медиафайл сюда</div>
-            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">или выберите файл вручную</div>
+            <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyTools.localMediaConverter.dropTitle')}</div>
+            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('legacyTools.localMediaConverter.dropHint')}</div>
           </div>
         )}
 
@@ -277,7 +286,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-300 ease-out hover:scale-[1.02]"
           >
-            Выбрать файл
+            {t('btnSelect')}
           </button>
           {sourceFile && (
             <button
@@ -286,7 +295,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
               disabled={isWorking}
               className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]"
             >
-              Очистить
+              {t('btnClear')}
             </button>
           )}
         </div>
@@ -303,7 +312,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
 
       <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto]">
         <label className="rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
-          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">Формат результата</div>
+          <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">{t('legacyTools.localMediaConverter.outputFormat')}</div>
           <select
             value={activeSelectedFormat}
             onChange={(event) => setSelectedFormat(event.target.value)}
@@ -328,13 +337,13 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
             <>
               <Loader2 size={16} className="animate-spin" />
               {isAiBusy
-                ? 'AI очищает звук...'
-                : (status === 'loading' ? 'Загрузка FFmpeg...' : 'Обрабатываем...')}
+                ? t('legacyTools.localMediaConverter.aiCleaning')
+                : (status === 'loading' ? t('legacyTools.localMediaConverter.loadingFfmpeg') : t('legacyTools.localMediaConverter.processingCta'))}
             </>
           ) : (
             <>
               <Play size={16} />
-              Начать локальную конвертацию
+              {t('legacyTools.localMediaConverter.start')}
             </>
           )}
         </button>
@@ -349,10 +358,10 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
                 Neural Edge / Audio
               </div>
               <div className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
-                AI-очистка звука перед конвертацией
+                {t('legacyTools.localMediaConverter.aiSectionTitle')}
               </div>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                Speech-aware пайплайн выделяет голосовые участки через Transformers.js и мягко подавляет фон в браузере до запуска FFmpeg.
+                {t('legacyTools.localMediaConverter.aiSectionDescription')}
               </p>
             </div>
 
@@ -377,7 +386,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
                   }`}
                 />
               </span>
-              {aiCleanupEnabled ? 'AI включен' : 'AI выключен'}
+              {aiCleanupEnabled ? t('legacyTools.localMediaConverter.aiEnabled') : t('legacyTools.localMediaConverter.aiDisabled')}
             </button>
           </div>
 
@@ -386,8 +395,8 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
               <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 <span>Inference</span>
                 {aiModelReady && (
-                  <span className="rounded-full border border-emerald-300/60 dark:border-emerald-300/20 bg-emerald-100/80 dark:bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-200">
-                    Модель готова
+                    <span className="rounded-full border border-emerald-300/60 dark:border-emerald-300/20 bg-emerald-100/80 dark:bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-200">
+                    {t('legacyTools.localMediaConverter.modelReady')}
                   </span>
                 )}
                 {modelDevice && (
@@ -401,16 +410,16 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
                 {isAICleanupAvailable
                   ? (effectiveAICleanupEnabled
                     ? aiStatusText
-                    : 'AI-режим готов. При запуске мы сначала очистим дорожку, потом передадим ее в FFmpeg.')
-                  : 'AI-очистка активируется для аудиофайлов при экспорте в аудиоформат.'}
+                    : t('legacyTools.localMediaConverter.aiReadyHint'))
+                  : t('legacyTools.localMediaConverter.aiAudioOnlyHint')}
               </div>
             </div>
 
             {lastCleanup && (
               <div className="rounded-2xl border border-cyan-300/40 dark:border-cyan-300/20 bg-cyan-50/70 dark:bg-cyan-500/10 px-4 py-3 text-sm text-cyan-800 dark:text-cyan-100">
-                <div className="font-semibold">Последняя AI-обработка</div>
+                <div className="font-semibold">{t('legacyTools.localMediaConverter.lastAiRun')}</div>
                 <div className="mt-1 text-xs text-cyan-700 dark:text-cyan-200">
-                  {aiCoverageLabel || 'Речь оценена'}
+                  {aiCoverageLabel || t('legacyTools.localMediaConverter.voiceEstimated')}
                   {modelDevice ? ` · ${modelDevice === 'webgpu' ? 'WebGPU' : 'WASM'}` : ''}
                 </div>
               </div>
@@ -420,7 +429,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
           {(effectiveAICleanupEnabled || aiError) && (
             <div className="mt-4 rounded-2xl border border-white/50 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-3">
               <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                <span>AI Progress</span>
+                <span>{t('legacyTools.localMediaConverter.aiProgress')}</span>
                 <span>{Math.round(clampProgress(aiProgress))}%</span>
               </div>
               <div className="mt-3 h-[4px] rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
@@ -437,7 +446,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
 
       <div className="mt-5 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
         <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">
-          <span>Прогресс</span>
+          <span>{t('legacyTools.localMediaConverter.progressLabel')}</span>
           <span>{Math.round(clampProgress(primaryProgress))}%</span>
         </div>
         <div className="mt-3 h-[4px] rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
@@ -458,7 +467,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
               onClick={clearError}
               className="shrink-0 text-xs font-semibold text-red-700 dark:text-red-200 hover:underline"
             >
-              Скрыть
+              {t('legacyTools.localMediaConverter.dismissError')}
             </button>
           </div>
         </div>
@@ -473,7 +482,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
               onClick={clearAiError}
               className="shrink-0 text-xs font-semibold text-red-700 dark:text-red-200 hover:underline"
             >
-              Скрыть
+              {t('legacyTools.localMediaConverter.dismissError')}
             </button>
           </div>
         </div>
@@ -481,7 +490,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
 
       {result && (
         <div className="mt-4 rounded-2xl border border-emerald-300/60 dark:border-emerald-400/20 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-3">
-          <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">Файл готов</div>
+          <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-100">{t('legacyTools.localMediaConverter.resultReady')}</div>
           <div className="mt-1 text-xs text-emerald-700 dark:text-emerald-200">
             {result.fileName} · {formatBytes(result.size)}
           </div>
@@ -492,7 +501,7 @@ export default function LocalMediaConverterTool({ onCloudFallback }) {
               className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/70 dark:border-emerald-300/30 bg-white/85 dark:bg-white/5 px-3 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
             >
               <Download size={14} />
-              Скачать результат
+              {t('legacyTools.localMediaConverter.downloadResult')}
             </a>
           </div>
         </div>

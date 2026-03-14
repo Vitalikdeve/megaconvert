@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PDFDocument } from 'pdf-lib';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Download,
@@ -61,9 +62,10 @@ const renderFirstPagePreview = async (bytes) => {
 };
 
 export default function PdfEditorTool() {
+  const { t } = useTranslation();
   const [isDragOver, setIsDragOver] = useState(false);
   const [documents, setDocuments] = useState([]);
-  const [statusText, setStatusText] = useState('Загрузите один или несколько PDF');
+  const [statusText, setStatusText] = useState(() => t('legacyTools.pdfEditor.statuses.initial'));
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [result, setResult] = useState(null);
@@ -84,23 +86,23 @@ export default function PdfEditorTool() {
   const removeDocument = useCallback((documentId) => {
     setDocuments((prev) => prev.filter((item) => item.id !== documentId));
     setError('');
-    setStatusText('Карточка удалена из сборки');
-  }, []);
+    setStatusText(t('legacyTools.pdfEditor.statuses.removed'));
+  }, [t]);
 
   const clearAll = useCallback(() => {
     setDocuments([]);
     setError('');
-    setStatusText('Редактор очищен');
+    setStatusText(t('legacyTools.pdfEditor.statuses.cleared'));
     clearResultLink();
     setResult(null);
-  }, [clearResultLink]);
+  }, [clearResultLink, t]);
 
   const appendPdfFiles = useCallback(async (incomingFiles) => {
     const files = Array.from(incomingFiles || []);
     if (!files.length) return;
 
     setError('');
-    setStatusText('Извлекаем первую страницу каждого PDF...');
+    setStatusText(t('legacyTools.pdfEditor.statuses.extracting'));
     clearResultLink();
     setResult(null);
 
@@ -111,7 +113,7 @@ export default function PdfEditorTool() {
     for (let i = 0; i < files.length; i += 1) {
       const file = files[i];
       if (!ensurePdfFile(file)) {
-        failed.push(`${file.name || `file-${i + 1}`}: неподдерживаемый формат`);
+        failed.push(`${file.name || `file-${i + 1}`}: ${t('legacyTools.pdfEditor.errors.unsupportedFormat')}`);
         continue;
       }
       const id = createDocumentId(file, i);
@@ -128,20 +130,20 @@ export default function PdfEditorTool() {
           firstPagePreview: preview.dataUrl
         });
       } catch {
-        failed.push(`${file.name || `file-${i + 1}`}: не удалось извлечь превью`);
+        failed.push(`${file.name || `file-${i + 1}`}: ${t('legacyTools.pdfEditor.errors.previewFailed')}`);
       }
     }
 
     if (parsed.length) {
       setDocuments((prev) => [...prev, ...parsed]);
-      setStatusText(`Добавлено PDF: ${parsed.length}`);
+      setStatusText(t('legacyTools.pdfEditor.statuses.added', { count: parsed.length }));
     }
 
     if (failed.length) {
-      setError(`Некоторые файлы пропущены: ${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}`);
-      if (!parsed.length) setStatusText('Не удалось загрузить PDF');
+      setError(t('legacyTools.pdfEditor.errors.filesSkipped', { details: `${failed.slice(0, 3).join('; ')}${failed.length > 3 ? '...' : ''}` }));
+      if (!parsed.length) setStatusText(t('legacyTools.pdfEditor.statuses.loadFailed'));
     }
-  }, [clearResultLink, documents]);
+  }, [clearResultLink, documents, t]);
 
   const onDrop = (event) => {
     event.preventDefault();
@@ -152,13 +154,13 @@ export default function PdfEditorTool() {
   const mergePDFs = useCallback(async () => {
     if (isSaving) return;
     if (!documents.length) {
-      setError('Добавьте хотя бы один PDF для объединения.');
+      setError(t('legacyTools.pdfEditor.errors.addPdfRequired'));
       return;
     }
 
     setError('');
     setIsSaving(true);
-    setStatusText('Склеиваем PDF...');
+    setStatusText(t('legacyTools.pdfEditor.statuses.merging'));
     clearResultLink();
     setResult(null);
 
@@ -179,14 +181,14 @@ export default function PdfEditorTool() {
       const fileName = `megaconvert-merged-${Date.now()}.pdf`;
 
       setResult({ fileName, size: blob.size, url });
-      setStatusText('PDF успешно склеен');
+      setStatusText(t('legacyTools.pdfEditor.statuses.done'));
     } catch {
-      setError('Не удалось объединить PDF. Проверьте исходные файлы и попробуйте снова.');
-      setStatusText('Ошибка при объединении');
+      setError(t('legacyTools.pdfEditor.errors.mergeFailed'));
+      setStatusText(t('legacyTools.pdfEditor.statuses.failed'));
     } finally {
       setIsSaving(false);
     }
-  }, [clearResultLink, documents, isSaving]);
+  }, [clearResultLink, documents, isSaving, t]);
 
   const pageTotal = useMemo(
     () => documents.reduce((sum, item) => sum + Number(item.pageCount || 0), 0),
@@ -198,10 +200,10 @@ export default function PdfEditorTool() {
       <div>
         <div className="text-xs uppercase tracking-widest text-slate-500 dark:text-slate-400">PDF / Editor</div>
         <h2 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-          Визуальный PDF-редактор
+          {t('legacyTools.pdfEditor.title')}
         </h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-w-3xl">
-          Загружайте несколько PDF, смотрите превью первой страницы каждого файла и склеивайте документы в один.
+          {t('legacyTools.pdfEditor.description')}
         </p>
       </div>
 
@@ -222,15 +224,15 @@ export default function PdfEditorTool() {
         <div className="mx-auto h-12 w-12 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-200">
           <Upload size={18} />
         </div>
-        <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Перетащите PDF-файлы сюда</div>
-        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">или выберите один/несколько файлов вручную</div>
+        <div className="mt-3 text-lg font-semibold text-slate-900 dark:text-slate-100">{t('legacyTools.pdfEditor.dropTitle')}</div>
+        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('legacyTools.pdfEditor.dropHint')}</div>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-300 ease-out hover:scale-[1.02]"
           >
-            Добавить PDF
+            {t('legacyTools.pdfEditor.addPdf')}
           </button>
           {documents.length > 0 && (
             <button
@@ -238,7 +240,7 @@ export default function PdfEditorTool() {
               onClick={clearAll}
               className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 transition-all duration-300 ease-out hover:scale-[1.02]"
             >
-              Очистить всё
+              {t('legacyTools.pdfEditor.clearAll')}
             </button>
           )}
         </div>
@@ -259,7 +261,7 @@ export default function PdfEditorTool() {
       <div className="mt-5 rounded-2xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            PDF-файлов: {documents.length} · Страниц всего: {pageTotal}
+            {t('legacyTools.pdfEditor.summary', { count: documents.length, pages: pageTotal })}
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400">{statusText}</div>
         </div>
@@ -278,7 +280,7 @@ export default function PdfEditorTool() {
         {documents.length === 0 ? (
           <div className="rounded-3xl border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/5 p-8 text-center">
             <FileText size={18} className="mx-auto text-slate-400 dark:text-slate-500" />
-            <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">Загрузите PDF, чтобы открыть карточки с превью.</div>
+            <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">{t('legacyTools.pdfEditor.emptyState')}</div>
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -293,7 +295,7 @@ export default function PdfEditorTool() {
                     type="button"
                     onClick={() => removeDocument(doc.id)}
                     className="h-8 w-8 rounded-lg border border-red-200 dark:border-red-300/20 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-300 flex items-center justify-center transition-all duration-300 ease-out hover:scale-[1.04]"
-                    aria-label="Удалить карточку"
+                    aria-label={t('legacyTools.pdfEditor.removeCardAria')}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -302,12 +304,12 @@ export default function PdfEditorTool() {
                   {doc.firstPagePreview ? (
                     <img src={doc.firstPagePreview} alt={`preview-${doc.fileName}`} className="h-40 w-full object-contain bg-white" />
                   ) : (
-                    <div className="h-40 w-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-300">Превью недоступно</div>
+                    <div className="h-40 w-full flex items-center justify-center text-xs text-slate-500 dark:text-slate-300">{t('legacyTools.pdfEditor.previewUnavailable')}</div>
                   )}
                 </div>
                 <div className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100 break-all">{doc.fileName}</div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  Страниц: {doc.pageCount} · {formatBytes(doc.size)}
+                  {t('legacyTools.pdfEditor.pageCount', { count: doc.pageCount, size: formatBytes(doc.size) })}
                 </div>
               </article>
             ))}
@@ -325,12 +327,12 @@ export default function PdfEditorTool() {
           {isSaving ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              Склеиваем PDF...
+              {t('legacyTools.pdfEditor.mergingCta')}
             </>
           ) : (
             <>
               <Save size={16} />
-              Склеить PDF
+              {t('legacyTools.pdfEditor.mergePdf')}
             </>
           )}
         </button>
@@ -342,7 +344,7 @@ export default function PdfEditorTool() {
             className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/60 dark:border-emerald-300/30 bg-emerald-100/70 dark:bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:text-emerald-100 transition-all duration-300 ease-out hover:scale-[1.02]"
           >
             <Download size={15} />
-            Скачать {result.fileName} ({formatBytes(result.size)})
+            {t('legacyTools.pdfEditor.downloadResult', { name: result.fileName, size: formatBytes(result.size) })}
           </a>
         )}
       </div>

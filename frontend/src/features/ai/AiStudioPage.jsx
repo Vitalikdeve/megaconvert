@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AudioLines,
   BrainCircuit,
@@ -11,51 +12,14 @@ import {
   WandSparkles
 } from 'lucide-react';
 
-const PROMPT_SUGGESTIONS = [
-  'Сделать PDF вордом',
-  'Аудио в MP3',
-  'Картинку в PNG',
-  'Сжать видео без потери качества'
-];
-
-const CAPABILITY_MODULES = [
-  {
-    id: 'crystal-clear',
-    title: 'Crystal Clear',
-    copy: 'Подготовить фото к upscale и улучшению детализации прямо в браузере.',
-    prompt: 'Улучши четкость изображения и подготовь его для upscale без потери деталей',
-    icon: ImageIcon
-  },
-  {
-    id: 'silence',
-    title: 'Silence',
-    copy: 'Очистить речь, убрать ветер и фоновый шум из аудио или видео.',
-    prompt: 'Очисти звук, убери шум и сохрани разборчивый голос',
-    icon: AudioLines
-  },
-  {
-    id: 'smart-crop',
-    title: 'Smart Crop',
-    copy: 'Подготовить вертикальный фокус под Shorts, Reels и TikTok.',
-    prompt: 'Подготовь вертикальный 9:16 вариант с фокусом на главном объекте',
-    icon: Video
-  }
-];
-
-const STAGE_MESSAGES = {
-  idle: 'Neural hub ready',
-  analyzing: 'AI analyzing your intent...',
-  converting: 'AI running the selected pipeline...'
-};
-
 const formatFileSizeMb = (size) => `${(Math.max(0, Number(size || 0)) / (1024 * 1024)).toFixed(2)} MB`;
 
-const inferMediaLabel = (file) => {
+const inferMediaLabel = (file, t) => {
   const mime = String(file?.type || '').toLowerCase();
-  if (mime.startsWith('image/')) return 'Image lane';
-  if (mime.startsWith('audio/')) return 'Audio lane';
-  if (mime.startsWith('video/')) return 'Video lane';
-  return 'Universal lane';
+  if (mime.startsWith('image/')) return t('legacyAi.aiStudio.mediaLanes.image');
+  if (mime.startsWith('audio/')) return t('legacyAi.aiStudio.mediaLanes.audio');
+  if (mime.startsWith('video/')) return t('legacyAi.aiStudio.mediaLanes.video');
+  return t('legacyAi.aiStudio.mediaLanes.universal');
 };
 
 export default function AiStudioPage({
@@ -87,13 +51,48 @@ export default function AiStudioPage({
   onQuickLook,
   batchStackNode = null
 }) {
+  const { t } = useTranslation();
+  const promptSuggestions = useMemo(() => ([
+    t('legacyAi.aiStudio.promptSuggestions.pdfToWord'),
+    t('legacyAi.aiStudio.promptSuggestions.audioToMp3'),
+    t('legacyAi.aiStudio.promptSuggestions.imageToPng'),
+    t('legacyAi.aiStudio.promptSuggestions.compressVideo')
+  ]), [t]);
+  const capabilityModules = useMemo(() => ([
+    {
+      id: 'crystal-clear',
+      title: t('legacyAi.aiStudio.capabilityModules.crystalClear.title'),
+      copy: t('legacyAi.aiStudio.capabilityModules.crystalClear.copy'),
+      prompt: t('legacyAi.aiStudio.capabilityModules.crystalClear.prompt'),
+      icon: ImageIcon
+    },
+    {
+      id: 'silence',
+      title: t('legacyAi.aiStudio.capabilityModules.silence.title'),
+      copy: t('legacyAi.aiStudio.capabilityModules.silence.copy'),
+      prompt: t('legacyAi.aiStudio.capabilityModules.silence.prompt'),
+      icon: AudioLines
+    },
+    {
+      id: 'smart-crop',
+      title: t('legacyAi.aiStudio.capabilityModules.smartCrop.title'),
+      copy: t('legacyAi.aiStudio.capabilityModules.smartCrop.copy'),
+      prompt: t('legacyAi.aiStudio.capabilityModules.smartCrop.prompt'),
+      icon: Video
+    }
+  ]), [t]);
+  const stageMessages = useMemo(() => ({
+    idle: t('legacyAi.aiStudio.stageMessages.idle'),
+    analyzing: t('legacyAi.aiStudio.stageMessages.analyzing'),
+    converting: t('legacyAi.aiStudio.stageMessages.converting')
+  }), [t]);
   const selectedFiles = Array.isArray(files) && files.length ? files : (file ? [file] : []);
   const primaryFile = selectedFiles[0] || null;
   const hasBatch = selectedFiles.length > 1;
-  const stageMessage = STAGE_MESSAGES[stage] || STAGE_MESSAGES.idle;
+  const stageMessage = stageMessages[stage] || stageMessages.idle;
   const safeProgress = Math.max(6, Math.min(100, Math.round(Number(progress || 0))));
   const isBusy = stage !== 'idle' || status === 'processing';
-  const mediaLane = inferMediaLabel(primaryFile);
+  const mediaLane = inferMediaLabel(primaryFile, t);
   const totalBatchSize = hasBatch
     ? selectedFiles.reduce((sum, item) => sum + Number(item?.size || 0), 0)
     : Number(primaryFile?.size || 0);
@@ -116,17 +115,17 @@ export default function AiStudioPage({
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-cyan-200">
             <BrainCircuit size={13} />
-            Neural Hub
+            {t('legacyAi.aiStudio.badge')}
           </div>
           <h1 className="mt-4 text-4xl md:text-5xl font-semibold tracking-tight text-white">
-            AI tools that feel like hardware, not like forms.
+            {t('legacyAi.aiStudio.heroTitle')}
           </h1>
           <p className="mt-4 max-w-2xl text-sm md:text-base leading-7 text-slate-300">
-            Drop a file, describe the outcome, and let the local AI pipeline route conversion, cleanup and enhancement around the media you actually brought in.
+            {t('legacyAi.aiStudio.heroDescription')}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <span className="ai-neural-pill"><Cpu size={13} /> WebGPU / WASM ready</span>
-            <span className="ai-neural-pill"><ShieldCheck size={13} /> Private client-side flow</span>
+            <span className="ai-neural-pill"><Cpu size={13} /> {t('legacyAi.aiStudio.capabilities.webgpu')}</span>
+            <span className="ai-neural-pill"><ShieldCheck size={13} /> {t('legacyAi.aiStudio.capabilities.privateFlow')}</span>
             {intent?.from && intent?.to ? (
               <span className="ai-neural-pill ai-neural-pill-accent">{intent.from} → {intent.to}</span>
             ) : null}
@@ -147,12 +146,12 @@ export default function AiStudioPage({
                   <div className="ai-neural-drop-orb">
                     <Sparkles size={22} />
                   </div>
-                  <div className="mt-6 text-2xl md:text-3xl font-semibold text-white">Drop a file into the neural lane</div>
+                  <div className="mt-6 text-2xl md:text-3xl font-semibold text-white">{t('legacyAi.aiStudio.dropTitle')}</div>
                   <div className="mt-3 max-w-xl text-sm md:text-base text-slate-400 leading-7">
-                    Images, audio, video and document prompts all start from the same invisible interface: the file itself.
+                    {t('legacyAi.aiStudio.dropDescription')}
                   </div>
                   <button type="button" onClick={onBrowseClick} className="auth-primary-btn mt-7">
-                    Choose file
+                    {t('btnSelect')}
                   </button>
                 </div>
               ) : (
@@ -160,23 +159,23 @@ export default function AiStudioPage({
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="text-[11px] uppercase tracking-[0.28em] text-cyan-200/80">
-                        {hasBatch ? 'Batch lane ready' : mediaLane}
+                        {hasBatch ? t('legacyAi.aiStudio.batchLaneReady') : mediaLane}
                       </div>
                       <div className="mt-2 text-2xl font-semibold text-white break-words">
-                        {hasBatch ? `${selectedFiles.length} files loaded` : primaryFile.name}
+                        {hasBatch ? t('legacyAi.aiStudio.filesLoaded', { count: selectedFiles.length }) : primaryFile.name}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-400">
                         <span className="ai-neural-pill">{formatFileSizeMb(totalBatchSize)}</span>
                         {primaryFile?.type ? <span className="ai-neural-pill">{primaryFile.type}</span> : null}
-                        {hasBatch ? <span className="ai-neural-pill"><FileStack size={13} /> multi-file</span> : null}
+                        {hasBatch ? <span className="ai-neural-pill"><FileStack size={13} /> {t('legacyAi.aiStudio.multiFile')}</span> : null}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={onBrowseClick} className="auth-secondary-btn">
-                        Replace
+                        {t('btnReplaceFile')}
                       </button>
                       <button type="button" onClick={onClear} className="auth-secondary-btn">
-                        Clear
+                        {t('btnClear')}
                       </button>
                     </div>
                   </div>
@@ -197,17 +196,17 @@ export default function AiStudioPage({
               <div className="ai-neural-surface rounded-[2rem] p-5 md:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Pipeline state</div>
+                    <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{t('legacyAi.aiStudio.pipelineState')}</div>
                     <div className="mt-2 text-xl font-semibold text-white">{stageMessage}</div>
                     <div className="mt-2 text-sm text-slate-400">
-                      {status === 'processing' ? (pipelineStage || 'Optimizing route and preparing execution') : 'Standing by for the next media command'}
+                      {status === 'processing' ? (pipelineStage || t('legacyAi.aiStudio.optimizingRoute')) : t('legacyAi.aiStudio.standingBy')}
                     </div>
                   </div>
                   {status === 'done' && downloadUrl ? (
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={onDownload} className="auth-primary-btn">Download</button>
-                      {canQuickLook ? <button type="button" onClick={onQuickLook} className="auth-secondary-btn">Quick Look</button> : null}
-                      <button type="button" onClick={onReset} className="auth-secondary-btn">New request</button>
+                      <button type="button" onClick={onDownload} className="auth-primary-btn">{t('download')}</button>
+                      {canQuickLook ? <button type="button" onClick={onQuickLook} className="auth-secondary-btn">{t('legacyAi.aiStudio.quickLook')}</button> : null}
+                      <button type="button" onClick={onReset} className="auth-secondary-btn">{t('legacyAi.aiStudio.newRequest')}</button>
                     </div>
                   ) : null}
                 </div>
@@ -247,16 +246,16 @@ export default function AiStudioPage({
                   rows={3}
                   onChange={(event) => onPromptChange?.(event.target.value)}
                   onKeyDown={handlePromptKeyDown}
-                  placeholder="Describe the result you want. Example: remove noise from this interview and export clean MP3."
+                  placeholder={t('legacyAi.aiStudio.promptPlaceholder')}
                   className="ai-neural-textarea"
                 />
                 <button type="button" onClick={onSubmit} disabled={disabled} className="auth-primary-btn shrink-0">
-                  Run pipeline
+                  {t('legacyAi.aiStudio.runPipeline')}
                 </button>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {PROMPT_SUGGESTIONS.map((chip) => (
+                {promptSuggestions.map((chip) => (
                   <button
                     key={chip}
                     type="button"
@@ -273,10 +272,10 @@ export default function AiStudioPage({
 
           <aside className="space-y-4">
             <div className="ai-neural-surface rounded-[2rem] p-5 md:p-6">
-              <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Capability rack</div>
-              <div className="mt-2 text-xl font-semibold text-white">Intent-driven presets</div>
+              <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{t('legacyAi.aiStudio.capabilityRack')}</div>
+              <div className="mt-2 text-xl font-semibold text-white">{t('legacyAi.aiStudio.intentDrivenPresets')}</div>
               <div className="mt-4 space-y-3">
-                {CAPABILITY_MODULES.map((item) => {
+                {capabilityModules.map((item) => {
                   const Icon = item.icon;
                   return (
                     <button
@@ -299,20 +298,20 @@ export default function AiStudioPage({
             </div>
 
             <div className="ai-neural-surface rounded-[2rem] p-5 md:p-6">
-              <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Execution lane</div>
-              <div className="mt-2 text-xl font-semibold text-white">Local neural stack</div>
+              <div className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{t('legacyAi.aiStudio.executionLane')}</div>
+              <div className="mt-2 text-xl font-semibold text-white">{t('legacyAi.aiStudio.localNeuralStack')}</div>
               <div className="mt-4 space-y-3">
                 <div className="ai-neural-info-row">
                   <Cpu size={15} />
-                  <span>Browser-first execution with GPU-friendly fallbacks</span>
+                  <span>{t('legacyAi.aiStudio.infoRows.browserFirst')}</span>
                 </div>
                 <div className="ai-neural-info-row">
                   <WandSparkles size={15} />
-                  <span>AI cleanup, conversion and enhancement stay in one premium flow</span>
+                  <span>{t('legacyAi.aiStudio.infoRows.oneFlow')}</span>
                 </div>
                 <div className="ai-neural-info-row">
                   <ShieldCheck size={15} />
-                  <span>Your file does not need to leave the device for the core pipeline</span>
+                  <span>{t('legacyAi.aiStudio.infoRows.localPrivacy')}</span>
                 </div>
               </div>
             </div>
