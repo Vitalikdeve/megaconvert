@@ -30,6 +30,8 @@ build
 .env*.local
 .dev/
 data/
+!frontend/src/data/
+!frontend/src/data/blogPosts.js
 
 tmp_*.js
 tmp_*.html
