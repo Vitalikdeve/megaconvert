@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
@@ -10,6 +11,14 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    nodePolyfills({
+      include: ['process', 'events', 'stream', 'util', 'buffer'],
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
