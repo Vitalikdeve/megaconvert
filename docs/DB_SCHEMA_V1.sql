@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL DEFAULT 'user',
   plan TEXT NOT NULL DEFAULT 'free',
   locale TEXT NOT NULL DEFAULT 'en',
+  public_key JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -156,7 +157,7 @@ CREATE TABLE IF NOT EXISTS user_contacts (
   id UUID PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'blocked')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, contact_id)
 );
@@ -165,7 +166,7 @@ CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY,
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  encrypted_content TEXT NOT NULL,
+  encrypted_content JSONB NOT NULL,
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -1964,5 +1964,34 @@
       "cta": "Verifiëren met SheerID",
       "redirecting": "Doorsturen naar SheerID-verificatie..."
     }
+  },
+  "messenger": {
+    "eyebrow": "Berichten",
+    "addContact": "Contact toevoegen",
+    "searchPlaceholder": "Contacten zoeken...",
+    "emptyStateEyebrow": "Nog geen gesprekken",
+    "emptyStateBody": "Voeg een contact toe om een end-to-end versleutelde chat te starten.",
+    "mockContactAlice": "Alice, Juridisch",
+    "mockLastMessageAlice": "Ik heb de bijgewerkte NDA-versie geüpload.",
+    "mockThreadAlice1": "Dit is de nieuwste NDA-versie, afgestemd op jullie bedrijfsbeleid.",
+    "mockThreadAlice2": "Top, ik stuur het door naar inkoop in deze versleutelde thread.",
+    "mockContactOps": "Ops, nachtelijke jobs",
+    "mockLastMessageOps": "Analytics-export is zonder fouten voltooid.",
+    "mockThreadOps1": "Je B2B-workspace-export voor finance is succesvol afgerond.",
+    "mockThreadOps2": "Dank je, blijf de run-samenvattingen hier delen.",
+    "youLabel": "Jij",
+    "emptyChatEyebrow": "Berichten",
+    "emptyChatTitle": "Kies een contact om een beveiligd gesprek te starten",
+    "emptyChatSubtitle": "Alle berichten zijn bedoeld voor end-to-end encryptie. De inhoud blijft tussen jou en je contact.",
+    "statusOnline": "Online",
+    "statusOffline": "Offline",
+    "headerSecurity": "End-to-end versleutelde thread",
+    "headerTitle": "Berichten",
+    "inputPlaceholder": "Typ een beveiligd bericht...",
+    "sendLabel": "Verzenden",
+    "sendFailed": "Beveiligd bericht verzenden mislukt. Probeer het opnieuw.",
+    "decryptFailed": "Bericht kan niet worden ontsleuteld. Mogelijk heeft de contactpersoon sleutels gewisseld.",
+    "back": "Terug",
+    "keysInitFailed": "Unable to initialize secure messaging keys in this browser."
   }
 }

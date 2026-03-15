@@ -27,22 +27,6 @@ const PARTICIPANT_ACCENTS = [
   'from-violet-400/24 via-indigo-400/10 to-transparent',
 ];
 
-function getGridColumns(count) {
-  if (count <= 1) {
-    return 'repeat(1, minmax(0, 1fr))';
-  }
-
-  if (count === 2) {
-    return 'repeat(2, minmax(0, 1fr))';
-  }
-
-  if (count <= 4) {
-    return 'repeat(2, minmax(0, 1fr))';
-  }
-
-  return 'repeat(3, minmax(0, 1fr))';
-}
-
 function ControlButton({
   active = false,
   danger = false,
@@ -59,7 +43,7 @@ function ControlButton({
       aria-label={label}
       onClick={onClick}
       className={[
-        'inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all duration-300',
+        'inline-flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 snap-center items-center justify-center rounded-2xl border transition-all duration-300',
         danger
           ? 'border-red-400/28 bg-red-500 text-white shadow-[0_18px_40px_-22px_rgba(239,68,68,0.7)] hover:bg-red-400'
           : active
@@ -244,11 +228,11 @@ export default function MegaMeetRoom() {
 
         <div className="relative z-[1] flex-1 overflow-hidden px-3 pb-28 pt-4 sm:px-6 sm:pt-6">
           <div
-            className="flex h-full flex-col gap-3 sm:gap-4"
+          className="flex h-full flex-col gap-3 sm:gap-4"
           >
             <div
-              className="grid flex-1 gap-3 sm:gap-4"
-              style={{ gridTemplateColumns: getGridColumns(participants.length) }}
+              className="grid flex-1 grid-cols-1 gap-3 sm:gap-4"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}
             >
               {participants.map((participant) => (
                 <VideoTile
@@ -262,7 +246,7 @@ export default function MegaMeetRoom() {
         </div>
 
         <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[2] flex justify-center px-3 sm:bottom-6 sm:px-6">
-          <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-x-auto rounded-[24px] border border-white/[0.08] bg-[#0f1014]/88 px-3 py-2 shadow-[0_30px_90px_-48px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:gap-3 sm:rounded-[28px] sm:px-4 sm:py-3">
+          <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-x-auto rounded-[24px] border border-white/[0.08] bg-[#0f1014]/88 px-3 py-2 shadow-[0_30px_90px_-48px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:gap-3 sm:rounded-[28px] sm:px-4 sm:py-3 snap-x">
             <ControlButton
               icon={audioEnabled ? Mic : MicOff}
               active={!audioEnabled}

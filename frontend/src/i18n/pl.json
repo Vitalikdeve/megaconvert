@@ -1964,5 +1964,34 @@
       "cta": "Zweryfikuj przez SheerID",
       "redirecting": "Przekierowanie do weryfikacji SheerID..."
     }
+  },
+  "messenger": {
+    "eyebrow": "Wiadomości",
+    "addContact": "Dodaj kontakt",
+    "searchPlaceholder": "Szukaj kontaktów...",
+    "emptyStateEyebrow": "Brak rozmów",
+    "emptyStateBody": "Dodaj kontakt, aby rozpocząć czat szyfrowany end-to-end.",
+    "mockContactAlice": "Alice, Dział prawny",
+    "mockLastMessageAlice": "Wrzuciłam zaktualizowany szkic NDA.",
+    "mockThreadAlice1": "To najnowsza wersja NDA, zgodna z waszymi politykami.",
+    "mockThreadAlice2": "Świetnie, przekażę ją zakupom w tym szyfrowanym wątku.",
+    "mockContactOps": "Ops, nocne zadania",
+    "mockLastMessageOps": "Eksport analityki zakończył się bez błędów.",
+    "mockThreadOps1": "Eksport twojego workspace B2B dla finansów zakończył się pomyślnie.",
+    "mockThreadOps2": "Dzięki, przesyłaj tu dalej podsumowania uruchomień.",
+    "youLabel": "Ty",
+    "emptyChatEyebrow": "Wiadomości",
+    "emptyChatTitle": "Wybierz kontakt, aby rozpocząć bezpieczną rozmowę",
+    "emptyChatSubtitle": "Wszystkie wiadomości są projektowane z myślą o szyfrowaniu end-to-end. Treść zostaje między tobą a kontaktem.",
+    "statusOnline": "Online",
+    "statusOffline": "Offline",
+    "headerSecurity": "Wątek szyfrowany end-to-end",
+    "headerTitle": "Wiadomości",
+    "inputPlaceholder": "Napisz bezpieczną wiadomość...",
+    "sendLabel": "Wyślij",
+    "sendFailed": "Nie udało się wysłać bezpiecznej wiadomości. Spróbuj ponownie.",
+    "decryptFailed": "Nie można odszyfrować wiadomości. Kontakt mógł zmienić klucze.",
+    "back": "Wstecz",
+    "keysInitFailed": "Unable to initialize secure messaging keys in this browser."
   }
 }

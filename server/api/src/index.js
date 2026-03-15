@@ -10,7 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const { TOOL_EXT, TOOL_IDS } = require('../../shared/tools');
 const { createAuthRouter } = require('./auth.controller');
-const { createMessengerRouter } = require('../routes/messenger');
+const { createMessengerRouter } = require('../routes/messenger.routes');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const storageMode = (process.env.STORAGE_MODE || 's3').toLowerCase();

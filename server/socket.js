@@ -64,15 +64,24 @@ const saveMessage = async ({ senderId, receiverId, encryptedContent }) => {
     throw new Error('Database pool is not configured');
   }
 
+  let payload = encryptedContent;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      payload = { ciphertext: payload, iv: null };
+    }
+  }
+
   const client = await pool.connect();
   try {
     const result = await client.query(
       `
       INSERT INTO messages (id, sender_id, receiver_id, encrypted_content, is_read)
-      VALUES (gen_random_uuid(), $1, $2, $3, FALSE)
+      VALUES (gen_random_uuid(), $1, $2, $3::jsonb, FALSE)
       RETURNING id, sender_id, receiver_id, encrypted_content, is_read, created_at
       `,
-      [senderId, receiverId, encryptedContent]
+      [senderId, receiverId, payload]
     );
 
     const row = result.rows[0];
@@ -112,13 +121,14 @@ io.on('connection', (socket) => {
         throw new Error('Invalid payload');
       }
 
-      const receiverId = String(payload.receiverId || payload.to || '').trim();
-      const encryptedContent = String(payload.encryptedContent || payload.content || '').trim();
+      const receiverId = String(payload.receiverId || payload.contactId || payload.to || '').trim();
+      const rawEncrypted = payload.encryptedContent || payload.message || payload.content;
+      const encryptedContent = typeof rawEncrypted === 'string' ? rawEncrypted : JSON.stringify(rawEncrypted || '');
 
       if (!receiverId) {
         throw new Error('receiverId is required');
       }
-      if (!encryptedContent) {
+      if (!encryptedContent || !encryptedContent.trim()) {
         throw new Error('encryptedContent is required');
       }
 

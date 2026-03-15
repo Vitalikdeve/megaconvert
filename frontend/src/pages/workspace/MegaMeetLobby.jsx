@@ -64,7 +64,7 @@ export default function MegaMeetLobby({
         }}
       />
 
-      <div className="relative grid w-full max-w-6xl gap-6 md:grid-cols-1 lg:grid-cols-[minmax(0,1fr),360px]">
+      <div className="relative grid w-full max-w-6xl grid-cols-1 gap-6 md:grid-cols-1 lg:grid-cols-[minmax(0,1fr),360px]">
         <section className="overflow-hidden rounded-[34px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(14,14,18,0.96),rgba(8,8,11,0.96))] p-4 shadow-[0_34px_120px_-54px_rgba(0,0,0,0.92)] sm:p-6">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-300/16 bg-emerald-400/10 px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-emerald-100/78">
             <ShieldCheck className="h-4 w-4" strokeWidth={1.9} />

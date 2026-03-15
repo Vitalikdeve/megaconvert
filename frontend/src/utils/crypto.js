@@ -1,136 +1,130 @@
-const getSubtle = () => {
-  if (typeof window === 'undefined' || !window.crypto || !window.crypto.subtle) {
-    throw new Error('WebCrypto is not available in this environment.');
-  }
-  return window.crypto.subtle;
-};
+// Lightweight E2EE helpers powered by WebCrypto (browser only)
+// Note: all functions assume a secure context (https) with window.crypto.subtle available.
 
-const bufferToBase64 = (buffer) => {
-  if (!buffer) return '';
-  const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+const toBase64 = (buffer) => {
+  const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
   let binary = '';
-  for (let i = 0; i < bytes.length; i += 1) {
-    binary += String.fromCharCode(bytes[i]);
-  }
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
   return btoa(binary);
 };
 
-const base64ToBuffer = (b64) => {
-  const normalized = String(b64 || '').trim();
-  if (!normalized) return new ArrayBuffer(0);
-  const binary = atob(normalized);
+const fromBase64 = (base64) => {
+  const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) {
     bytes[i] = binary.charCodeAt(i);
   }
-  return bytes.buffer;
+  return bytes;
 };
 
 export async function generateKeyPair() {
-  const subtle = getSubtle();
-  const keyPair = await subtle.generateKey(
+  const subtle = window.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto is not available.');
+
+  return subtle.generateKey(
     {
       name: 'ECDH',
       namedCurve: 'P-256',
     },
-    true,
+    true, // extractable (private export to backup)
     ['deriveKey', 'deriveBits'],
   );
-  return keyPair;
 }
 
-export async function exportPublicKey(publicKey) {
-  const subtle = getSubtle();
-  const jwk = await subtle.exportKey('jwk', publicKey);
-  return jwk;
+export async function exportPublicKey(key) {
+  const subtle = window.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto is not available.');
+  return subtle.exportKey('jwk', key);
 }
 
 export async function importPublicKey(jwk) {
-  const subtle = getSubtle();
+  const subtle = window.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto is not available.');
+
   return subtle.importKey(
     'jwk',
     jwk,
-    {
-      name: 'ECDH',
-      namedCurve: 'P-256',
-    },
+    { name: 'ECDH', namedCurve: 'P-256' },
     true,
     [],
   );
 }
 
-async function deriveAesKey(privateKey, publicKey) {
-  const subtle = getSubtle();
-  const rawBits = await subtle.deriveBits(
+export async function deriveSharedSecret(privateKey, publicKey) {
+  const subtle = window.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto is not available.');
+
+  return subtle.deriveKey(
     {
       name: 'ECDH',
       public: publicKey,
     },
     privateKey,
-    256,
-  );
-  return subtle.importKey(
-    'raw',
-    rawBits,
     {
       name: 'AES-GCM',
+      length: 256,
     },
     false,
     ['encrypt', 'decrypt'],
   );
 }
 
-export async function deriveSharedSecret(privateKey, publicKey) {
-  return deriveAesKey(privateKey, publicKey);
-}
-
 export async function encryptMessage(text, sharedSecret) {
-  if (!text || !text.length) {
-    throw new Error('Message is empty.');
-  }
-  const subtle = getSubtle();
-  const encoder = new TextEncoder();
+  const subtle = window.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto is not available.');
+
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const ciphertextBuffer = await subtle.encrypt(
+  const encoded = textEncoder.encode(text);
+
+  const ciphertext = await subtle.encrypt(
     {
       name: 'AES-GCM',
       iv,
     },
     sharedSecret,
-    encoder.encode(text),
+    encoded,
   );
+
   return {
-    ciphertext: bufferToBase64(ciphertextBuffer),
-    iv: bufferToBase64(iv),
+    ciphertext: toBase64(ciphertext),
+    iv: toBase64(iv),
   };
 }
 
-export async function decryptMessage(encrypted, sharedSecret) {
-  if (!encrypted || typeof encrypted !== 'object') {
+export async function decryptMessage(encryptedObj, sharedSecret) {
+  const subtle = window.crypto?.subtle;
+  if (!subtle) throw new Error('WebCrypto is not available.');
+
+  const payload = typeof encryptedObj === 'string' ? JSON.parse(encryptedObj) : encryptedObj;
+  if (!payload?.ciphertext || !payload?.iv) {
     throw new Error('Invalid encrypted payload.');
   }
-  const { ciphertext, iv } = encrypted;
-  if (!ciphertext || !iv) {
-    throw new Error('Missing ciphertext or IV.');
-  }
 
-  const subtle = getSubtle();
-  const decoder = new TextDecoder();
-  const ivBytes = new Uint8Array(base64ToBuffer(iv));
-  const cipherBuffer = base64ToBuffer(ciphertext);
-  const plainBuffer = await subtle.decrypt(
+  const ivBytes = fromBase64(payload.iv);
+  const cipherBytes = fromBase64(payload.ciphertext);
+
+  const plaintext = await subtle.decrypt(
     {
       name: 'AES-GCM',
       iv: ivBytes,
     },
     sharedSecret,
-    cipherBuffer,
+    cipherBytes,
   );
-  return decoder.decode(plainBuffer);
+
+  return textDecoder.decode(plaintext);
 }
 
-export const __debug = {
-  bufferToBase64,
-  base64ToBuffer,
+export default {
+  generateKeyPair,
+  exportPublicKey,
+  importPublicKey,
+  deriveSharedSecret,
+  encryptMessage,
+  decryptMessage,
 };
-

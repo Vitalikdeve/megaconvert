@@ -289,15 +289,22 @@ function createMessengerRouter() {
   router.post('/messages', async (req, res) => {
     try {
       const userId = req.userId;
-      const { receiverId, encryptedContent } = req.body || {};
+      const { receiverId: bodyReceiverId, contactId, encryptedContent: bodyEncrypted, message } = req.body || {};
+      const receiverId = String(bodyReceiverId || contactId || '').trim();
 
-      if (!receiverId || typeof receiverId !== 'string') {
+      let encryptedContent = bodyEncrypted || message;
+
+      if (!receiverId) {
         return res.status(400).json({
           ok: false,
           code: 'VALIDATION_ERROR',
           message: 'receiverId is required'
         });
       }
+      if (typeof encryptedContent === 'object') {
+        encryptedContent = JSON.stringify(encryptedContent);
+      }
+
       if (!encryptedContent || typeof encryptedContent !== 'string') {
         return res.status(400).json({
           ok: false,
@@ -311,7 +318,7 @@ function createMessengerRouter() {
         const insertResult = await client.query(
           `
           INSERT INTO messages (id, sender_id, receiver_id, encrypted_content, is_read)
-          VALUES (gen_random_uuid(), $1, $2, $3, FALSE)
+          VALUES (gen_random_uuid(), $1, $2, $3::jsonb, FALSE)
           RETURNING id, sender_id, receiver_id, encrypted_content, is_read, created_at
           `,
           [userId, receiverId, encryptedContent]

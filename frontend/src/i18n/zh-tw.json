@@ -1964,5 +1964,34 @@
       "cta": "透過 SheerID 驗證",
       "redirecting": "正在重新導向至 SheerID 驗證..."
     }
+  },
+  "messenger": {
+    "eyebrow": "訊息",
+    "addContact": "新增聯絡人",
+    "searchPlaceholder": "搜尋聯絡人...",
+    "emptyStateEyebrow": "尚無對話",
+    "emptyStateBody": "新增聯絡人以開始端到端加密的聊天。",
+    "mockContactAlice": "Alice，法務",
+    "mockLastMessageAlice": "我已上傳更新後的 NDA 草稿。",
+    "mockThreadAlice1": "這是最新的 NDA 版本，已與你的企業政策對齊。",
+    "mockThreadAlice2": "太好了，我會在這個加密討論串轉給採購。",
+    "mockContactOps": "營運，夜間任務",
+    "mockLastMessageOps": "分析匯出已順利完成。",
+    "mockThreadOps1": "你的財務 B2B 工作區匯出已成功結束。",
+    "mockThreadOps2": "謝謝，請持續在此發送執行情況摘要。",
+    "youLabel": "你",
+    "emptyChatEyebrow": "訊息",
+    "emptyChatTitle": "選擇聯絡人開始安全對話",
+    "emptyChatSubtitle": "所有訊息皆採端到端加密。內容僅在你與聯絡人之間。",
+    "statusOnline": "在線",
+    "statusOffline": "離線",
+    "headerSecurity": "端到端加密討論串",
+    "headerTitle": "訊息",
+    "inputPlaceholder": "輸入安全訊息...",
+    "sendLabel": "傳送",
+    "sendFailed": "無法傳送安全訊息，請再試一次。",
+    "decryptFailed": "無法解密訊息。聯絡人可能已更新金鑰。",
+    "back": "返回",
+    "keysInitFailed": "Unable to initialize secure messaging keys in this browser."
   }
 }

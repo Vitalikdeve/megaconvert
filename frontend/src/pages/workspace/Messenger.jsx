@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
@@ -214,8 +214,10 @@ function MessengerLayout({
                   type="button"
                   onClick={() => setShowSidebarOnMobile(true)}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-white/[0.08] bg-black/40 text-white hover:bg-white/[0.08] md:hidden"
+                  aria-label={t('messenger.back', 'Back')}
                 >
                   <ArrowLeft className="h-4 w-4" strokeWidth={2} />
+                  <span className="sr-only">{t('messenger.back', 'Back')}</span>
                 </button>
 
                 <div className="flex items-center gap-3">
@@ -410,8 +412,12 @@ export default function MessengerPage() {
         if (!contactId) {
           return;
         }
-        const encrypted = payload?.encrypted || payload?.message || null;
-        if (!encrypted) {
+        const encryptedPayload = payload?.encryptedContent
+          || payload?.encrypted_content
+          || payload?.encrypted
+          || payload?.message
+          || null;
+        if (!encryptedPayload) {
           return;
         }
 
@@ -419,7 +425,7 @@ export default function MessengerPage() {
         let plaintext = '';
         try {
           const { decryptMessage } = await import('../../utils/crypto.js');
-          plaintext = await decryptMessage(encrypted, sharedSecret);
+          plaintext = await decryptMessage(encryptedPayload, sharedSecret);
         } catch (decryptError) {
           console.error('[messenger] decrypt failed:', decryptError);
           toast.error(
