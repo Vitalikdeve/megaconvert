@@ -151,6 +151,25 @@ CREATE TABLE IF NOT EXISTS error_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- B2B messenger: contact list and private messages
+CREATE TABLE IF NOT EXISTS user_contacts (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contact_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'blocked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, contact_id)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID PRIMARY KEY,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  encrypted_content TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS developers (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,

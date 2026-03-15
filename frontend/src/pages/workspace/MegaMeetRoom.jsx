@@ -242,23 +242,27 @@ export default function MegaMeetRoom() {
           </div>
         </header>
 
-        <div className="relative z-[1] flex-1 overflow-hidden px-6 pb-28 pt-6">
+        <div className="relative z-[1] flex-1 overflow-hidden px-3 pb-28 pt-4 sm:px-6 sm:pt-6">
           <div
-            className="grid h-full gap-4"
-            style={{ gridTemplateColumns: getGridColumns(participants.length) }}
+            className="flex h-full flex-col gap-3 sm:gap-4"
           >
-            {participants.map((participant) => (
-              <VideoTile
-                key={participant.id}
-                participant={participant}
-                t={t}
-              />
-            ))}
+            <div
+              className="grid flex-1 gap-3 sm:gap-4"
+              style={{ gridTemplateColumns: getGridColumns(participants.length) }}
+            >
+              {participants.map((participant) => (
+                <VideoTile
+                  key={participant.id}
+                  participant={participant}
+                  t={t}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-6 z-[2] flex justify-center px-6">
-          <div className="pointer-events-auto inline-flex items-center gap-3 rounded-[28px] border border-white/[0.08] bg-[#0f1014]/78 px-4 py-3 shadow-[0_30px_90px_-48px_rgba(0,0,0,0.95)] backdrop-blur-2xl">
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[2] flex justify-center px-3 sm:bottom-6 sm:px-6">
+          <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-x-auto rounded-[24px] border border-white/[0.08] bg-[#0f1014]/88 px-3 py-2 shadow-[0_30px_90px_-48px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:gap-3 sm:rounded-[28px] sm:px-4 sm:py-3">
             <ControlButton
               icon={audioEnabled ? Mic : MicOff}
               active={!audioEnabled}

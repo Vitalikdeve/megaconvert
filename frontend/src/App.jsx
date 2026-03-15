@@ -63,6 +63,7 @@ const BlogIndex = lazy(() => import('./pages/blog/BlogIndex.jsx'));
 const BlogPost = lazy(() => import('./pages/blog/BlogPost.jsx'));
 const StudioLayout = lazy(() => import('./pages/editors/StudioLayout.jsx'));
 const MegaMeetRoom = lazy(() => import('./pages/workspace/MegaMeetRoom.jsx'));
+const Messenger = lazy(() => import('./pages/workspace/Messenger.jsx'));
 
 function RouteFallback({ fullScreen = false }) {
   const { t } = useTranslation();
@@ -90,7 +91,8 @@ export default function App() {
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
   const isStudioRoute = location.pathname === '/editors' || location.pathname.startsWith('/editors/');
   const isMeetRoute = location.pathname.startsWith('/meet/');
-  const isImmersiveRoute = isStudioRoute || isMeetRoute;
+  const isMessengerRoute = location.pathname.startsWith('/messenger');
+  const isImmersiveRoute = isStudioRoute || isMeetRoute || isMessengerRoute;
   const apiBase = useMemo(
     () => String(import.meta.env.VITE_API_BASE || '/api').trim() || '/api',
     [],
@@ -396,6 +398,10 @@ export default function App() {
           <Route
             path="/meet/:roomId"
             element={<MegaMeetRoom />}
+          />
+          <Route
+            path="/messenger"
+            element={<Messenger />}
           />
           <Route
             path="/account/billing"
