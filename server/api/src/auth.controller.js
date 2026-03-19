@@ -872,6 +872,7 @@ class AuthController {
     const email = normalizeEmail(req.body?.email);
     const password = String(req.body?.password || '');
     const name = String(req.body?.name || '').trim() || email.split('@')[0] || 'User';
+    const turnstileSecret = resolveTurnstileSecret();
     const turnstileToken = readTurnstileToken(req.body);
 
     if (!email || !password) {
@@ -890,17 +891,29 @@ class AuthController {
       });
     }
 
-    const captcha = await verifyTurnstile({
-      turnstileToken,
-      remoteIp: req.headers['cf-connecting-ip'] || req.ip
-    });
-    if (!captcha.ok) {
-      return res.status(400).json({
-        ok: false,
-        code: 'TURNSTILE_FAILED',
-        message: 'Captcha verification failed',
-        details: captcha.error
+    if (turnstileSecret) {
+      if (!turnstileToken) {
+        return res.status(400).json({
+          ok: false,
+          code: 'TURNSTILE_TOKEN_REQUIRED',
+          message: 'Captcha token is required'
+        });
+      }
+
+      const captcha = await verifyTurnstile({
+        turnstileToken,
+        remoteIp: req.headers['cf-connecting-ip'] || req.ip
       });
+      if (!captcha.ok) {
+        return res.status(400).json({
+          ok: false,
+          code: 'TURNSTILE_FAILED',
+          message: 'Captcha verification failed',
+          details: captcha.error
+        });
+      }
+    } else {
+      console.warn('Turnstile bypass: TURNSTILE_SECRET_KEY is not set in environment.');
     }
 
     const existing = users.find((user) => user.email === email);

@@ -41,7 +41,7 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [captchaToken, setCaptchaToken] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (event) => {
@@ -55,7 +55,7 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
       toast.error(t('auth.validationRequired', 'Please fill in all required fields.'));
       return;
     }
-    if (!captchaToken) {
+    if (!turnstileToken) {
       toast.error(t('auth.captchaRequired', 'Please complete the captcha challenge.'));
       return;
     }
@@ -71,9 +71,9 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
           name: String(name || '').trim(),
           email: normalizedEmail,
           password,
-          turnstileToken: captchaToken,
-          captchaToken,
-          'cf-turnstile-response': captchaToken,
+          turnstileToken,
+          captchaToken: turnstileToken,
+          'cf-turnstile-response': turnstileToken,
         }),
       });
       const payload = await parsePayload(response);
@@ -165,9 +165,9 @@ export default function RegisterModal({ apiBase, onClose, onSwitch }) {
         <div className="auth-turnstile-wrap">
           <Turnstile
             siteKey={TURNSTILE_SITE_KEY}
-            onSuccess={(token) => setCaptchaToken(String(token || '').trim())}
-            onExpire={() => setCaptchaToken('')}
-            onError={() => setCaptchaToken('')}
+            onSuccess={(token) => setTurnstileToken(String(token || '').trim())}
+            onExpire={() => setTurnstileToken('')}
+            onError={() => setTurnstileToken('')}
             options={{ theme: 'dark' }}
           />
         </div>
