@@ -6,8 +6,10 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Pressable,
   SafeAreaView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +19,8 @@ import {
 
 import { premiumPalette } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-context';
+import { GlassView } from '@/src/components/ui/GlassView';
+import { NeonButton } from '@/src/components/ui/NeonButton';
 
 function getDefaultUsername(email: string): string {
   const localPart = email.split('@')[0] || 'business_user';
@@ -96,55 +100,68 @@ export default function SetupProfileScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Настройка бизнес-профиля</Text>
-        <Text style={styles.subtitle}>
-          Заполните профиль. При сохранении автоматически выдадим Pro-статус.
-        </Text>
+      <View pointerEvents="none" style={styles.ambientLayer}>
+        <View style={styles.ambientCyan} />
+        <View style={styles.ambientIndigo} />
+      </View>
 
-        <View style={styles.avatarSection}>
-          <Pressable onPress={pickAvatar} style={styles.avatarButton}>
-            {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <MaterialIcons name="business-center" size={34} color={premiumPalette.accent} />
-              </View>
-            )}
-          </Pressable>
-          <Text style={styles.avatarHint}>Нажмите, чтобы загрузить аватар</Text>
-        </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+        style={styles.keyboardWrap}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <GlassView intensity={22} radius={20} style={styles.headCard}>
+            <Text style={styles.title}>Настройка бизнес-профиля</Text>
+            <Text style={styles.subtitle}>
+              Заполните профиль. При сохранении автоматически выдадим Pro-статус.
+            </Text>
+          </GlassView>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Уникальный @username</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="ascii-capable"
-            maxLength={25}
-            onChangeText={setUsername}
-            placeholder="@ваша_компания"
-            placeholderTextColor="#708099"
-            style={styles.input}
-            value={username}
+          <GlassView intensity={24} radius={20} style={styles.avatarCard}>
+            <View style={styles.avatarSection}>
+              <Pressable onPress={pickAvatar} style={styles.avatarButton}>
+                <View style={styles.avatarSpecular} />
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <MaterialIcons name="business-center" size={34} color={premiumPalette.accent} />
+                  </View>
+                )}
+              </Pressable>
+              <Text style={styles.avatarHint}>Нажмите, чтобы загрузить аватар</Text>
+            </View>
+          </GlassView>
+
+          <GlassView intensity={24} radius={20} style={styles.inputCard}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Уникальный @username</Text>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="ascii-capable"
+                maxLength={25}
+                onChangeText={setUsername}
+                placeholder="@ваша_компания"
+                placeholderTextColor="#7A8AA4"
+                style={styles.input}
+                value={username}
+              />
+              <Text style={styles.inputHint}>Формат: 4-24 символа, латиница, цифры, _.</Text>
+            </View>
+          </GlassView>
+
+          {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+
+          <NeonButton
+            title="Сохранить и войти"
+            disabled={isSaving}
+            onPress={submitProfile}
+            icon={isSaving ? <ActivityIndicator color="#03202A" /> : undefined}
+            style={[styles.saveButton, isSaving ? styles.saveButtonDisabled : null]}
           />
-          <Text style={styles.inputHint}>Формат: 4-24 символа, латиница, цифры, _.</Text>
-        </View>
-
-        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={isSaving}
-          onPress={submitProfile}
-          style={({ pressed }) => [styles.saveButton, pressed ? styles.saveButtonPressed : null]}>
-          {isSaving ? (
-            <ActivityIndicator color={premiumPalette.textPrimary} />
-          ) : (
-            <Text style={styles.saveButtonLabel}>Сохранить профиль</Text>
-          )}
-        </Pressable>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -154,14 +171,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: premiumPalette.background,
   },
+  ambientLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  ambientCyan: {
+    position: 'absolute',
+    top: -120,
+    right: -24,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(0, 229, 255, 0.16)',
+  },
+  ambientIndigo: {
+    position: 'absolute',
+    bottom: 40,
+    left: -80,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(79, 70, 229, 0.15)',
+  },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    gap: 22,
+    width: '100%',
+    maxWidth: 620,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    gap: 14,
+  },
+  keyboardWrap: {
+    flex: 1,
+  },
+  headCard: {
+    padding: 16,
+    gap: 8,
   },
   title: {
     color: premiumPalette.textPrimary,
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: 0.2,
   },
@@ -170,17 +219,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
+  avatarCard: {
+    padding: 16,
+  },
   avatarSection: {
-    marginTop: 10,
     alignItems: 'center',
     gap: 10,
   },
   avatarButton: {
-    borderRadius: 52,
+    borderRadius: 54,
     borderWidth: 1,
-    borderColor: premiumPalette.border,
-    backgroundColor: premiumPalette.surfaceElevated,
+    borderColor: 'rgba(0, 229, 255, 0.45)',
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
     padding: 4,
+    overflow: 'hidden',
+    shadowColor: premiumPalette.accent,
+    shadowOpacity: 0.34,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  avatarSpecular: {
+    position: 'absolute',
+    top: 3,
+    left: 10,
+    right: 10,
+    height: 13,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.36)',
   },
   avatarImage: {
     width: 96,
@@ -191,13 +256,22 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#111B2E',
+    backgroundColor: 'rgba(16, 16, 26, 0.68)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.34)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#00E5FF',
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
   },
   avatarHint: {
     color: premiumPalette.textSecondary,
     fontSize: 13,
+  },
+  inputCard: {
+    padding: 16,
   },
   inputGroup: {
     gap: 8,
@@ -208,9 +282,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   input: {
-    backgroundColor: premiumPalette.surface,
+    backgroundColor: 'rgba(16, 16, 26, 0.66)',
     borderWidth: 1,
-    borderColor: premiumPalette.border,
+    borderColor: 'rgba(226, 232, 240, 0.2)',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 13,
@@ -227,21 +301,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   saveButton: {
-    marginTop: 6,
-    borderRadius: 14,
-    minHeight: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: premiumPalette.accentStrong,
-    borderWidth: 1,
-    borderColor: '#318FFF',
+    marginTop: 2,
+    minHeight: 56,
   },
-  saveButtonPressed: {
-    opacity: 0.9,
-  },
-  saveButtonLabel: {
-    color: premiumPalette.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
+  saveButtonDisabled: {
+    opacity: 0.62,
   },
 });

@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import {
   Alert,
   Modal,
@@ -11,15 +11,64 @@ import {
   StyleSheet,
   Text,
   ToastAndroid,
+  useWindowDimensions,
   View,
 } from 'react-native';
-import { RTCView } from 'react-native-webrtc';
 
 import { premiumPalette } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-context';
-import { useMegaMeetCall } from '@/hooks/use-megameet-call';
+import { GlassView } from '@/src/components/ui/GlassView';
+import { NeonButton } from '@/src/components/ui/NeonButton';
 
-function normalizeVideoFlag(value: string | string[] | undefined): boolean {
+type ParamValue = string | string[] | undefined;
+
+type UseMegaMeetCall = typeof import('../hooks/use-megameet-call').useMegaMeetCall;
+
+type RTCViewProps = {
+  objectFit?: 'cover' | 'contain';
+  streamURL: string;
+  style?: unknown;
+  mirror?: boolean;
+  zOrder?: number;
+};
+
+type WebRtcBridge = {
+  RTCView: ComponentType<RTCViewProps>;
+  useMegaMeetCall: UseMegaMeetCall;
+};
+
+type CallRouteParams = {
+  roomId?: ParamValue;
+  name?: ParamValue;
+  username?: ParamValue;
+  video?: ParamValue;
+};
+
+function resolveWebRtcBridge(): WebRtcBridge | null {
+  if (Platform.OS === 'web') {
+    return null;
+  }
+
+  try {
+    const webrtcModule = require('react-native-webrtc') as { RTCView?: ComponentType<RTCViewProps> };
+    const hookModule = require('../hooks/use-megameet-call') as { useMegaMeetCall?: UseMegaMeetCall };
+
+    if (!webrtcModule.RTCView || typeof hookModule.useMegaMeetCall !== 'function') {
+      return null;
+    }
+
+    return {
+      RTCView: webrtcModule.RTCView,
+      useMegaMeetCall: hookModule.useMegaMeetCall,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const webRtcBridge = resolveWebRtcBridge();
+
+function normalizeVideoFlag(value: ParamValue): boolean {
   if (!value) {
     return true;
   }
@@ -27,7 +76,7 @@ function normalizeVideoFlag(value: string | string[] | undefined): boolean {
   return source !== '0' && source !== 'false' && source !== 'voice';
 }
 
-function normalizeStringParam(value: string | string[] | undefined, fallback: string): string {
+function normalizeStringParam(value: ParamValue, fallback: string): string {
   if (!value) {
     return fallback;
   }
@@ -36,7 +85,7 @@ function normalizeStringParam(value: string | string[] | undefined, fallback: st
   return trimmed || fallback;
 }
 
-function normalizeRoomParam(value: string | string[] | undefined): string {
+function normalizeRoomParam(value: ParamValue): string {
   const room = normalizeStringParam(value, '');
   return room;
 }
@@ -59,60 +108,116 @@ type ControlButtonProps = {
 };
 
 function ControlButton({ label, icon, active = false, danger = false, accent = false, onPress }: ControlButtonProps) {
+  const iconColor = danger
+    ? '#FFFFFF'
+    : accent
+      ? '#FFF7D9'
+      : active
+        ? premiumPalette.accent
+        : premiumPalette.textSecondary;
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.controlButton,
-        active ? styles.controlButtonActive : null,
-        danger ? styles.controlButtonDanger : null,
-        accent ? styles.controlButtonAccent : null,
-        pressed ? styles.controlButtonPressed : null,
-      ]}>
-      <MaterialIcons
-        name={icon}
-        size={22}
-        color={
-          danger ? '#FFFFFF' : active || accent ? '#FFFFFF' : premiumPalette.textSecondary
-        }
-      />
+    <View style={styles.controlItem}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.controlButtonCircle,
+          active ? styles.controlButtonActive : null,
+          danger ? styles.controlButtonDanger : null,
+          accent ? styles.controlButtonAccent : null,
+          pressed ? styles.controlButtonPressed : null,
+        ]}>
+        <View style={styles.controlSpecular} />
+        <MaterialIcons name={icon} size={24} color={iconColor} />
+      </Pressable>
       <Text
         style={[
           styles.controlLabel,
-          active || danger || accent ? styles.controlLabelActive : null,
+          active || danger || accent ? styles.controlLabelAccent : null,
         ]}>
         {label}
       </Text>
-    </Pressable>
+    </View>
+  );
+}
+
+function CallUnavailableScreen() {
+  const router = useRouter();
+
+  return (
+    <SafeAreaView style={styles.root}>
+      <View style={styles.unavailableWrap}>
+        <View style={styles.unavailableCard}>
+          <MaterialIcons name="wifi-off" size={30} color={premiumPalette.textSecondary} />
+          <Text style={styles.unavailableTitle}>Звонки временно недоступны</Text>
+          <Text style={styles.unavailableBody}>
+            В Expo Go и web-версии модуль WebRTC не поддерживается. Для теста звонков используйте Development Build
+            или APK-сборку.
+          </Text>
+          <NeonButton title="Назад" onPress={() => router.back()} style={styles.unavailableNeonButton} />
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 export default function CallScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{
-    roomId?: string | string[];
-    name?: string | string[];
-    username?: string | string[];
-    video?: string | string[];
-  }>();
+  const params = useLocalSearchParams<CallRouteParams>();
   const { googleAccount, profile } = useAuth();
+
+  if (!googleAccount) {
+    return <Redirect href="/login" />;
+  }
+
+  if (!profile) {
+    return <Redirect href="/setup-profile" />;
+  }
+
+  if (!webRtcBridge) {
+    return <CallUnavailableScreen />;
+  }
+
+  return (
+    <CallSessionScreen
+      bridge={webRtcBridge}
+      params={params}
+      callerDisplayName={profile.fullName || googleAccount.fullName || 'Пользователь'}
+      callerId={profile.username || googleAccount.id || 'me'}
+    />
+  );
+}
+
+function CallSessionScreen({
+  bridge,
+  params,
+  callerDisplayName,
+  callerId,
+}: {
+  bridge: WebRtcBridge;
+  params: CallRouteParams;
+  callerDisplayName: string;
+  callerId: string;
+}) {
+  const router = useRouter();
+  const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const { width, height } = useWindowDimensions();
 
   const enableVideoByDefault = normalizeVideoFlag(params.video);
   const fallbackName = normalizeStringParam(params.username, 'Собеседник');
   const contactName = normalizeStringParam(params.name, fallbackName);
   const roomId = normalizeRoomParam(params.roomId);
-  const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
 
   const safeRoomId = useMemo(() => {
     if (roomId) {
       return roomId;
     }
-    const me = profile?.username || googleAccount?.id || 'me';
     const contact = normalizeStringParam(params.username, 'contact');
-    return `mc-${[me, contact].sort().join('-')}`;
-  }, [googleAccount?.id, params.username, profile?.username, roomId]);
+    return `mc-${[callerId, contact].sort().join('-')}`;
+  }, [callerId, params.username, roomId]);
 
+  const { RTCView, useMegaMeetCall } = bridge;
   const {
     localStream,
     remoteStream,
@@ -126,22 +231,24 @@ export default function CallScreen() {
     endCall,
   } = useMegaMeetCall({
     roomId: safeRoomId,
-    displayName: profile?.fullName || googleAccount?.fullName || 'Пользователь',
+    displayName: callerDisplayName,
     enableVideoByDefault,
   });
-
-  if (!googleAccount) {
-    return <Redirect href="/login" />;
-  }
-
-  if (!profile) {
-    return <Redirect href="/setup-profile" />;
-  }
 
   const remoteStreamUrl = remoteStream ? remoteStream.toURL() : null;
   const localStreamUrl = localStream ? localStream.toURL() : null;
   const hasLocalVideo = Boolean(localStream?.getVideoTracks().length);
   const canToggleCamera = hasLocalVideo;
+  const isTabletLayout = Math.min(width, height) >= 700 || Math.max(width, height) >= 980;
+  const pipWidth = isTabletLayout ? Math.min(220, Math.floor(width * 0.22)) : 118;
+  const pipHeight = Math.round(pipWidth * 1.44);
+
+  useEffect(() => {
+    const permissionDenied = String(errorMessage || '')
+      .toLowerCase()
+      .includes('доступ к камере');
+    setShowPermissionModal(permissionDenied);
+  }, [errorMessage]);
 
   const closeCall = () => {
     endCall();
@@ -151,6 +258,11 @@ export default function CallScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.videoLayer}>
+        <View pointerEvents="none" style={styles.ambilightLayer}>
+          <View style={styles.ambilightCyan} />
+          <View style={styles.ambilightIndigo} />
+        </View>
+
         {remoteStreamUrl && enableVideoByDefault ? (
           <RTCView objectFit="cover" streamURL={remoteStreamUrl} style={StyleSheet.absoluteFill} />
         ) : (
@@ -166,20 +278,35 @@ export default function CallScreen() {
           </View>
         )}
 
+        <View pointerEvents="none" style={styles.ambilightBlurWrap}>
+          <BlurView intensity={22} tint="dark" style={StyleSheet.absoluteFill} />
+        </View>
+
         <View style={styles.callHeader}>
-          <View>
-            <Text style={styles.callTitle}>{contactName}</Text>
-            <Text style={styles.callSubTitle}>
-              {remoteDisplayName && remoteDisplayName !== 'Собеседник'
-                ? `В сети • ${remoteDisplayName}`
-                : 'В сети'}
-            </Text>
+          <BlurView intensity={58} tint="dark" style={StyleSheet.absoluteFill} />
+          <View pointerEvents="none" style={styles.callHeaderGlow} />
+          <View style={styles.callHeaderRow}>
+            <View>
+              <Text style={styles.callTitle}>{contactName}</Text>
+              <Text style={styles.callSubTitle}>
+                {remoteDisplayName && remoteDisplayName !== 'Собеседник' ? `В сети • ${remoteDisplayName}` : 'В сети'}
+              </Text>
+            </View>
+            <MaterialIcons name="verified" size={20} color={premiumPalette.gold} />
           </View>
-          <MaterialIcons name="verified" size={20} color={premiumPalette.accent} />
         </View>
 
         {localStreamUrl && hasLocalVideo ? (
-          <View style={styles.pipContainer}>
+          <View
+            style={[
+              styles.pipContainer,
+              {
+                width: pipWidth,
+                height: pipHeight,
+                right: isTabletLayout ? 20 : 14,
+                top: isTabletLayout ? 102 : 94,
+              },
+            ]}>
             <RTCView
               objectFit="cover"
               mirror
@@ -191,43 +318,53 @@ export default function CallScreen() {
         ) : null}
       </View>
 
-      <View style={styles.controlsContainer}>
-        <BlurView intensity={28} tint="dark" style={styles.controlsBlur}>
-          <ControlButton
-            label={micEnabled ? 'Микрофон' : 'Без звука'}
-            icon={micEnabled ? 'mic' : 'mic-off'}
-            active={!micEnabled}
-            onPress={toggleMic}
-          />
-          <ControlButton
-            label={cameraEnabled ? 'Камера' : 'Камера выкл'}
-            icon={cameraEnabled ? 'videocam' : 'videocam-off'}
-            active={!cameraEnabled}
-            onPress={() => {
-              if (!canToggleCamera) {
-                showToast('В голосовом звонке камера не активна.');
-                return;
-              }
-              toggleCamera();
-            }}
-          />
-          <ControlButton
-            label="Экран"
-            icon="cast"
-            onPress={() => {
-              showToast('Функция появится в следующем обновлении');
-            }}
-          />
-          <ControlButton
-            label="Доска Pro"
-            icon="draw"
-            accent
-            onPress={() => {
-              setShowWhiteboardModal(true);
-            }}
-          />
-          <ControlButton label="Завершить" icon="call-end" danger onPress={closeCall} />
-        </BlurView>
+      <View style={[styles.controlsContainer, { bottom: isTabletLayout ? 28 : 20 }]}>
+        <GlassView
+          intensity={28}
+          radius={30}
+          style={[
+            styles.controlsGlass,
+            {
+              maxWidth: isTabletLayout ? 980 : 760,
+            },
+          ]}>
+          <View style={styles.controlsRow}>
+            <ControlButton
+              label={micEnabled ? 'Микрофон' : 'Без звука'}
+              icon={micEnabled ? 'mic' : 'mic-off'}
+              active={!micEnabled}
+              onPress={toggleMic}
+            />
+            <ControlButton
+              label={cameraEnabled ? 'Камера' : 'Камера выкл'}
+              icon={cameraEnabled ? 'videocam' : 'videocam-off'}
+              active={!cameraEnabled}
+              onPress={() => {
+                if (!canToggleCamera) {
+                  showToast('В голосовом звонке камера не активна.');
+                  return;
+                }
+                toggleCamera();
+              }}
+            />
+            <ControlButton
+              label="Экран"
+              icon="cast"
+              onPress={() => {
+                showToast('Функция появится в следующем обновлении');
+              }}
+            />
+            <ControlButton
+              label="Доска Pro"
+              icon="draw"
+              accent
+              onPress={() => {
+                setShowWhiteboardModal(true);
+              }}
+            />
+            <ControlButton label="Завершить" icon="call-end" danger onPress={closeCall} />
+          </View>
+        </GlassView>
       </View>
 
       <Modal
@@ -236,15 +373,35 @@ export default function CallScreen() {
         visible={showWhiteboardModal}
         onRequestClose={() => setShowWhiteboardModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <GlassView intensity={30} radius={20} style={styles.modalCard}>
             <Text style={styles.modalTitle}>Электронная доска (Pro)</Text>
-            <Text style={styles.modalBody}>
-              Интерактивная доска доступна по подписке Pro. В разработке.
-            </Text>
-            <Pressable onPress={() => setShowWhiteboardModal(false)} style={styles.modalButton}>
-              <Text style={styles.modalButtonText}>Понятно</Text>
-            </Pressable>
-          </View>
+            <Text style={styles.modalBody}>Интерактивная доска доступна по подписке Pro. В разработке.</Text>
+            <NeonButton
+              title="Понятно"
+              onPress={() => setShowWhiteboardModal(false)}
+              style={styles.modalNeonButton}
+            />
+          </GlassView>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showPermissionModal}
+        onRequestClose={() => setShowPermissionModal(false)}>
+        <View style={styles.modalOverlay}>
+          <GlassView intensity={30} radius={20} style={styles.permissionModalGlass}>
+            <Text style={styles.permissionModalTitle}>Нужен доступ к камере</Text>
+            <Text style={styles.permissionModalBody}>Для звонка необходим доступ к камере.</Text>
+            <NeonButton
+              title="Понятно"
+              onPress={() => {
+                setShowPermissionModal(false);
+              }}
+              style={styles.permissionModalButton}
+            />
+          </GlassView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -256,17 +413,85 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: premiumPalette.background,
   },
+  unavailableWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  unavailableCard: {
+    width: '100%',
+    maxWidth: 460,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: premiumPalette.border,
+    backgroundColor: premiumPalette.glass,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: premiumPalette.accent,
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  unavailableTitle: {
+    color: premiumPalette.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  unavailableBody: {
+    color: premiumPalette.textSecondary,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+  },
+  unavailableNeonButton: {
+    marginTop: 6,
+    minHeight: 46,
+    minWidth: 160,
+  },
   videoLayer: {
     flex: 1,
-    backgroundColor: '#03060D',
+    backgroundColor: '#050509',
+  },
+  ambilightLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+  ambilightCyan: {
+    position: 'absolute',
+    top: -120,
+    right: -60,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: 'rgba(0, 229, 255, 0.16)',
+  },
+  ambilightIndigo: {
+    position: 'absolute',
+    bottom: -100,
+    left: -40,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(79, 70, 229, 0.2)',
   },
   remoteFallback: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#070E1A',
+    backgroundColor: 'rgba(5, 5, 9, 0.74)',
     paddingHorizontal: 24,
     gap: 10,
+    zIndex: 2,
+  },
+  ambilightBlurWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
   },
   remoteName: {
     color: premiumPalette.textPrimary,
@@ -285,12 +510,23 @@ const styles = StyleSheet.create({
     top: 18,
     left: 14,
     right: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: premiumPalette.border,
+    backgroundColor: premiumPalette.glass,
+    overflow: 'hidden',
+    zIndex: 3,
+  },
+  callHeaderGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.2)',
+    backgroundColor: 'rgba(0, 229, 255, 0.06)',
+  },
+  callHeaderRow: {
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#223450',
-    backgroundColor: 'rgba(8, 13, 24, 0.76)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -301,7 +537,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   callSubTitle: {
-    color: '#9DB0C9',
+    color: '#99EAF7',
     fontSize: 12,
     marginTop: 2,
   },
@@ -314,8 +550,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#31527F',
-    backgroundColor: '#111B2E',
+    borderColor: 'rgba(226, 232, 240, 0.36)',
+    backgroundColor: 'rgba(16, 16, 26, 0.8)',
+    zIndex: 3,
   },
   controlsContainer: {
     position: 'absolute',
@@ -325,59 +562,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
   },
-  controlsBlur: {
+  controlsGlass: {
     width: '100%',
-    maxWidth: 760,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#233654',
-    overflow: 'hidden',
+    shadowColor: premiumPalette.accent,
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
+  },
+  controlsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
     paddingHorizontal: 10,
-    gap: 8,
+    gap: 6,
   },
-  controlButton: {
+  controlItem: {
     flex: 1,
-    borderRadius: 16,
+    alignItems: 'center',
+    gap: 6,
+  },
+  controlButtonCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     borderWidth: 1,
-    borderColor: '#2A3B58',
-    backgroundColor: 'rgba(14, 22, 36, 0.78)',
+    borderColor: 'rgba(226, 232, 240, 0.2)',
+    backgroundColor: 'rgba(16, 16, 26, 0.54)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    gap: 4,
-    minHeight: 66,
+    overflow: 'hidden',
+  },
+  controlSpecular: {
+    position: 'absolute',
+    top: 0,
+    left: 6,
+    right: 6,
+    height: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
   },
   controlButtonActive: {
-    borderColor: '#3E5F90',
-    backgroundColor: 'rgba(30, 58, 103, 0.85)',
+    borderColor: 'rgba(0, 229, 255, 0.48)',
+    backgroundColor: 'rgba(0, 229, 255, 0.18)',
+    shadowColor: premiumPalette.accent,
+    shadowOpacity: 0.34,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
   },
   controlButtonDanger: {
-    borderColor: '#A34B53',
-    backgroundColor: '#B13442',
+    borderColor: 'rgba(239, 68, 68, 0.66)',
+    backgroundColor: 'rgba(239, 68, 68, 0.8)',
   },
   controlButtonAccent: {
-    borderColor: '#AF8F35',
-    backgroundColor: '#7F6422',
+    borderColor: 'rgba(251, 191, 36, 0.78)',
+    backgroundColor: 'rgba(251, 191, 36, 0.46)',
+    shadowColor: premiumPalette.gold,
+    shadowOpacity: 0.38,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
   },
   controlButtonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.985 }],
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
   },
   controlLabel: {
     color: premiumPalette.textSecondary,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textAlign: 'center',
+    lineHeight: 13,
   },
-  controlLabelActive: {
+  controlLabelAccent: {
     color: '#FFFFFF',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(3, 6, 11, 0.74)',
+    backgroundColor: 'rgba(5, 5, 9, 0.72)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
@@ -385,15 +647,19 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 420,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#3E434C',
-    backgroundColor: '#141920',
+    borderColor: 'rgba(251, 191, 36, 0.54)',
+    backgroundColor: premiumPalette.glassHeavy,
     padding: 18,
     gap: 12,
+    shadowColor: premiumPalette.gold,
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
   },
   modalTitle: {
-    color: '#F6E9BD',
+    color: '#FFE7A8',
     fontSize: 18,
     fontWeight: '800',
   },
@@ -402,19 +668,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
-  modalButton: {
+  modalNeonButton: {
     marginTop: 2,
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#B38B29',
-    backgroundColor: '#8A6C20',
-    alignItems: 'center',
-    justifyContent: 'center',
+    minHeight: 46,
   },
-  modalButtonText: {
-    color: '#FFF9E6',
+  permissionModalGlass: {
+    width: '100%',
+    maxWidth: 420,
+    padding: 18,
+    gap: 12,
+    borderColor: 'rgba(0, 229, 255, 0.38)',
+    backgroundColor: 'rgba(14, 19, 31, 0.68)',
+    shadowColor: premiumPalette.accent,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  permissionModalTitle: {
+    color: premiumPalette.textPrimary,
+    fontSize: 18,
     fontWeight: '800',
+  },
+  permissionModalBody: {
+    color: premiumPalette.textSecondary,
     fontSize: 14,
+    lineHeight: 20,
+  },
+  permissionModalButton: {
+    marginTop: 4,
+    minHeight: 48,
   },
 });

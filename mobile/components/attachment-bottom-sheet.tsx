@@ -1,16 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { premiumPalette } from '@/constants/theme';
+import { GlassView } from '@/src/components/ui/GlassView';
 
 type AttachmentBottomSheetProps = {
   visible: boolean;
@@ -59,6 +53,8 @@ const actions: AttachmentAction[] = [
   },
 ];
 
+const liquidEase = Easing.bezier(0.23, 1, 0.32, 1);
+
 export function AttachmentBottomSheet({
   visible,
   isBusy = false,
@@ -67,8 +63,7 @@ export function AttachmentBottomSheet({
 }: AttachmentBottomSheetProps) {
   const { width } = useWindowDimensions();
   const [shouldRender, setShouldRender] = useState(visible);
-  const panelTranslateY = useRef(new Animated.Value(320)).current;
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
 
   const panelWidth = useMemo(() => {
     if (width >= 900) {
@@ -80,20 +75,10 @@ export function AttachmentBottomSheet({
   useEffect(() => {
     if (visible) {
       setShouldRender(true);
-      Animated.parallel([
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-        Animated.spring(panelTranslateY, {
-          toValue: 0,
-          damping: 18,
-          stiffness: 230,
-          mass: 0.85,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      progress.value = withTiming(1, {
+        duration: 360,
+        easing: liquidEase,
+      });
       return;
     }
 
@@ -101,23 +86,32 @@ export function AttachmentBottomSheet({
       return;
     }
 
-    Animated.parallel([
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(panelTranslateY, {
-        toValue: 300,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) {
-        setShouldRender(false);
+    progress.value = withTiming(
+      0,
+      {
+        duration: 260,
+        easing: liquidEase,
+      },
+      (finished) => {
+        if (finished) {
+          runOnJS(setShouldRender)(false);
+        }
       }
-    });
-  }, [backdropOpacity, panelTranslateY, shouldRender, visible]);
+    );
+  }, [progress, shouldRender, visible]);
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: progress.value,
+    };
+  });
+
+  const panelAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 0.94 + progress.value * 0.06,
+      transform: [{ translateY: (1 - progress.value) * 320 }],
+    };
+  });
 
   if (!shouldRender) {
     return null;
@@ -126,48 +120,70 @@ export function AttachmentBottomSheet({
   return (
     <Modal transparent statusBarTranslucent onRequestClose={onClose} visible={shouldRender}>
       <View style={styles.modalRoot}>
-        <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+        <Animated.View style={[styles.backdrop, backdropAnimatedStyle]}>
           <Pressable onPress={onClose} style={StyleSheet.absoluteFill} />
         </Animated.View>
 
         <Animated.View
           style={[
-            styles.sheet,
             {
               width: panelWidth,
-              transform: [{ translateY: panelTranslateY }],
             },
+            panelAnimatedStyle,
           ]}>
-          <View style={styles.dragHandle} />
-          <Text style={styles.title}>Вложения</Text>
-          <Text style={styles.subtitle}>Выберите инструмент для отправки контента</Text>
+          <GlassView intensity={24} radius={28} style={styles.sheetGlass}>
+            <View style={styles.sheetContent}>
+              <View style={styles.dragHandle} />
+              <Text style={styles.title}>Вложения</Text>
+              <Text style={styles.subtitle}>Выберите инструмент для отправки контента</Text>
 
-          <View style={styles.grid}>
-            {actions.map((action) => {
-              const disabled = action.disabled || isBusy;
-              return (
-                <Pressable
-                  key={action.key}
-                  disabled={disabled}
-                  onPress={() => {
-                    if (action.key === 'file-gallery') {
-                      onSelectFileOrGallery();
-                    }
-                  }}
-                  style={({ pressed }) => [
-                    styles.actionCard,
-                    action.disabled ? styles.actionCardDisabled : null,
-                    pressed && !disabled ? styles.actionCardPressed : null,
-                  ]}>
-                  <View style={styles.iconWrap}>
-                    <MaterialIcons name={action.icon} size={24} color={premiumPalette.textPrimary} />
-                  </View>
-                  <Text style={styles.actionLabel}>{action.title}</Text>
-                  {action.disabled ? <Text style={styles.soonBadge}>Скоро</Text> : null}
-                </Pressable>
-              );
-            })}
-          </View>
+              <View style={styles.grid}>
+                {actions.map((action) => {
+                  const disabled = action.disabled || isBusy;
+                  const isPrimary = action.key === 'file-gallery';
+
+                  return (
+                    <Pressable
+                      key={action.key}
+                      disabled={disabled}
+                      onPress={() => {
+                        if (action.key === 'file-gallery') {
+                          onSelectFileOrGallery();
+                        }
+                      }}
+                      style={({ pressed }) => [
+                        styles.actionCard,
+                        isPrimary ? styles.actionCardPrimary : null,
+                        action.disabled ? styles.actionCardDisabled : null,
+                        pressed && !disabled ? styles.actionCardPressed : null,
+                      ]}>
+                      <View style={[styles.iconWrap, isPrimary ? styles.iconWrapPrimary : null]}>
+                        <MaterialIcons
+                          name={action.icon}
+                          size={24}
+                          color={
+                            action.disabled
+                              ? '#92A0B5'
+                              : isPrimary
+                                ? premiumPalette.accent
+                                : premiumPalette.textPrimary
+                          }
+                        />
+                      </View>
+                      <Text style={[styles.actionLabel, action.disabled ? styles.actionLabelDisabled : null]}>
+                        {action.title}
+                      </Text>
+                      {action.disabled ? (
+                        <View style={styles.soonBadge}>
+                          <Text style={styles.soonBadgeText}>Скоро</Text>
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </GlassView>
         </Animated.View>
       </View>
     </Modal>
@@ -179,29 +195,32 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingBottom: 14,
+    paddingBottom: 16,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(4, 7, 14, 0.64)',
+    backgroundColor: 'rgba(5, 5, 9, 0.56)',
   },
-  sheet: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#233654',
-    backgroundColor: '#0A1324',
+  sheetGlass: {
+    maxWidth: 560,
+    shadowColor: premiumPalette.accent,
+    shadowOpacity: 0.2,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 10,
+  },
+  sheetContent: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 18,
     gap: 8,
-    maxWidth: 560,
   },
   dragHandle: {
     alignSelf: 'center',
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#324968',
+    backgroundColor: 'rgba(226, 232, 240, 0.34)',
     marginBottom: 6,
   },
   title: {
@@ -224,29 +243,40 @@ const styles = StyleSheet.create({
   actionCard: {
     width: '48.5%',
     minHeight: 116,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2E4E77',
-    backgroundColor: '#143763',
+    borderColor: 'rgba(226, 232, 240, 0.22)',
+    backgroundColor: 'rgba(16, 16, 26, 0.54)',
     padding: 12,
     justifyContent: 'space-between',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  actionCardPrimary: {
+    borderColor: 'rgba(0, 229, 255, 0.42)',
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
   },
   actionCardDisabled: {
-    backgroundColor: '#101A2C',
-    borderColor: '#24344F',
+    backgroundColor: 'rgba(16, 16, 26, 0.56)',
+    borderColor: 'rgba(148, 163, 184, 0.3)',
   },
   actionCardPressed: {
-    transform: [{ scale: 0.985 }],
-    opacity: 0.93,
+    transform: [{ scale: 0.982 }],
+    opacity: 0.92,
   },
   iconWrap: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(226, 232, 240, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.16)',
+  },
+  iconWrapPrimary: {
+    backgroundColor: 'rgba(0, 229, 255, 0.12)',
+    borderColor: 'rgba(0, 229, 255, 0.46)',
   },
   actionLabel: {
     color: premiumPalette.textPrimary,
@@ -254,16 +284,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  actionLabelDisabled: {
+    color: '#CAD5E4',
+  },
   soonBadge: {
     position: 'absolute',
     right: 8,
     top: 8,
     borderRadius: 999,
-    backgroundColor: '#2A3448',
-    color: '#AFBDD2',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.38)',
+    backgroundColor: 'rgba(71, 85, 105, 0.28)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    overflow: 'hidden',
+    paddingVertical: 2,
+    shadowColor: premiumPalette.indigo,
+    shadowOpacity: 0.34,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  soonBadgeText: {
+    color: '#D8DEFF',
     fontWeight: '700',
     fontSize: 11,
   },

@@ -6,8 +6,10 @@ export default function Footer() {
   const { t } = useTranslation();
   const footerLinks = [
     { label: t('navBlog', 'Blog'), to: '/blog' },
-    { label: t('navTerms'), to: '/terms' },
-    { label: t('navPrivacy'), to: '/privacy' },
+    { label: 'Privacy Policy', to: '/legal/privacy' },
+    { label: 'Terms of Service', to: '/legal/terms' },
+    { label: 'Law Enforcement Guide', to: '/legal/law-enforcement' },
+    { label: 'Transparency Report', to: '/legal/transparency' },
     { label: t('navSecurity'), to: '/security' },
     { label: t('navCookies'), to: '/cookies' },
   ];

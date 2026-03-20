@@ -43,14 +43,12 @@ const ZenPortal = lazy(() => import('./components/ZenPortal.jsx'));
 const HomeDashboard = lazy(() => import('./components/home/HomeDashboard.jsx'));
 const ImageOptimizer = lazy(() => import('./components/tools/ImageOptimizer.jsx'));
 const SecurityPage = lazy(() => import('./components/legal/SecurityPage.jsx'));
-const PrivacyPage = lazy(() => import('./components/legal/PrivacyPage.jsx'));
 const CookiesPage = lazy(() => import('./components/legal/CookiesPage.jsx'));
 const VideoCompressor = lazy(() => import('./components/tools/VideoCompressor.jsx'));
 const AudioConverter = lazy(() => import('./components/tools/AudioConverter.jsx'));
 const VideoToGif = lazy(() => import('./components/tools/VideoToGif.jsx'));
 const ArchiveManager = lazy(() => import('./components/tools/ArchiveManager.jsx'));
 const BatchWatermark = lazy(() => import('./components/tools/BatchWatermark.jsx'));
-const TermsPage = lazy(() => import('./components/legal/TermsPage.jsx'));
 const SmartOcr = lazy(() => import('./components/tools/SmartOcr.jsx'));
 const PdfEditor = lazy(() => import('./components/tools/PdfEditor.jsx'));
 const MegaGrid = lazy(() => import('./components/tools/MegaGrid.jsx'));
@@ -61,6 +59,10 @@ const PricingPage = lazy(() => import('./pages/PricingPage.jsx'));
 const AccountBillingPage = lazy(() => import('./pages/AccountBillingPage.jsx'));
 const BlogIndex = lazy(() => import('./pages/blog/BlogIndex.jsx'));
 const BlogPost = lazy(() => import('./pages/blog/BlogPost.jsx'));
+const LegalPrivacyPolicyPage = lazy(() => import('./pages/legal/PrivacyPolicy.jsx'));
+const LegalTermsOfServicePage = lazy(() => import('./pages/legal/TermsOfService.jsx'));
+const LegalLawEnforcementPage = lazy(() => import('./pages/legal/LawEnforcement.jsx'));
+const LegalTransparencyReportPage = lazy(() => import('./pages/legal/TransparencyReport.jsx'));
 const StudioLayout = lazy(() => import('./pages/editors/StudioLayout.jsx'));
 const MegaMeetRoom = lazy(() => import('./pages/workspace/MegaMeetRoom.jsx'));
 const Messenger = lazy(() => import('./pages/workspace/Messenger.jsx'));
@@ -367,8 +369,12 @@ export default function App() {
             path="/tools/smart-brand-watermark"
             element={<BusinessWorkflowPage workflowId="smartBrandWatermark" />}
           />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/legal/privacy" element={<LegalPrivacyPolicyPage />} />
+          <Route path="/legal/terms" element={<LegalTermsOfServicePage />} />
+          <Route path="/legal/law-enforcement" element={<LegalLawEnforcementPage />} />
+          <Route path="/legal/transparency" element={<LegalTransparencyReportPage />} />
+          <Route path="/privacy" element={<Navigate to="/legal/privacy" replace />} />
+          <Route path="/terms" element={<Navigate to="/legal/terms" replace />} />
           <Route path="/security" element={<SecurityPage />} />
           <Route path="/cookies" element={<CookiesPage />} />
           <Route

@@ -1,5 +1,5 @@
-import { ProfileScreen } from '@/components/profile-screen';
+import { Redirect, type Href } from 'expo-router';
 
 export default function ProfileTabScreen() {
-  return <ProfileScreen />;
+  return <Redirect href={'/settings' as Href} />;
 }

@@ -2,19 +2,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Alert, SafeAreaView, StyleSheet, Text, View, Pressable, useWindowDimensions } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { premiumPalette } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-context';
 import { useContacts } from '@/providers/contacts-context';
+import { GlassView } from '@/src/components/ui/GlassView';
+import { NeonButton } from '@/src/components/ui/NeonButton';
 
 type AddContactTab = 'my_qr' | 'scan';
 
@@ -22,6 +17,7 @@ export default function AddContactScreen() {
   const router = useRouter();
   const { googleAccount, profile } = useAuth();
   const { sendRequestByQrData } = useContacts();
+  const { width } = useWindowDimensions();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [activeTab, setActiveTab] = useState<AddContactTab>('my_qr');
@@ -83,54 +79,67 @@ export default function AddContactScreen() {
     }
   };
 
-  const showScanner = activeTab === 'scan';
   const hasCameraPermission = permission?.granted;
+  const qrSize = Math.max(180, Math.min(240, Math.floor(width * 0.56)));
 
   return (
     <SafeAreaView style={styles.root}>
+      <View pointerEvents="none" style={styles.ambientLayer}>
+        <View style={styles.ambientCyan} />
+        <View style={styles.ambientIndigo} />
+      </View>
+
       <View style={styles.content}>
-        <View style={styles.segmentedRow}>
-          <Pressable
-            onPress={() => setActiveTab('my_qr')}
-            style={[styles.segmentButton, activeTab === 'my_qr' ? styles.segmentButtonActive : null]}>
-            <Text
-              style={[
-                styles.segmentButtonText,
-                activeTab === 'my_qr' ? styles.segmentButtonTextActive : null,
-              ]}>
-              Мой QR-код
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActiveTab('scan')}
-            style={[styles.segmentButton, activeTab === 'scan' ? styles.segmentButtonActive : null]}>
-            <Text
-              style={[
-                styles.segmentButtonText,
-                activeTab === 'scan' ? styles.segmentButtonTextActive : null,
-              ]}>
-              Сканировать
-            </Text>
-          </Pressable>
-        </View>
+        <GlassView intensity={20} radius={20} style={styles.tabSwitcherGlass}>
+          <View style={styles.segmentedRow}>
+            <Pressable
+              onPress={() => setActiveTab('my_qr')}
+              style={[styles.segmentButton, activeTab === 'my_qr' ? styles.segmentButtonActive : null]}>
+              <Text
+                style={[
+                  styles.segmentButtonText,
+                  activeTab === 'my_qr' ? styles.segmentButtonTextActive : null,
+                ]}>
+                Мой QR-код
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setActiveTab('scan')}
+              style={[styles.segmentButton, activeTab === 'scan' ? styles.segmentButtonActive : null]}>
+              <Text
+                style={[
+                  styles.segmentButtonText,
+                  activeTab === 'scan' ? styles.segmentButtonTextActive : null,
+                ]}>
+                Сканировать
+              </Text>
+            </Pressable>
+          </View>
+        </GlassView>
 
         {activeTab === 'my_qr' ? (
-          <View style={styles.qrCard}>
+          <GlassView intensity={24} radius={18} style={styles.qrCard}>
             <Text style={styles.qrTitle}>Покажите этот QR-код коллеге</Text>
             <Text style={styles.qrSubtitle}>В QR зашиты ваш ID и username</Text>
-            <View style={styles.qrContainer}>
-              <QRCode value={qrValue} size={220} color="#0F172A" backgroundColor="#FFFFFF" />
-            </View>
+
+            <GlassView intensity={30} radius={20} style={styles.qrContainerGlass}>
+              <View style={styles.qrContainerInner}>
+                <QRCode value={qrValue} size={qrSize} color="#E2E8F0" backgroundColor="#050509" />
+              </View>
+            </GlassView>
+
             <Text style={styles.usernameText}>@{profile.username}</Text>
-          </View>
+          </GlassView>
         ) : (
           <View style={styles.scannerBlock}>
             {!permission ? (
-              <Text style={styles.infoText}>Проверяем разрешение на камеру...</Text>
+              <GlassView intensity={22} radius={16} style={styles.infoCard}>
+                <Text style={styles.infoText}>Проверяем разрешение на камеру...</Text>
+              </GlassView>
             ) : hasCameraPermission ? (
               <>
-                <View style={styles.cameraShell}>
-                  {showScanner ? (
+                <GlassView intensity={16} radius={18} style={styles.cameraGlass}>
+                  <View style={styles.cameraShell}>
                     <CameraView
                       style={StyleSheet.absoluteFill}
                       facing="back"
@@ -139,27 +148,32 @@ export default function AddContactScreen() {
                       }}
                       onBarcodeScanned={({ data }) => onQrScanned(data)}
                     />
-                  ) : null}
-                  <View style={styles.scanOverlay}>
-                    <MaterialIcons name="qr-code-scanner" size={22} color={premiumPalette.textPrimary} />
-                    <Text style={styles.scanOverlayText}>
-                      Наведите камеру на QR-код пользователя
-                    </Text>
+
+                    <GlassView intensity={18} radius={12} style={styles.scanOverlayGlass}>
+                      <View style={styles.scanOverlayRow}>
+                        <MaterialIcons name="qr-code-scanner" size={22} color={premiumPalette.textPrimary} />
+                        <Text style={styles.scanOverlayText}>Наведите камеру на QR-код пользователя</Text>
+                      </View>
+                    </GlassView>
                   </View>
-                </View>
-                <Text style={styles.infoText}>
-                  После сканирования заявка на добавление в друзья отправится автоматически.
-                </Text>
+                </GlassView>
+
+                <GlassView intensity={22} radius={14} style={styles.infoCard}>
+                  <Text style={styles.infoText}>
+                    После сканирования заявка на добавление в друзья отправится автоматически.
+                  </Text>
+                </GlassView>
               </>
             ) : (
-              <View style={styles.permissionBlock}>
-                <Text style={styles.infoText}>
-                  Для сканирования нужен доступ к камере.
-                </Text>
-                <Pressable onPress={requestPermission} style={styles.permissionButton}>
-                  <Text style={styles.permissionButtonText}>Разрешить камеру</Text>
-                </Pressable>
-              </View>
+              <GlassView intensity={24} radius={16} style={styles.permissionBlock}>
+                <Text style={styles.infoText}>Для сканирования нужен доступ к камере.</Text>
+                <NeonButton
+                  title="Разрешить камеру"
+                  onPress={requestPermission}
+                  icon={<MaterialIcons name="photo-camera" size={18} color="#02161D" />}
+                  style={styles.permissionNeonButton}
+                />
+              </GlassView>
             )}
           </View>
         )}
@@ -173,10 +187,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: premiumPalette.background,
   },
+  ambientLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  ambientCyan: {
+    position: 'absolute',
+    top: -110,
+    right: -20,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: 'rgba(0, 229, 255, 0.14)',
+  },
+  ambientIndigo: {
+    position: 'absolute',
+    bottom: 40,
+    left: -90,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(79, 70, 229, 0.14)',
+  },
   content: {
     flex: 1,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
     padding: 16,
     gap: 14,
+  },
+  tabSwitcherGlass: {
+    padding: 8,
   },
   segmentedRow: {
     flexDirection: 'row',
@@ -187,14 +229,18 @@ const styles = StyleSheet.create({
     minHeight: 42,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: premiumPalette.border,
-    backgroundColor: premiumPalette.surface,
+    borderColor: 'rgba(226, 232, 240, 0.2)',
+    backgroundColor: 'rgba(16, 16, 26, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   segmentButtonActive: {
-    backgroundColor: '#15325A',
-    borderColor: '#245796',
+    backgroundColor: 'rgba(0, 229, 255, 0.14)',
+    borderColor: 'rgba(0, 229, 255, 0.5)',
+    shadowColor: premiumPalette.accent,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
   },
   segmentButtonText: {
     color: premiumPalette.textSecondary,
@@ -205,10 +251,6 @@ const styles = StyleSheet.create({
     color: premiumPalette.textPrimary,
   },
   qrCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: premiumPalette.border,
-    backgroundColor: premiumPalette.surface,
     padding: 16,
     alignItems: 'center',
     gap: 10,
@@ -224,11 +266,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
   },
-  qrContainer: {
-    marginVertical: 12,
-    borderRadius: 16,
+  qrContainerGlass: {
+    marginVertical: 10,
+    width: '100%',
+    alignItems: 'center',
     padding: 16,
-    backgroundColor: '#FFFFFF',
+  },
+  qrContainerInner: {
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: 'rgba(5, 8, 15, 0.96)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   usernameText: {
     color: premiumPalette.textPrimary,
@@ -238,24 +287,25 @@ const styles = StyleSheet.create({
   scannerBlock: {
     gap: 12,
   },
+  cameraGlass: {
+    padding: 10,
+  },
   cameraShell: {
     width: '100%',
     aspectRatio: 3 / 4,
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: premiumPalette.border,
+    borderColor: 'rgba(226, 232, 240, 0.16)',
     backgroundColor: '#04080F',
   },
-  scanOverlay: {
+  scanOverlayGlass: {
     position: 'absolute',
     left: 10,
     right: 10,
     bottom: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(8, 14, 24, 0.82)',
-    borderWidth: 1,
-    borderColor: '#23344F',
+  },
+  scanOverlayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -267,25 +317,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
   },
+  infoCard: {
+    padding: 12,
+  },
   infoText: {
     color: premiumPalette.textSecondary,
     fontSize: 13,
     lineHeight: 19,
   },
   permissionBlock: {
+    padding: 12,
     gap: 12,
   },
-  permissionButton: {
-    minHeight: 44,
-    borderRadius: 10,
-    backgroundColor: premiumPalette.accentStrong,
-    borderWidth: 1,
-    borderColor: '#318FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  permissionButtonText: {
-    color: premiumPalette.textPrimary,
-    fontWeight: '700',
+  permissionNeonButton: {
+    minHeight: 46,
   },
 });

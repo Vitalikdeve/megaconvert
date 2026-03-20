@@ -5,6 +5,11 @@ const { Pool } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const port = Number(process.env.SOCKET_PORT || process.env.PORT || 4000);
+const CHANNEL_ADMIN_ROLES = new Set(['owner', 'admin']);
+const SYSTEM_MESSAGES_RU = {
+  channelCreated: (adminName, channelName) => `${adminName} создал канал ${channelName}`,
+  botConnected: (botName) => `Бот ${botName} подключен`
+};
 
 const resolveDbConnectionString = () => {
   return String(
@@ -59,20 +64,124 @@ const getUserIdFromSocket = (socket) => {
   return '';
 };
 
-const saveMessage = async ({ senderId, receiverId, encryptedContent }) => {
+const toSocketError = (error, fallbackCode, fallbackMessage) => ({
+  ok: false,
+  code: String(error?.code || fallbackCode || 'UNKNOWN_ERROR'),
+  message: String(error?.message || fallbackMessage || 'Внутренняя ошибка')
+});
+
+const normalizeEncryptedPayload = (rawValue) => {
+  if (!rawValue) {
+    return { ciphertext: '', iv: null };
+  }
+
+  if (typeof rawValue === 'string') {
+    try {
+      const parsed = JSON.parse(rawValue);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    } catch {
+      // keep raw ciphertext format
+    }
+    return { ciphertext: rawValue, iv: null };
+  }
+
+  if (typeof rawValue === 'object') {
+    return rawValue;
+  }
+
+  return { ciphertext: String(rawValue), iv: null };
+};
+
+const ensureSocketSchema = async () => {
+  if (!pool) return;
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+      ALTER TABLE IF EXISTS users
+        ADD COLUMN IF NOT EXISTS is_bot BOOLEAN NOT NULL DEFAULT FALSE;
+
+      CREATE TABLE IF NOT EXISTS chats (
+        id UUID PRIMARY KEY,
+        title TEXT,
+        type TEXT NOT NULL DEFAULT 'direct' CHECK (type IN ('direct', 'group', 'channel')),
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE IF EXISTS chats
+        ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'direct';
+
+      CREATE TABLE IF NOT EXISTS chat_members (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (chat_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS channel_metadata (
+        chat_id UUID PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+        description TEXT,
+        is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+        subscriber_count BIGINT NOT NULL DEFAULT 0 CHECK (subscriber_count >= 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE IF EXISTS messages
+        ADD COLUMN IF NOT EXISTS chat_id UUID REFERENCES chats(id) ON DELETE CASCADE;
+
+      ALTER TABLE IF EXISTS messages
+        ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+      CREATE TABLE IF NOT EXISTS bots (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL,
+        is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+        webhook_url TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'messages'
+            AND column_name = 'receiver_id'
+            AND is_nullable = 'NO'
+        ) THEN
+          ALTER TABLE messages ALTER COLUMN receiver_id DROP NOT NULL;
+        END IF;
+      END $$;
+    `);
+  } finally {
+    client.release();
+  }
+};
+
+const schemaReady = ensureSocketSchema()
+  .catch((error) => {
+    console.error('[socket] schema bootstrap failed:', error);
+  });
+
+const saveDirectMessage = async ({ senderId, receiverId, encryptedContent }) => {
   if (!pool) {
     throw new Error('Database pool is not configured');
   }
 
-  let payload = encryptedContent;
-  if (typeof payload === 'string') {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      payload = { ciphertext: payload, iv: null };
-    }
-  }
-
+  const payload = normalizeEncryptedPayload(encryptedContent);
   const client = await pool.connect();
   try {
     const result = await client.query(
@@ -98,6 +207,139 @@ const saveMessage = async ({ senderId, receiverId, encryptedContent }) => {
   }
 };
 
+const resolveChatAccess = async ({ chatId, userId }) => {
+  if (!pool) {
+    const error = new Error('База данных недоступна');
+    error.code = 'DB_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `
+      SELECT
+        c.id,
+        c.type,
+        COALESCE(c.title, 'Канал') AS title,
+        cm.role
+      FROM chats c
+      LEFT JOIN chat_members cm
+        ON cm.chat_id = c.id
+       AND cm.user_id = $2
+      WHERE c.id = $1
+      LIMIT 1
+      `,
+      [chatId, userId]
+    );
+
+    if (!result.rows.length) {
+      const error = new Error('Чат не найден');
+      error.code = 'CHAT_NOT_FOUND';
+      throw error;
+    }
+
+    const row = result.rows[0];
+    if (!row.role) {
+      const error = new Error('Пользователь не состоит в чате');
+      error.code = 'CHAT_MEMBERSHIP_REQUIRED';
+      throw error;
+    }
+
+    return {
+      chatId: row.id,
+      type: String(row.type || 'direct').trim().toLowerCase(),
+      title: row.title,
+      role: String(row.role || 'member').trim().toLowerCase()
+    };
+  } finally {
+    client.release();
+  }
+};
+
+const saveChatMessage = async ({ senderId, chatId, encryptedContent, isChannelDelivery }) => {
+  if (!pool) {
+    throw new Error('Database pool is not configured');
+  }
+
+  const payload = normalizeEncryptedPayload(encryptedContent);
+  const metadata = {
+    delivery: isChannelDelivery ? 'channel' : 'chat',
+    maskedSender: Boolean(isChannelDelivery)
+  };
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `
+      INSERT INTO messages (id, sender_id, receiver_id, chat_id, encrypted_content, metadata, is_read)
+      VALUES (gen_random_uuid(), $1, NULL, $2, $3::jsonb, $4::jsonb, FALSE)
+      RETURNING id, sender_id, chat_id, encrypted_content, metadata, is_read, created_at
+      `,
+      [senderId, chatId, payload, metadata]
+    );
+
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      senderId: row.sender_id,
+      chatId: row.chat_id,
+      encryptedContent: row.encrypted_content,
+      metadata: row.metadata,
+      isRead: row.is_read,
+      createdAt: row.created_at
+    };
+  } finally {
+    client.release();
+  }
+};
+
+const processChatMessage = async ({ payload, userId }) => {
+  const chatId = String(payload?.chatId || payload?.channelId || '').trim();
+  const rawEncrypted = payload?.encryptedContent || payload?.message || payload?.content;
+  if (!chatId) {
+    const error = new Error('chatId обязателен');
+    error.code = 'VALIDATION_ERROR';
+    throw error;
+  }
+
+  const normalizedPayload = normalizeEncryptedPayload(rawEncrypted);
+  const ciphertext = String(normalizedPayload?.ciphertext || '').trim();
+  if (!ciphertext) {
+    const error = new Error('encryptedContent обязателен');
+    error.code = 'VALIDATION_ERROR';
+    throw error;
+  }
+
+  const access = await resolveChatAccess({ chatId, userId });
+  if (access.type === 'channel' && !CHANNEL_ADMIN_ROLES.has(access.role)) {
+    const error = new Error('Только администратор канала может отправлять сообщения');
+    error.code = 'CHANNEL_ADMIN_REQUIRED';
+    throw error;
+  }
+
+  const message = await saveChatMessage({
+    senderId: userId,
+    chatId: access.chatId,
+    encryptedContent: normalizedPayload,
+    isChannelDelivery: access.type === 'channel'
+  });
+
+  const outgoingMessage = {
+    id: message.id,
+    chatId: message.chatId,
+    encryptedContent: message.encryptedContent,
+    isRead: message.isRead,
+    createdAt: message.createdAt,
+    senderId: access.type === 'channel' ? null : message.senderId,
+    senderType: access.type === 'channel' ? 'channel' : 'user',
+    channelTitle: access.type === 'channel' ? access.title : null
+  };
+
+  io.to(`chat_${chatId}`).emit('receive-chat-message', outgoingMessage);
+  return outgoingMessage;
+};
+
 io.on('connection', (socket) => {
   const userId = getUserIdFromSocket(socket);
 
@@ -115,25 +357,102 @@ io.on('connection', (socket) => {
     console.log(`[socket] user disconnected: ${userId}, reason=${reason}`);
   });
 
+  socket.on('join-chat-room', async (payload, callback) => {
+    try {
+      await schemaReady;
+      const chatId = String(payload?.chatId || payload?.channelId || '').trim();
+      if (!chatId) {
+        const error = new Error('chatId обязателен');
+        error.code = 'VALIDATION_ERROR';
+        throw error;
+      }
+
+      const access = await resolveChatAccess({ chatId, userId });
+      const chatRoom = `chat_${chatId}`;
+      socket.join(chatRoom);
+
+      if (typeof callback === 'function') {
+        callback({
+          ok: true,
+          room: chatRoom,
+          chat: {
+            id: access.chatId,
+            type: access.type,
+            role: access.role
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[socket] join-chat-room failed:', error);
+      if (typeof callback === 'function') {
+        callback(toSocketError(error, 'JOIN_CHAT_ROOM_FAILED', 'Не удалось войти в комнату чата'));
+      } else {
+        socket.emit('join-chat-room-error', toSocketError(error, 'JOIN_CHAT_ROOM_FAILED', 'Не удалось войти в комнату чата'));
+      }
+    }
+  });
+
+  socket.on('leave-chat-room', (payload, callback) => {
+    const chatId = String(payload?.chatId || payload?.channelId || '').trim();
+    if (!chatId) {
+      const errorPayload = {
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        message: 'chatId обязателен'
+      };
+      if (typeof callback === 'function') {
+        callback(errorPayload);
+      } else {
+        socket.emit('leave-chat-room-error', errorPayload);
+      }
+      return;
+    }
+
+    const chatRoom = `chat_${chatId}`;
+    socket.leave(chatRoom);
+    if (typeof callback === 'function') {
+      callback({ ok: true, room: chatRoom });
+    }
+  });
+
   socket.on('send-private-message', async (payload, callback) => {
     try {
+      await schemaReady;
       if (!payload || typeof payload !== 'object') {
-        throw new Error('Invalid payload');
+        const error = new Error('Некорректный payload');
+        error.code = 'VALIDATION_ERROR';
+        throw error;
+      }
+
+      const chatId = String(payload.chatId || payload.channelId || '').trim();
+      if (chatId) {
+        const outgoingMessage = await processChatMessage({ payload, userId });
+        if (typeof callback === 'function') {
+          callback({ ok: true, message: outgoingMessage });
+        } else {
+          socket.emit('chat-message-sent', { ok: true, message: outgoingMessage });
+        }
+        return;
       }
 
       const receiverId = String(payload.receiverId || payload.contactId || payload.to || '').trim();
       const rawEncrypted = payload.encryptedContent || payload.message || payload.content;
-      const encryptedContent = typeof rawEncrypted === 'string' ? rawEncrypted : JSON.stringify(rawEncrypted || '');
 
       if (!receiverId) {
-        throw new Error('receiverId is required');
-      }
-      if (!encryptedContent || !encryptedContent.trim()) {
-        throw new Error('encryptedContent is required');
+        const error = new Error('receiverId обязателен');
+        error.code = 'VALIDATION_ERROR';
+        throw error;
       }
 
-      const message = await saveMessage({ senderId: userId, receiverId, encryptedContent });
+      const normalizedPayload = normalizeEncryptedPayload(rawEncrypted);
+      const ciphertext = String(normalizedPayload?.ciphertext || '').trim();
+      if (!ciphertext) {
+        const error = new Error('encryptedContent обязателен');
+        error.code = 'VALIDATION_ERROR';
+        throw error;
+      }
 
+      const message = await saveDirectMessage({ senderId: userId, receiverId, encryptedContent: normalizedPayload });
       const targetRoom = `user_${receiverId}`;
       io.to(targetRoom).emit('receive-private-message', message);
 
@@ -144,15 +463,101 @@ io.on('connection', (socket) => {
       }
     } catch (error) {
       console.error('[socket] send-private-message failed:', error);
-      const errorPayload = {
-        ok: false,
-        code: 'SEND_PRIVATE_MESSAGE_FAILED',
-        message: error?.message || 'Failed to send private message'
-      };
+      const errorPayload = toSocketError(error, 'SEND_PRIVATE_MESSAGE_FAILED', 'Не удалось отправить личное сообщение');
       if (typeof callback === 'function') {
         callback(errorPayload);
       } else {
         socket.emit('send-private-message-error', errorPayload);
+      }
+    }
+  });
+
+  socket.on('send-chat-message', async (payload, callback) => {
+    try {
+      await schemaReady;
+      if (!payload || typeof payload !== 'object') {
+        const error = new Error('Некорректный payload');
+        error.code = 'VALIDATION_ERROR';
+        throw error;
+      }
+
+      const outgoingMessage = await processChatMessage({ payload, userId });
+
+      if (typeof callback === 'function') {
+        callback({ ok: true, message: outgoingMessage });
+      } else {
+        socket.emit('chat-message-sent', { ok: true, message: outgoingMessage });
+      }
+    } catch (error) {
+      console.error('[socket] send-chat-message failed:', error);
+      const errorPayload = toSocketError(error, 'SEND_CHAT_MESSAGE_FAILED', 'Не удалось отправить сообщение в чат');
+      if (typeof callback === 'function') {
+        callback(errorPayload);
+      } else {
+        socket.emit('send-chat-message-error', errorPayload);
+      }
+    }
+  });
+
+  socket.on('send-channel-system-message', async (payload, callback) => {
+    try {
+      await schemaReady;
+      const chatId = String(payload?.chatId || payload?.channelId || '').trim();
+      if (!chatId) {
+        const error = new Error('chatId обязателен');
+        error.code = 'VALIDATION_ERROR';
+        throw error;
+      }
+
+      const access = await resolveChatAccess({ chatId, userId });
+      if (access.type !== 'channel') {
+        const error = new Error('Системные сообщения поддерживаются только для каналов');
+        error.code = 'CHANNEL_REQUIRED';
+        throw error;
+      }
+      if (!CHANNEL_ADMIN_ROLES.has(access.role)) {
+        const error = new Error('Только администратор канала может отправлять системные сообщения');
+        error.code = 'CHANNEL_ADMIN_REQUIRED';
+        throw error;
+      }
+
+      const systemType = String(payload?.systemType || '').trim().toLowerCase();
+      const adminName = String(payload?.adminName || 'Админ').trim() || 'Админ';
+      const channelName = String(payload?.channelName || access.title || 'Канал').trim() || 'Канал';
+      const botName = String(payload?.botName || 'бот').trim() || 'бот';
+
+      let text = '';
+      if (systemType === 'channel_created') {
+        text = SYSTEM_MESSAGES_RU.channelCreated(adminName, channelName);
+      } else if (systemType === 'bot_connected') {
+        text = SYSTEM_MESSAGES_RU.botConnected(botName);
+      } else {
+        const error = new Error('Неизвестный тип системного сообщения');
+        error.code = 'SYSTEM_MESSAGE_TYPE_UNSUPPORTED';
+        throw error;
+      }
+
+      const systemMessage = {
+        id: `system_${Date.now()}`,
+        chatId,
+        type: 'system',
+        text,
+        senderId: null,
+        senderType: 'channel',
+        createdAt: new Date().toISOString()
+      };
+
+      io.to(`chat_${chatId}`).emit('receive-chat-message', systemMessage);
+
+      if (typeof callback === 'function') {
+        callback({ ok: true, message: systemMessage });
+      }
+    } catch (error) {
+      console.error('[socket] send-channel-system-message failed:', error);
+      if (typeof callback === 'function') {
+        callback(toSocketError(error, 'SEND_CHANNEL_SYSTEM_MESSAGE_FAILED', 'Не удалось отправить системное сообщение'));
+      } else {
+        socket.emit('send-channel-system-message-error', toSocketError(error, 'SEND_CHANNEL_SYSTEM_MESSAGE_FAILED', 'Не удалось отправить системное сообщение'));
       }
     }
   });

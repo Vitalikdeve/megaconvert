@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   plan TEXT NOT NULL DEFAULT 'free',
   locale TEXT NOT NULL DEFAULT 'en',
   public_key JSONB,
+  is_bot BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -165,11 +166,63 @@ CREATE TABLE IF NOT EXISTS user_contacts (
 CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY,
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  receiver_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  chat_id UUID,
   encrypted_content JSONB NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS chats (
+  id UUID PRIMARY KEY,
+  title TEXT,
+  type TEXT NOT NULL DEFAULT 'direct' CHECK (type IN ('direct', 'group', 'channel')),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS chat_members (
+  id UUID PRIMARY KEY,
+  chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (chat_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS channel_metadata (
+  chat_id UUID PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+  description TEXT,
+  is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  subscriber_count BIGINT NOT NULL DEFAULT 0 CHECK (subscriber_count >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bots (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  webhook_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'messages_chat_id_fkey'
+  ) THEN
+    ALTER TABLE messages
+      ADD CONSTRAINT messages_chat_id_fkey
+      FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS developers (
   id UUID PRIMARY KEY,

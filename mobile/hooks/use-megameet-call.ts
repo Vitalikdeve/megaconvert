@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { Alert, PermissionsAndroid, Platform } from 'react-native';
 import { io, type Socket } from 'socket.io-client';
 import {
   mediaDevices,
@@ -9,6 +9,8 @@ import {
   RTCSessionDescription,
   registerGlobals,
 } from 'react-native-webrtc';
+
+import { toast } from '@/src/utils/toast';
 
 registerGlobals();
 
@@ -37,6 +39,7 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
+const ALPHA_SIGNALING_FALLBACK_URL = 'https://35.202.253.153.nip.io';
 
 function normalizeRoomId(value: string): string {
   return String(value || '')
@@ -71,13 +74,6 @@ function normalizeSignalingBase(value: string): string {
   }
 }
 
-function resolveSignalingBase(): string {
-  const configured = normalizeSignalingBase(
-    process.env.EXPO_PUBLIC_SIGNALING_URL || process.env.EXPO_PUBLIC_API_BASE_URL || ''
-  );
-  return configured;
-}
-
 function stopMediaStream(stream: MediaStream | null) {
   if (!stream) {
     return;
@@ -96,6 +92,25 @@ function stopMediaStream(stream: MediaStream | null) {
   } catch {
     // ignore stream release errors
   }
+}
+
+function showPermissionAlert() {
+  Alert.alert('Нужен доступ к камере', 'Для звонка необходим доступ к камере.');
+}
+
+function isPermissionDeniedError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const normalized = error.message.trim().toLowerCase();
+  return (
+    normalized.includes('permission') ||
+    normalized.includes('denied') ||
+    normalized.includes('notallowed') ||
+    normalized.includes('security') ||
+    normalized.includes('media_permission_denied')
+  );
 }
 
 async function requestAndroidMediaPermissions(needCamera: boolean) {
@@ -120,7 +135,13 @@ export function useMegaMeetCall({
   displayName,
   enableVideoByDefault,
 }: UseMegaMeetCallInput): UseMegaMeetCallResult {
-  const signalingBase = useMemo(() => resolveSignalingBase(), []);
+  const signalingUrl = useMemo(
+    () =>
+      // fallback URL - GCP signaling server (35.202.253.153.nip.io)
+      normalizeSignalingBase(process.env.EXPO_PUBLIC_SIGNALING_URL || ALPHA_SIGNALING_FALLBACK_URL) ||
+      ALPHA_SIGNALING_FALLBACK_URL,
+    []
+  );
   const normalizedRoomId = useMemo(() => normalizeRoomId(roomId), [roomId]);
   const normalizedDisplayName = useMemo(() => normalizeDisplayName(displayName) || 'Guest', [displayName]);
 
@@ -130,6 +151,7 @@ export function useMegaMeetCall({
   const localStreamRef = useRef<MediaStream | null>(null);
   const roomIdRef = useRef(normalizedRoomId);
   const mountedRef = useRef(true);
+  const reconnectToastShownRef = useRef(false);
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -179,7 +201,7 @@ export function useMegaMeetCall({
       return;
     }
 
-    socket.emit(
+        socket.emit(
       'signal',
       {
         roomId: roomIdRef.current,
@@ -188,7 +210,7 @@ export function useMegaMeetCall({
       },
       (response: { ok?: boolean; message?: string } | undefined) => {
         if (response?.ok === false) {
-          console.warn('[mobile-call] signal rejected:', response.message);
+          console.error('[mobile-call] signal rejected:', response.message);
         }
       }
     );
@@ -326,6 +348,7 @@ export function useMegaMeetCall({
 
       if (socket) {
         socket.removeAllListeners();
+        socket.io.removeAllListeners();
         socket.disconnect();
         socketRef.current = null;
       }
@@ -355,12 +378,6 @@ export function useMegaMeetCall({
       return;
     }
 
-    if (!signalingBase) {
-      setCallState('error');
-      setErrorMessage('Укажите EXPO_PUBLIC_SIGNALING_URL для подключения к Signaling серверу.');
-      return;
-    }
-
     let cancelled = false;
 
     const initialize = async () => {
@@ -370,8 +387,9 @@ export function useMegaMeetCall({
       try {
         await requestAndroidMediaPermissions(enableVideoByDefault);
       } catch {
+        showPermissionAlert();
         setCallState('error');
-        setErrorMessage('Нужны разрешения на камеру и микрофон для звонков.');
+        setErrorMessage('Для звонка необходим доступ к камере.');
         return;
       }
 
@@ -395,14 +413,19 @@ export function useMegaMeetCall({
         setMicEnabled(stream.getAudioTracks()[0]?.enabled !== false);
         setCameraEnabled(stream.getVideoTracks()[0]?.enabled !== false);
 
-        const socket = io(signalingBase, {
+        const socket = io(signalingUrl, {
           autoConnect: false,
           transports: ['websocket', 'polling'],
           withCredentials: true,
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 900,
+          reconnectionDelayMax: 2500,
         });
         socketRef.current = socket;
 
         socket.on('connect', () => {
+          reconnectToastShownRef.current = false;
           socket.emit(
             'join-meet-room',
             {
@@ -422,8 +445,17 @@ export function useMegaMeetCall({
         });
 
         socket.on('connect_error', () => {
-          setCallState('error');
-          setErrorMessage('Не удалось подключиться к signaling серверу.');
+          if (!mountedRef.current) {
+            return;
+          }
+
+          setCallState('connecting');
+          setErrorMessage('Соединение с сервером звонков нестабильно. Выполняется переподключение...');
+
+          if (!reconnectToastShownRef.current) {
+            reconnectToastShownRef.current = true;
+            toast.info('Соединение потеряно, переподключение...');
+          }
         });
 
         socket.on(
@@ -467,14 +499,64 @@ export function useMegaMeetCall({
           removePeer(remoteSocketId);
         });
 
-        socket.on('disconnect', () => {
+        socket.on('disconnect', (reason) => {
           if (mountedRef.current) {
-            setCallState('disconnected');
+            if (reason === 'io client disconnect') {
+              setCallState('disconnected');
+              return;
+            }
+
+            setCallState('connecting');
+            setErrorMessage('Соединение потеряно. Пытаемся восстановить звонок...');
+            if (!reconnectToastShownRef.current) {
+              reconnectToastShownRef.current = true;
+              toast.info('Соединение потеряно, переподключение...');
+            }
+            socket.connect();
           }
+        });
+
+        socket.io.on('reconnect_attempt', () => {
+          if (!mountedRef.current) {
+            return;
+          }
+          setCallState('connecting');
+          setErrorMessage('Соединение потеряно. Пытаемся восстановить звонок...');
+          if (!reconnectToastShownRef.current) {
+            reconnectToastShownRef.current = true;
+            toast.info('Соединение потеряно, переподключение...');
+          }
+        });
+
+        socket.io.on('reconnect', () => {
+          if (!mountedRef.current) {
+            return;
+          }
+          reconnectToastShownRef.current = false;
+          setCallState('joined');
+          setErrorMessage(null);
+          toast.success('Соединение восстановлено');
+        });
+
+        socket.io.on('reconnect_failed', () => {
+          if (!mountedRef.current) {
+            return;
+          }
+          reconnectToastShownRef.current = false;
+          setCallState('error');
+          setErrorMessage('Не удалось переподключиться к звонку. Проверьте интернет и попробуйте снова.');
+          toast.error('Не удалось переподключиться к серверу звонков');
         });
 
         socket.connect();
       } catch (error) {
+        if (isPermissionDeniedError(error)) {
+          showPermissionAlert();
+          setCallState('error');
+          setErrorMessage('Для звонка необходим доступ к камере.');
+          return;
+        }
+
         setCallState('error');
         setErrorMessage('Ошибка доступа к камере или микрофону.');
       }
@@ -494,7 +576,7 @@ export function useMegaMeetCall({
     normalizedDisplayName,
     normalizedRoomId,
     removePeer,
-    signalingBase,
+    signalingUrl,
   ]);
 
   const toggleMic = useCallback(() => {

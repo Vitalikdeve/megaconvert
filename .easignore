@@ -1,0 +1,5 @@
+# Exclude local IDE/build artifacts that should never be uploaded to EAS.
+.vs/
+mobile/.vs/
+mobile/builds/
+*.apk
