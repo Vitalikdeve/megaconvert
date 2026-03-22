@@ -1,0 +1,16 @@
+{
+  "name": "megaconvert-bot-sdk",
+  "version": "0.1.0",
+  "description": "Official bot SDK for MegaConvert",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "scripts": {
+    "start": "node example.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

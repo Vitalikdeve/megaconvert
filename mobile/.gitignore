@@ -41,3 +41,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# local secrets / machine config
+local.properties
+app/google-services.json
+.env
+.env.*
+!.env.example

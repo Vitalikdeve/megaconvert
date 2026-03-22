@@ -35,3 +35,12 @@ data/
 
 tmp_*.js
 tmp_*.html
+
+# Android local secrets
+/mobile/local.properties
+/mobile/app/google-services.json
+
+# Local Node.js env files
+/megaconvert-server/.env
+/megaconvert-server/.env.*
+!/megaconvert-server/.env.example

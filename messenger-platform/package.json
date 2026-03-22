@@ -1,0 +1,36 @@
+{
+  "name": "megaconvert-secure-messenger",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.8.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev --parallel",
+    "dev:web": "npm run dev -w @messenger/web",
+    "dev:server": "npm run dev -w @messenger/server",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "db:generate": "npm run db:generate -w @messenger/database",
+    "db:migrate": "npm run db:migrate -w @messenger/database",
+    "format": "prettier --write .",
+    "docker:up": "docker compose up -d --build",
+    "docker:up:prod": "docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.production.yml up -d --build",
+    "docker:down": "docker compose down -v",
+    "docker:down:prod": "docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.production.yml down -v"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.5.0",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "tsup": "^8.5.1",
+    "turbo": "^2.8.20",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1"
+  }
+}

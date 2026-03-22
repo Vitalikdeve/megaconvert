@@ -1,0 +1,25 @@
+default_platform(:android)
+
+platform :android do
+  desc "Build the release AAB and upload it to Google Play production"
+  lane :deploy_production do
+    UI.user_error!("SUPPLY_JSON_KEY is missing.") if ENV["SUPPLY_JSON_KEY"].to_s.strip.empty?
+
+    gradle(
+      task: "bundleRelease",
+      project_dir: ".",
+      print_command: false
+    )
+
+    upload_to_play_store(
+      track: "production",
+      aab: "app/build/outputs/bundle/release/app-release.aab",
+      json_key: ENV["SUPPLY_JSON_KEY"],
+      package_name: "com.megaconvert.business",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "completed"
+    )
+  end
+end

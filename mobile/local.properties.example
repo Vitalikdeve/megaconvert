@@ -1,0 +1,33 @@
+# Copy this file to local.properties and fill values locally.
+# Do not commit local.properties.
+
+sdk.dir=C\:\\Users\\<user>\\AppData\\Local\\Android\\Sdk
+
+# Runtime endpoints / integrations
+SIGNALING_WS_URL=ws://10.0.2.2:8080
+SERVER_HTTP_BASE_URL=http://10.0.2.2:8080
+SHEERID_VERIFICATION_URL=https://services.sheerid.com/verify/YOUR_PROGRAM_ID
+
+# TLS certificate pinning for production domain (OkHttp CertificatePinner)
+# 1) Extract current pin:
+#    openssl s_client -connect api.megaconvert.com:443 -servername api.megaconvert.com < NUL | openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64
+# 2) Format value as: sha256/<BASE64_HASH>
+# 3) Always keep a backup pin for certificate rotation.
+PINNED_CERT_DOMAIN=api.megaconvert.com
+PINNED_CERT_SHA256_PRIMARY=sha256/REPLACE_WITH_PRIMARY_PIN
+PINNED_CERT_SHA256_BACKUP=sha256/REPLACE_WITH_BACKUP_PIN
+
+# Optional local release signing / CI-compatible env keys
+# ANDROID_KEYSTORE_PATH=C:\\path\\to\\upload-keystore.jks
+# ANDROID_KEYSTORE_PASSWORD=change_me
+# ANDROID_KEY_ALIAS=upload
+# ANDROID_KEY_PASSWORD=change_me
+
+# TURN server for WebRTC testing
+# Do not commit production TURN credentials into source control.
+TURN_SERVER_URL=turn:YOUR_SERVER_IP:3478?transport=udp
+TURN_USERNAME=mega_admin
+TURN_PASSWORD=change_me
+
+# Security contact shown in SECURITY.md
+SECURITY_REPORT_EMAIL=security@megaconvert.business

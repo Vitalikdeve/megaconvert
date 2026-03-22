@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "prerender": "node scripts/prerender.js",
+    "legal:build": "node scripts/generate_legal_html.js",
     "build": "npm run prerender && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
