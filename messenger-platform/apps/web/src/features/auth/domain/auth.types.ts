@@ -7,4 +7,5 @@ export interface AuthSession {
   username: string;
   userId?: string;
   token?: string;
+  deviceId?: string;
 }

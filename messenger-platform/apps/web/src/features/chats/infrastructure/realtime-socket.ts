@@ -4,16 +4,13 @@ import { io, type Socket } from "socket.io-client";
 
 import { REALTIME_URL } from "@/config/api";
 
-import type { RemoteSocketMessagePayload } from "../domain/remote-chat.types";
-
-export const createMessengerSocket = () =>
+export const createMessengerSocket = (token: string) =>
   io(REALTIME_URL, {
-    transports: ["websocket", "polling"]
+    path: "/socket.io",
+    transports: ["websocket", "polling"],
+    auth: {
+      token
+    }
   });
 
-export const emitRemoteMessage = (
-  socket: Socket,
-  payload: RemoteSocketMessagePayload
-) => {
-  socket.emit("send_message", payload);
-};
+export type MessengerSocket = Socket;

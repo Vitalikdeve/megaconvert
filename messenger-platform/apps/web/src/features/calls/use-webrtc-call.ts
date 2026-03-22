@@ -15,6 +15,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 
+import { REALTIME_URL } from "@/config/api";
+
 const userLabels: Record<string, string> = {
   you: "You",
   nina: "Nina",
@@ -96,11 +98,13 @@ const createPreviewStream = (audioTracks: MediaStreamTrack[], videoTrack?: Media
 export interface UseWebRtcCallOptions {
   conversationId: string;
   currentUserId: string;
+  authToken?: string;
 }
 
 export const useWebRtcCall = ({
   conversationId,
-  currentUserId
+  currentUserId,
+  authToken
 }: UseWebRtcCallOptions) => {
   const [status, setStatus] = useState<CallStatus>("idle");
   const [direction, setDirection] = useState<CallDirection>(null);
@@ -682,17 +686,18 @@ export const useWebRtcCall = ({
   };
 
   useEffect(() => {
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
-
-    if (!socketUrl) {
-      setError("NEXT_PUBLIC_SOCKET_URL is not configured.");
+    if (!authToken) {
+      setError("Login is required before starting secure calls.");
       updateStatus("error");
       return;
     }
 
-    const socket = io(socketUrl, {
+    const socket = io(REALTIME_URL, {
       path: "/socket.io",
-      transports: ["websocket"]
+      transports: ["websocket"],
+      auth: {
+        token: authToken
+      }
     });
 
     socketRef.current = socket;
@@ -825,7 +830,7 @@ export const useWebRtcCall = ({
       socket.close();
       socketRef.current = null;
     };
-  }, [conversationId, currentUserId]);
+  }, [authToken, conversationId, currentUserId]);
 
   return {
     status,

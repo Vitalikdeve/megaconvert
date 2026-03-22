@@ -21,14 +21,23 @@ const envSchema = z.object({
     .default("info"),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_TIME_WINDOW: z.string().default("1 minute"),
+  LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  LOGIN_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+  MESSAGE_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  MESSAGE_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   DATABASE_URL: z.string().optional(),
   REDIS_URL: z.string().optional(),
+  JWT_SECRET: z.string().default("messenger-development-secret"),
+  JWT_EXPIRES_IN: z.string().default("7d"),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("us-east-1"),
   S3_ACCESS_KEY: z.string().optional(),
   S3_SECRET_KEY: z.string().optional(),
   S3_BUCKET: z.string().default("messenger-media"),
-  S3_FORCE_PATH_STYLE: booleanFromString.default(true)
+  S3_FORCE_PATH_STYLE: booleanFromString.default(true),
+  WEB_PUSH_SUBJECT: z.string().default("mailto:ops@example.com"),
+  WEB_PUSH_PUBLIC_KEY: z.string().optional(),
+  WEB_PUSH_PRIVATE_KEY: z.string().optional()
 });
 
 export interface AppEnv extends z.infer<typeof envSchema> {

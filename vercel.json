@@ -1,7 +1,7 @@
 {
   "buildCommand": "cd frontend && npm run build",
   "installCommand": "cd frontend && npm install",
-  "outputDirectory": "frontend/dist",
+  "outputDirectory": "frontend/dist-messenger",
   "framework": "vite",
   "headers": [
     {
@@ -20,10 +20,6 @@
   ],
   "rewrites": [
     {
-      "source": "/ads.txt",
-      "destination": "/ads.txt"
-    },
-    {
       "source": "/robots.txt",
       "destination": "/robots.txt"
     },
@@ -32,11 +28,7 @@
       "destination": "/sitemap.xml"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "https://35.202.253.153.nip.io/api/$1"
-    },
-    {
-      "source": "/((?!api(?:/|$)).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

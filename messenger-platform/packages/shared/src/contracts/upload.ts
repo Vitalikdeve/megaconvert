@@ -11,7 +11,9 @@ export const uploadEncryptionSchema = z.object({
 });
 
 export const initiateUploadSchema = z.object({
-  conversationId: z.string().min(1),
+  conversationId: z.string().min(1).optional(),
+  chatId: z.string().min(1).optional(),
+  messageId: z.string().min(1).optional(),
   fileName: z.string().min(1),
   mimeType: z.string().min(1),
   sizeBytes: z.number().int().positive().max(MAX_FILE_SIZE_BYTES),
@@ -22,7 +24,10 @@ export const initiateUploadSchema = z.object({
     .max(MAX_PART_SIZE_BYTES)
     .optional(),
   encryption: uploadEncryptionSchema
-});
+}).refine(
+  (value) => Boolean(value.conversationId ?? value.chatId),
+  "conversationId or chatId is required."
+);
 
 export const signUploadPartsSchema = z.object({
   objectKey: z.string().min(1),
@@ -45,6 +50,7 @@ export const uploadChunkManifestSchema = z.object({
 });
 
 export const completeUploadSchema = z.object({
+  uploadId: z.string().min(1).optional(),
   objectKey: z.string().min(1),
   encryption: uploadEncryptionSchema,
   downloadFileName: z.string().min(1).optional(),
@@ -61,6 +67,7 @@ export const uploadStatusSchema = z.object({
   uploadId: z.string().min(1),
   objectKey: z.string().min(1),
   conversationId: z.string().min(1),
+  messageId: z.string().min(1).optional(),
   fileName: z.string().min(1),
   mimeType: z.string().min(1),
   sizeBytes: z.number().int().positive().max(MAX_FILE_SIZE_BYTES),

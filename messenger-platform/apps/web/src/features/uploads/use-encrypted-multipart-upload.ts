@@ -8,6 +8,8 @@ import {
 import type { UploadChunkManifest } from "@messenger/shared";
 import { useEffect, useRef, useState } from "react";
 
+import { API_URL } from "@/config/api";
+
 const DEFAULT_CHUNK_SIZE_BYTES = 16 * 1024 * 1024;
 const MAX_PARALLEL_UPLOADS = 3;
 const ENCRYPTION_VERSION = "signal-inspired-file-v1";
@@ -93,10 +95,14 @@ export type UploadTransferItem = UploadTransfer;
 
 export interface UseEncryptedMultipartUploadOptions {
   conversationId: string;
+  authToken?: string;
+  deviceId?: string;
 }
 
 export const useEncryptedMultipartUpload = ({
-  conversationId
+  conversationId,
+  authToken,
+  deviceId
 }: UseEncryptedMultipartUploadOptions) => {
   const [uploads, setUploads] = useState<UploadTransfer[]>([]);
 
@@ -104,8 +110,6 @@ export const useEncryptedMultipartUpload = ({
   const filesRef = useRef(new Map<string, File>());
   const fileKeysRef = useRef(new Map<string, string>());
   const runtimesRef = useRef(new Map<string, UploadRuntime>());
-
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   useEffect(() => {
     uploadsRef.current = uploads;
@@ -180,14 +184,16 @@ export const useEncryptedMultipartUpload = ({
     path: string,
     init?: RequestInit
   ): Promise<T> => {
-    if (!apiBaseUrl) {
-      throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
+    if (!authToken || !deviceId) {
+      throw new Error("Login is required before uploading encrypted files.");
     }
 
-    const response = await fetch(`${apiBaseUrl}${path}`, {
+    const response = await fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+        "x-device-id": deviceId,
         ...(init?.headers ?? {})
       }
     });
@@ -238,10 +244,11 @@ export const useEncryptedMultipartUpload = ({
       chunkSizeBytes: number;
       requiredPartCount: number;
       status: "uploading";
-    }>("/v1/uploads/initiate", {
+    }>("/upload/start", {
       method: "POST",
       body: JSON.stringify({
         conversationId,
+        messageId: `draft-${uploadId}`,
         fileName: file.name,
         mimeType: file.type || "application/octet-stream",
         sizeBytes: file.size,
@@ -483,9 +490,10 @@ export const useEncryptedMultipartUpload = ({
         (left, right) => left.partNumber - right.partNumber
       );
 
-      await requestJson(`/v1/uploads/${upload.uploadId}/complete`, {
+      await requestJson(`/upload/complete`, {
         method: "POST",
         body: JSON.stringify({
+          uploadId: upload.uploadId,
           objectKey: upload.objectKey,
           encryption: {
             version: ENCRYPTION_VERSION,

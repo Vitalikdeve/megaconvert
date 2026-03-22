@@ -223,6 +223,7 @@ export interface ConversationE2EEClient {
   getCachedPlaintext(
     message: Pick<StoredMessage, "id" | "clientMessageId">
   ): Promise<string | null>;
+  rememberPlaintext(cacheKeys: string[], plaintext: string): Promise<void>;
 }
 
 export const createConversationE2EEClient = (
@@ -270,6 +271,7 @@ export const createConversationE2EEClient = (
         sessionId: encrypted.sessionId,
         ratchetCounter: encrypted.header.messageNumber,
         iv: encrypted.ivBase64,
+        nonce: encrypted.ivBase64,
         senderRatchetPublicKey: encrypted.header.dhPublicKey,
         previousChainLength: encrypted.header.previousChainLength,
         contentType: "text"
@@ -294,6 +296,15 @@ export const createConversationE2EEClient = (
     async getCachedPlaintext(message) {
       const record = await loadOrCreateRecord(storageKey);
       return readCachedPlaintext(record, message);
+    },
+    async rememberPlaintext(cacheKeys, plaintext) {
+      const record = await loadOrCreateRecord(storageKey);
+
+      for (const key of cacheKeys) {
+        record.plaintextCache[key] = plaintext;
+      }
+
+      persistRecord(storageKey, record);
     }
   };
 };

@@ -1,458 +1,685 @@
-import React, {
-  Suspense,
-  lazy,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-import { AnimatePresence } from 'framer-motion';
-import {
-  Archive,
-  Code2,
-  FileText,
-  Film,
-  Image,
-  Music,
-  Network,
-  Search,
-  Sparkles,
-  Stamp,
-  Video,
-} from 'lucide-react';
-import {
-  Navigate,
-  Route,
-  Routes,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import CommandPalette from './components/CommandPalette.jsx';
-import MainLayout from './components/layout/MainLayout.jsx';
-import GlassPanel from './components/ui/GlassPanel.jsx';
-import AuthCallbackPage from './features/auth/pages/AuthCallbackPage.jsx';
-import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage.jsx';
-import LoginPage from './features/auth/pages/LoginPage.jsx';
-import RegisterPage from './features/auth/pages/RegisterPage.jsx';
-import ResetPasswordPage from './features/auth/pages/ResetPasswordPage.jsx';
-import { BUSINESS_WORKFLOW_CATALOG } from './lib/businessWorkflowCatalog.js';
-import { LAST_TOOL_KEY, writeStoredJson } from './lib/osMemory.js';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-const ZenPortal = lazy(() => import('./components/ZenPortal.jsx'));
-const HomeDashboard = lazy(() => import('./components/home/HomeDashboard.jsx'));
-const ImageOptimizer = lazy(() => import('./components/tools/ImageOptimizer.jsx'));
-const SecurityPage = lazy(() => import('./components/legal/SecurityPage.jsx'));
-const CookiesPage = lazy(() => import('./components/legal/CookiesPage.jsx'));
-const VideoCompressor = lazy(() => import('./components/tools/VideoCompressor.jsx'));
-const AudioConverter = lazy(() => import('./components/tools/AudioConverter.jsx'));
-const VideoToGif = lazy(() => import('./components/tools/VideoToGif.jsx'));
-const ArchiveManager = lazy(() => import('./components/tools/ArchiveManager.jsx'));
-const BatchWatermark = lazy(() => import('./components/tools/BatchWatermark.jsx'));
-const SmartOcr = lazy(() => import('./components/tools/SmartOcr.jsx'));
-const PdfEditor = lazy(() => import('./components/tools/PdfEditor.jsx'));
-const MegaGrid = lazy(() => import('./components/tools/MegaGrid.jsx'));
-const ToolsPortalPage = lazy(() => import('./pages/ToolsPortalPage.jsx'));
-const BusinessWorkflowPage = lazy(() => import('./pages/BusinessWorkflowPage.jsx'));
-const ApiDashboard = lazy(() => import('./pages/ApiDashboard.jsx'));
-const PricingPage = lazy(() => import('./pages/PricingPage.jsx'));
-const AccountBillingPage = lazy(() => import('./pages/AccountBillingPage.jsx'));
-const BlogIndex = lazy(() => import('./pages/blog/BlogIndex.jsx'));
-const BlogPost = lazy(() => import('./pages/blog/BlogPost.jsx'));
-const LegalPrivacyPolicyPage = lazy(() => import('./pages/legal/PrivacyPolicy.jsx'));
-const LegalTermsOfServicePage = lazy(() => import('./pages/legal/TermsOfService.jsx'));
-const LegalLawEnforcementPage = lazy(() => import('./pages/legal/LawEnforcement.jsx'));
-const LegalTransparencyReportPage = lazy(() => import('./pages/legal/TransparencyReport.jsx'));
-const StudioLayout = lazy(() => import('./pages/editors/StudioLayout.jsx'));
-const MegaMeetRoom = lazy(() => import('./pages/workspace/MegaMeetRoom.jsx'));
-const Messenger = lazy(() => import('./pages/workspace/Messenger.jsx'));
+import ChatPage from './app/chat/index.jsx';
+import LoginPage from './app/login/index.jsx';
+import RegisterPage from './app/register/index.jsx';
+import { fetchUsers, loginUser, registerUser } from './services/api.js';
+import { createSocketClient } from './services/socket.js';
 
-function RouteFallback({ fullScreen = false }) {
-  const { t } = useTranslation();
+const MotionDiv = motion.div;
 
-  return (
-    <div className={[
-      'flex w-full items-center justify-center bg-[#030303] px-4 text-white',
-      fullScreen ? 'h-screen' : 'min-h-[calc(100vh-4rem)]',
-    ].join(' ')}>
-      <GlassPanel className="flex h-[320px] w-[min(620px,calc(100vw-2rem))] flex-col items-center justify-center gap-5 px-8 text-center">
-        <div className="h-16 w-16 animate-pulse rounded-full border border-white/[0.08] bg-white/[0.04]" />
-        <div className="text-sm uppercase tracking-[0.28em] text-white/28">
-          {t('appShell.loadingModule')}
-        </div>
-      </GlassPanel>
-    </div>
+const SESSION_STORAGE_KEY = 'messenger.session';
+const MESSAGE_STORAGE_KEY = 'messenger.messages';
+const USER_CACHE_STORAGE_KEY = 'messenger.users';
+
+const pageTransition = {
+  initial: { opacity: 0, y: 18, filter: 'blur(18px)' },
+  animate: {
+    opacity: 1,
+    y: 0,
+    filter: 'blur(0px)',
+    transition: { duration: 0.34, ease: [0.22, 1, 0.36, 1] },
+  },
+  exit: {
+    opacity: 0,
+    y: -14,
+    filter: 'blur(18px)',
+    transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
+  },
+};
+
+const readStorage = (key, fallback) => {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeStorage = (key, value) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage failures for private browsing modes.
+  }
+};
+
+const chatIdForUser = (userId) => `dm:${String(userId)}`;
+
+const buildSavedMessagesChat = (session) => ({
+  id: `saved:${String(session.userId || session.username)}`,
+  userId: String(session.userId || session.username),
+  username: session.username,
+  displayName: 'Saved Messages',
+  subtitle: 'Private notes, links, and voice drafts',
+  status: 'secure',
+  isSavedMessages: true,
+});
+
+const normalizeAuthSession = (payload, fallbackUsername) => {
+  const data = payload?.data ?? payload?.user ?? payload ?? {};
+  const nestedUser = data.user ?? {};
+  const username = String(
+    nestedUser.username ??
+      data.username ??
+      nestedUser.handle ??
+      data.handle ??
+      fallbackUsername
+  ).trim();
+
+  return {
+    token:
+      data.token ??
+      data.accessToken ??
+      data.jwt ??
+      nestedUser.token ??
+      null,
+    userId: String(
+      nestedUser.id ??
+        nestedUser.userId ??
+        data.id ??
+        data.userId ??
+        username
+    ),
+    username: username || fallbackUsername,
+  };
+};
+
+const normalizeUsersPayload = (payload, session) => {
+  const source =
+    payload?.data ??
+    payload?.users ??
+    payload?.items ??
+    payload ??
+    [];
+
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  const seen = new Set();
+
+  return source
+    .map((entry, index) => {
+      const rawId =
+        entry?.id ??
+        entry?.userId ??
+        entry?.uuid ??
+        entry?.username ??
+        entry?.handle ??
+        `user-${index}`;
+      const username = String(
+        entry?.username ??
+          entry?.handle ??
+          entry?.name ??
+          `user-${index}`
+      ).trim();
+      const userId = String(rawId);
+
+      if (!username) {
+        return null;
+      }
+
+      if (
+        userId === String(session.userId) ||
+        username.toLowerCase() === session.username.toLowerCase()
+      ) {
+        return null;
+      }
+
+      if (seen.has(userId)) {
+        return null;
+      }
+
+      seen.add(userId);
+
+      return {
+        id: userId,
+        username,
+        displayName: String(entry?.displayName ?? entry?.name ?? username),
+        subtitle: String(
+          entry?.bio ??
+            entry?.headline ??
+            entry?.statusMessage ??
+            'Start a secure conversation'
+        ),
+        status: String(entry?.status ?? entry?.presence ?? 'offline'),
+        avatar: entry?.avatarUrl ?? entry?.avatar ?? null,
+      };
+    })
+    .filter(Boolean);
+};
+
+const normalizeAttachments = (attachments) =>
+  Array.isArray(attachments)
+    ? attachments
+        .filter(Boolean)
+        .map((attachment, index) => ({
+          id: String(
+            attachment.id ??
+              attachment.name ??
+              attachment.fileName ??
+              `attachment-${index}`
+          ),
+          name: String(attachment.name ?? attachment.fileName ?? `Attachment ${index + 1}`),
+          size: Number(attachment.size ?? attachment.sizeBytes ?? 0),
+          type: String(attachment.type ?? attachment.mimeType ?? 'application/octet-stream'),
+        }))
+    : [];
+
+const formatRelativeStatus = (status) => {
+  if (status === 'online' || status === 'active') {
+    return 'online now';
+  }
+
+  if (status === 'away') {
+    return 'away';
+  }
+
+  return 'last seen recently';
+};
+
+const normalizeIncomingMessage = (payload, session) => {
+  const senderId = String(
+    payload?.senderId ??
+      payload?.fromUserId ??
+      payload?.userId ??
+      payload?.username ??
+      payload?.sender ??
+      'unknown'
   );
-}
+  const senderName = String(
+    payload?.username ??
+      payload?.senderName ??
+      payload?.sender ??
+      payload?.from ??
+      senderId
+  );
+  const explicitChatId =
+    payload?.chatId ??
+    payload?.conversationId ??
+    payload?.roomId ??
+    (payload?.toUserId && senderId === String(session.userId)
+      ? chatIdForUser(payload.toUserId)
+      : null);
+
+  const chatId = String(
+    explicitChatId ??
+      (senderId === String(session.userId)
+        ? `saved:${String(session.userId || session.username)}`
+        : chatIdForUser(senderId))
+  );
+
+  return {
+    id: String(
+      payload?.id ??
+        payload?.clientMessageId ??
+        `${chatId}-${payload?.createdAt ?? Date.now()}`
+    ),
+    clientMessageId: payload?.clientMessageId ?? payload?.id ?? null,
+    chatId,
+    text: String(payload?.text ?? payload?.message ?? payload?.body ?? '').trim(),
+    senderId,
+    senderName,
+    createdAt: payload?.createdAt ?? new Date().toISOString(),
+    attachments: normalizeAttachments(payload?.attachments),
+  };
+};
+
+const mergeMessage = (currentMessages, nextMessage) => {
+  const alreadyExists = currentMessages.some(
+    (message) =>
+      message.id === nextMessage.id ||
+      (message.clientMessageId &&
+        nextMessage.clientMessageId &&
+        message.clientMessageId === nextMessage.clientMessageId)
+  );
+
+  if (alreadyExists) {
+    return currentMessages.map((message) => {
+      if (
+        message.id === nextMessage.id ||
+        (message.clientMessageId &&
+          nextMessage.clientMessageId &&
+          message.clientMessageId === nextMessage.clientMessageId)
+      ) {
+        return {
+          ...message,
+          ...nextMessage,
+        };
+      }
+
+      return message;
+    });
+  }
+
+  return [...currentMessages, nextMessage].sort(
+    (left, right) =>
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+  );
+};
+
+const ensureChatFromMessage = (chats, message) => {
+  if (chats.some((chat) => chat.id === message.chatId)) {
+    return chats;
+  }
+
+  return [
+    ...chats,
+    {
+      id: message.chatId,
+      userId: message.senderId,
+      username: message.senderName,
+      displayName: message.senderName,
+      subtitle: 'Conversation discovered from live traffic',
+      status: 'online',
+      avatar: null,
+      isSavedMessages: false,
+    },
+  ];
+};
+
+const createOptimisticMessage = ({ activeChat, currentUser, text, attachments }) => ({
+  id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  clientMessageId: `client-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  chatId: activeChat.id,
+  text: text.trim(),
+  senderId: String(currentUser.userId || currentUser.username),
+  senderName: currentUser.username,
+  createdAt: new Date().toISOString(),
+  attachments: attachments.map((file, index) => ({
+    id: `${file.name}-${file.lastModified}-${index}`,
+    name: file.name,
+    size: file.size,
+    type: file.type || 'application/octet-stream',
+  })),
+});
 
 export default function App() {
-  const location = useLocation();
   const navigate = useNavigate();
-  const { t } = useTranslation();
-  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
-  const isStudioRoute = location.pathname === '/editors' || location.pathname.startsWith('/editors/');
-  const isMeetRoute = location.pathname.startsWith('/meet/');
-  const isMessengerRoute = location.pathname.startsWith('/messenger');
-  const isImmersiveRoute = isStudioRoute || isMeetRoute || isMessengerRoute;
-  const apiBase = useMemo(
-    () => String(import.meta.env.VITE_API_BASE || '/api').trim() || '/api',
-    [],
+  const location = useLocation();
+  const socketRef = useRef(null);
+  const [session, setSession] = useState(() => readStorage(SESSION_STORAGE_KEY, null));
+  const [messagesByChat, setMessagesByChat] = useState(() =>
+    readStorage(MESSAGE_STORAGE_KEY, {})
   );
-  const toolItems = useMemo(() => [
-    {
-      id: 'zen',
-      path: '/',
-      aliases: ['/receive'],
-      group: t('appShell.toolGroups.home'),
-      label: t('appShell.tools.zen.label'),
-      caption: t('appShell.tools.zen.caption'),
-      icon: Sparkles,
-    },
-    {
-      id: 'image-optimizer',
-      path: '/tools/image-optimizer',
-      group: t('appShell.toolGroups.media'),
-      label: t('appShell.tools.imageOptimizer.label'),
-      caption: t('appShell.tools.imageOptimizer.caption'),
-      icon: Image,
-    },
-    {
-      id: 'video-compressor',
-      path: '/tools/video-compressor',
-      group: t('appShell.toolGroups.media'),
-      label: t('appShell.tools.videoCompressor.label'),
-      caption: t('appShell.tools.videoCompressor.caption'),
-      icon: Video,
-    },
-    {
-      id: 'audio-converter',
-      path: '/tools/audio-converter',
-      group: t('appShell.toolGroups.media'),
-      label: t('toolAudioConverterTitle'),
-      caption: t('appShell.tools.audioConverter.caption'),
-      icon: Music,
-    },
-    {
-      id: 'video-to-gif',
-      path: '/tools/video-to-gif',
-      group: t('appShell.toolGroups.media'),
-      label: t('toolVideoToGifTitle'),
-      caption: t('appShell.tools.videoToGif.caption'),
-      icon: Film,
-    },
-    {
-      id: 'smart-ocr',
-      path: '/tools/smart-ocr',
-      group: t('appShell.toolGroups.documents'),
-      label: t('dashboardCardOcrTitle'),
-      caption: t('appShell.tools.smartOcr.caption'),
-      icon: Search,
-    },
-    {
-      id: 'pdf-editor',
-      path: '/tools/pdf-editor',
-      group: t('appShell.toolGroups.documents'),
-      label: t('dashboardCardPdfTitle'),
-      caption: t('appShell.tools.pdfEditor.caption'),
-      icon: FileText,
-    },
-    {
-      id: 'megagrid',
-      path: '/tools/megagrid',
-      group: t('appShell.toolGroups.network'),
-      label: t('appShell.tools.megaGrid.label'),
-      caption: t('appShell.tools.megaGrid.caption'),
-      icon: Network,
-    },
-    {
-      id: 'api-dashboard',
-      path: '/developers',
-      aliases: ['/api-dashboard', '/api-overview'],
-      group: t('appShell.toolGroups.developers'),
-      label: t('appShell.tools.apiDashboard.label'),
-      caption: t('appShell.tools.apiDashboard.caption'),
-      icon: Code2,
-    },
-    {
-      id: 'archive-manager',
-      path: '/tools/archive-manager',
-      group: t('appShell.toolGroups.files'),
-      label: t('toolArchiveManagerTitle'),
-      caption: t('appShell.tools.archiveManager.caption'),
-      icon: Archive,
-    },
-    {
-      id: 'batch-watermark',
-      path: '/tools/batch-watermark',
-      group: t('appShell.toolGroups.media'),
-      label: t('toolBatchWatermarkTitle'),
-      caption: t('appShell.tools.batchWatermark.caption'),
-      icon: Stamp,
-    },
-    ...BUSINESS_WORKFLOW_CATALOG.map((workflow) => ({
-      id: workflow.id,
-      path: workflow.route,
-      group: workflow.recommendedGroup === 'document'
-        ? t('appShell.toolGroups.documents')
-        : t('appShell.toolGroups.media'),
-      label: t(`${workflow.translationBase}.title`),
-      caption: t(`${workflow.translationBase}.paletteCaption`),
-      icon: workflow.icon,
-    })),
-  ], [t]);
+  const [users, setUsers] = useState(() => readStorage(USER_CACHE_STORAGE_KEY, []));
+  const [authError, setAuthError] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState('');
+  const [connectionState, setConnectionState] = useState('offline');
+  const [activeChatId, setActiveChatId] = useState(null);
 
-  const activeToolMeta = useMemo(
-    () => (
-      toolItems.find((item) => item.path === location.pathname || item.aliases?.includes(location.pathname))
-      || ((location.pathname === '/editors' || location.pathname.startsWith('/editors/'))
-        ? {
-          id: 'editors',
-          path: '/editors',
-          label: t('headerEditors', 'Editors'),
-        }
-        : null)
-      || (location.pathname === '/tools'
-        ? {
-          id: 'tools-portal',
-          path: '/tools',
-          label: t('toolsPortal.eyebrow'),
-        }
-        : toolItems[0])
-    ),
-    [location.pathname, t, toolItems],
+  useEffect(() => {
+    const pathname = location.pathname;
+
+    if (pathname.startsWith('/chat')) {
+      document.title = 'Mega Messenger | Chat';
+      return;
+    }
+
+    if (pathname.startsWith('/register')) {
+      document.title = 'Mega Messenger | Register';
+      return;
+    }
+
+    document.title = 'Mega Messenger | Login';
+  }, [location.pathname]);
+
+  useEffect(() => {
+    writeStorage(SESSION_STORAGE_KEY, session);
+  }, [session]);
+
+  useEffect(() => {
+    writeStorage(MESSAGE_STORAGE_KEY, messagesByChat);
+  }, [messagesByChat]);
+
+  useEffect(() => {
+    writeStorage(USER_CACHE_STORAGE_KEY, users);
+  }, [users]);
+
+  const chats = useMemo(() => {
+    if (!session) {
+      return [];
+    }
+
+    const savedMessages = buildSavedMessagesChat(session);
+    const baseChats = [
+      savedMessages,
+      ...users.map((user) => ({
+        ...user,
+        id: chatIdForUser(user.id),
+        userId: user.id,
+        subtitle: user.subtitle,
+        presenceLabel: formatRelativeStatus(user.status),
+      })),
+    ];
+
+    const withLiveTraffic = Object.values(messagesByChat).flat().reduce(
+      (accumulator, message) => ensureChatFromMessage(accumulator, message),
+      baseChats
+    );
+
+    return withLiveTraffic
+      .map((chat) => {
+        const chatMessages = messagesByChat[chat.id] ?? [];
+
+        return {
+          ...chat,
+          lastMessage: chatMessages.at(-1),
+        };
+      })
+      .sort((left, right) => {
+        const leftTimestamp = left.lastMessage
+          ? new Date(left.lastMessage.createdAt).getTime()
+          : 0;
+        const rightTimestamp = right.lastMessage
+          ? new Date(right.lastMessage.createdAt).getTime()
+          : 0;
+
+        return rightTimestamp - leftTimestamp;
+      });
+  }, [messagesByChat, session, users]);
+
+  const activeChat = useMemo(
+    () => chats.find((chat) => chat.id === activeChatId) ?? chats[0] ?? null,
+    [activeChatId, chats]
+  );
+
+  const activeMessages = useMemo(
+    () => (activeChat ? messagesByChat[activeChat.id] ?? [] : []),
+    [activeChat, messagesByChat]
   );
 
   useEffect(() => {
-    writeStoredJson(LAST_TOOL_KEY, {
-      id: activeToolMeta.id,
-      path: activeToolMeta.path,
-      label: activeToolMeta.label,
-      updatedAt: Date.now(),
-    });
-  }, [activeToolMeta]);
+    if (!session) {
+      setActiveChatId(null);
+      return;
+    }
+
+    if (!activeChatId && chats.length > 0) {
+      setActiveChatId(chats[0].id);
+      return;
+    }
+
+    if (activeChatId && !chats.some((chat) => chat.id === activeChatId) && chats.length > 0) {
+      setActiveChatId(chats[0].id);
+    }
+  }, [activeChatId, chats, session]);
 
   useEffect(() => {
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-      setDeferredInstallPrompt(event);
+    if (!session) {
+      setUsers([]);
+      setUsersError('');
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadUsers = async () => {
+      setUsersLoading(true);
+      setUsersError('');
+
+      try {
+        const payload = await fetchUsers(session.token);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUsers(normalizeUsersPayload(payload, session));
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setUsersError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to load users right now.'
+        );
+        setUsers([]);
+      } finally {
+        if (isMounted) {
+          setUsersLoading(false);
+        }
+      }
     };
 
-    const handleAppInstalled = () => {
-      setDeferredInstallPrompt(null);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
+    void loadUsers();
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
+      isMounted = false;
     };
-  }, []);
+  }, [session]);
 
   useEffect(() => {
-    if (!location.hash || typeof window === 'undefined') {
+    if (!session) {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      setConnectionState('offline');
       return undefined;
     }
 
-    const targetId = decodeURIComponent(location.hash.slice(1));
-    let timeoutId = null;
-    let frameId = 0;
+    const socket = createSocketClient();
+    socketRef.current = socket;
 
-    const scrollToHashTarget = (attempt = 0) => {
-      const target = document.getElementById(targetId);
-      if (target) {
-        target.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        });
-        return;
-      }
-
-      if (attempt >= 10) {
-        return;
-      }
-
-      timeoutId = window.setTimeout(() => {
-        scrollToHashTarget(attempt + 1);
-      }, 80);
+    const handleConnect = () => {
+      setConnectionState('connected');
     };
 
-    frameId = window.requestAnimationFrame(() => {
-      scrollToHashTarget();
-    });
+    const handleDisconnect = () => {
+      setConnectionState('offline');
+    };
+
+    const handleConnectError = () => {
+      setConnectionState('degraded');
+    };
+
+    const handleReceiveMessage = (payload) => {
+      const normalized = normalizeIncomingMessage(payload, session);
+
+      setMessagesByChat((currentState) => ({
+        ...currentState,
+        [normalized.chatId]: mergeMessage(
+          currentState[normalized.chatId] ?? [],
+          normalized
+        ),
+      }));
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('connect_error', handleConnectError);
+    socket.on('receive_message', handleReceiveMessage);
 
     return () => {
-      window.cancelAnimationFrame(frameId);
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('connect_error', handleConnectError);
+      socket.off('receive_message', handleReceiveMessage);
+      socket.disconnect();
+      socketRef.current = null;
     };
-  }, [location.hash, location.pathname]);
+  }, [session]);
 
-  const handleSelectTool = useCallback(async (item) => {
-    if (!item) {
+  const handleLogin = async (credentials) => {
+    setAuthBusy(true);
+    setAuthError('');
+
+    try {
+      const payload = await loginUser(credentials);
+      const nextSession = normalizeAuthSession(payload, credentials.username);
+      setSession(nextSession);
+      navigate('/chat');
+    } catch (error) {
+      setAuthError(
+        error instanceof Error ? error.message : 'Unable to sign in right now.'
+      );
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleRegister = async (credentials) => {
+    setAuthBusy(true);
+    setAuthError('');
+
+    try {
+      const payload = await registerUser(credentials);
+      const nextSession = normalizeAuthSession(payload, credentials.username);
+      setSession(nextSession);
+      navigate('/chat');
+    } catch (error) {
+      setAuthError(
+        error instanceof Error ? error.message : 'Unable to create the account.'
+      );
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleLogout = () => {
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    setSession(null);
+    setMessagesByChat({});
+    setUsers([]);
+    setUsersError('');
+    setConnectionState('offline');
+    navigate('/login');
+  };
+
+  const handleCreateChat = (user) => {
+    const nextChatId = chatIdForUser(user.id);
+
+    setUsers((currentUsers) => {
+      const exists = currentUsers.some((entry) => entry.id === user.id);
+      return exists ? currentUsers : [...currentUsers, user];
+    });
+    setActiveChatId(nextChatId);
+  };
+
+  const handleSendMessage = ({ text, attachments }) => {
+    if (!session || !activeChat || !text.trim()) {
       return;
     }
 
-    if (item.action === 'install-os') {
-      if (!deferredInstallPrompt) {
-        return;
-      }
+    const optimisticMessage = createOptimisticMessage({
+      activeChat,
+      currentUser: session,
+      text,
+      attachments,
+    });
 
-      await deferredInstallPrompt.prompt();
-      try {
-        await deferredInstallPrompt.userChoice;
-      } catch {
-        // Ignore choice resolution issues; the install sheet already handled the UX.
-      }
-      setDeferredInstallPrompt(null);
-      return;
-    }
+    setMessagesByChat((currentState) => ({
+      ...currentState,
+      [activeChat.id]: mergeMessage(
+        currentState[activeChat.id] ?? [],
+        optimisticMessage
+      ),
+    }));
 
-    if (item.action === 'ocr-paste') {
-      navigate('/tools/smart-ocr', {
-        state: {
-          clipboardRequestId: Date.now(),
-        },
-      });
-      return;
-    }
+    socketRef.current?.emit('send_message', {
+      id: optimisticMessage.id,
+      clientMessageId: optimisticMessage.clientMessageId,
+      chatId: activeChat.id,
+      text: optimisticMessage.text,
+      username: session.username,
+      senderId: session.userId,
+      toUserId: activeChat.userId,
+      createdAt: optimisticMessage.createdAt,
+      attachments: optimisticMessage.attachments,
+    });
+  };
 
-    if (!item.path) {
-      return;
-    }
+  return (
+    <div className="app-root">
+      <div className="orb orb-a" />
+      <div className="orb orb-b" />
+      <div className="orb orb-c" />
 
-    navigate(item.path, item.state ? { state: item.state } : undefined);
-  }, [deferredInstallPrompt, navigate]);
-
-  const routeShell = (
-    <AnimatePresence mode="wait">
-      <Suspense fallback={<RouteFallback fullScreen={isImmersiveRoute} />}>
+      <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<HomeDashboard />} />
-          <Route path="/receive" element={<ZenPortal />} />
-          <Route path="/tools" element={<ToolsPortalPage />} />
-          <Route path="/developers" element={<ApiDashboard />} />
-          <Route path="/api-dashboard" element={<ApiDashboard />} />
-          <Route path="/tools/image-optimizer" element={<ImageOptimizer />} />
-          <Route path="/tools/video-compressor" element={<VideoCompressor />} />
-          <Route path="/tools/audio-converter" element={<AudioConverter />} />
-          <Route path="/tools/video-to-gif" element={<VideoToGif />} />
-          <Route path="/tools/smart-ocr" element={<SmartOcr />} />
-          <Route path="/tools/pdf-editor" element={<PdfEditor />} />
-          <Route path="/tools/megagrid" element={<MegaGrid />} />
-          <Route path="/tools/archive-manager" element={<ArchiveManager />} />
-          <Route path="/tools/batch-watermark" element={<BatchWatermark />} />
           <Route
-            path="/tools/ai-invoice-scanner"
-            element={<BusinessWorkflowPage workflowId="invoiceScanner" />}
-          />
-          <Route
-            path="/tools/strict-pdfa"
-            element={<BusinessWorkflowPage workflowId="strictPdfA" />}
-          />
-          <Route
-            path="/tools/redact-sensitive-data"
-            element={<BusinessWorkflowPage workflowId="redactSensitiveData" />}
-          />
-          <Route
-            path="/tools/auto-subtitle-generator"
-            element={<BusinessWorkflowPage workflowId="autoSubtitleGenerator" />}
-          />
-          <Route
-            path="/tools/exif-metadata-stripper"
-            element={<BusinessWorkflowPage workflowId="exifMetadataStripper" />}
-          />
-          <Route
-            path="/tools/smart-brand-watermark"
-            element={<BusinessWorkflowPage workflowId="smartBrandWatermark" />}
-          />
-          <Route path="/legal/privacy" element={<LegalPrivacyPolicyPage />} />
-          <Route path="/legal/terms" element={<LegalTermsOfServicePage />} />
-          <Route path="/legal/law-enforcement" element={<LegalLawEnforcementPage />} />
-          <Route path="/legal/transparency" element={<LegalTransparencyReportPage />} />
-          <Route path="/privacy" element={<Navigate to="/legal/privacy" replace />} />
-          <Route path="/terms" element={<Navigate to="/legal/terms" replace />} />
-          <Route path="/security" element={<SecurityPage />} />
-          <Route path="/cookies" element={<CookiesPage />} />
-          <Route
-            path="/api-overview"
-            element={<Navigate to="/developers" replace />}
-          />
-          <Route
-            path="/pricing"
-            element={<PricingPage />}
-          />
-          <Route
-            path="/blog"
-            element={<BlogIndex />}
-          />
-          <Route
-            path="/blog/:slug"
-            element={<BlogPost />}
-          />
-          <Route
-            path="/editors"
-            element={<StudioLayout />}
-          />
-          <Route
-            path="/editors/photo"
-            element={<StudioLayout />}
-          />
-          <Route
-            path="/meet/:roomId"
-            element={<MegaMeetRoom />}
-          />
-          <Route
-            path="/messenger"
-            element={<Messenger />}
-          />
-          <Route
-            path="/account/billing"
-            element={<AccountBillingPage />}
+            path="/"
+            element={<Navigate to={session ? '/chat' : '/login'} replace />}
           />
           <Route
             path="/login"
-            element={<LoginPage apiBase={apiBase} onNavigate={navigate} />}
+            element={
+              session ? (
+                <Navigate to="/chat" replace />
+              ) : (
+                <MotionDiv {...pageTransition}>
+                  <LoginPage
+                    error={authError}
+                    isSubmitting={authBusy}
+                    onSubmit={handleLogin}
+                  />
+                </MotionDiv>
+              )
+            }
           />
           <Route
             path="/register"
-            element={<RegisterPage apiBase={apiBase} onNavigate={navigate} />}
+            element={
+              session ? (
+                <Navigate to="/chat" replace />
+              ) : (
+                <MotionDiv {...pageTransition}>
+                  <RegisterPage
+                    error={authError}
+                    isSubmitting={authBusy}
+                    onSubmit={handleRegister}
+                  />
+                </MotionDiv>
+              )
+            }
           />
           <Route
-            path="/forgot-password"
-            element={<ForgotPasswordPage apiBase={apiBase} onNavigate={navigate} />}
+            path="/chat"
+            element={
+              session ? (
+                <MotionDiv {...pageTransition}>
+                  <ChatPage
+                    activeChat={activeChat}
+                    chats={chats}
+                    connectionState={connectionState}
+                    currentUser={session}
+                    messages={activeMessages}
+                    onCreateChat={handleCreateChat}
+                    onLogout={handleLogout}
+                    onSelectChat={setActiveChatId}
+                    onSendMessage={handleSendMessage}
+                    users={users}
+                    usersError={usersError}
+                    usersLoading={usersLoading}
+                  />
+                </MotionDiv>
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
           />
           <Route
-            path="/reset-password"
-            element={<ResetPasswordPage apiBase={apiBase} onNavigate={navigate} />}
+            path="*"
+            element={<Navigate to={session ? '/chat' : '/login'} replace />}
           />
-          <Route
-            path="/auth/callback"
-            element={<AuthCallbackPage onNavigate={navigate} />}
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Suspense>
-    </AnimatePresence>
-  );
-
-  return (
-    <>
-      {isImmersiveRoute ? routeShell : <MainLayout>{routeShell}</MainLayout>}
-
-      {isImmersiveRoute ? null : (
-        <CommandPalette
-          open={isPaletteOpen}
-          onOpenChange={setIsPaletteOpen}
-          items={toolItems}
-          activeTool={activeToolMeta.id}
-          installAvailable={Boolean(deferredInstallPrompt)}
-          onSelect={handleSelectTool}
-        />
-      )}
-    </>
+      </AnimatePresence>
+    </div>
   );
 }

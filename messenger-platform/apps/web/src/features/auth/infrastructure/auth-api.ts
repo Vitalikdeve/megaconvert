@@ -41,7 +41,8 @@ const normalizeAuthSession = (
         (nestedUser ? readString(nestedUser, ["userId", "id"]) : undefined),
       token:
         readString(record, ["token", "accessToken", "jwt"]) ??
-        (nestedUser ? readString(nestedUser, ["token"]) : undefined)
+        (nestedUser ? readString(nestedUser, ["token"]) : undefined),
+      deviceId: readString(record, ["deviceId"])
     };
   }
 

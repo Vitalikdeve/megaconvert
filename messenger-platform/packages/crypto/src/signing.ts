@@ -1,6 +1,8 @@
-import { ed25519, x25519 } from "@noble/curves/ed25519.js";
+import sodium from "libsodium-wrappers";
 
 import { base64ToBytes, bytesToBase64, utf8ToBytes } from "./encoding";
+
+await sodium.ready;
 
 export interface IdentityKeyPair {
   publicKey: string;
@@ -18,23 +20,22 @@ export interface SignedEnvelope {
 }
 
 export const createIdentityKeyPair = (): IdentityKeyPair => {
-  const privateKey = ed25519.utils.randomSecretKey();
-  const publicKey = ed25519.getPublicKey(privateKey);
+  const pair = sodium.crypto_sign_keypair();
 
   return {
-    publicKey: bytesToBase64(publicKey),
-    privateKey: bytesToBase64(privateKey)
+    publicKey: bytesToBase64(pair.publicKey),
+    privateKey: bytesToBase64(pair.privateKey)
   };
 };
 
 export const createSigningKeyPair = createIdentityKeyPair;
 
 export const createCurve25519KeyPair = (): Curve25519KeyPair => {
-  const { secretKey, publicKey } = x25519.keygen();
+  const pair = sodium.crypto_box_keypair();
 
   return {
-    publicKey: bytesToBase64(publicKey),
-    privateKey: bytesToBase64(secretKey)
+    publicKey: bytesToBase64(pair.publicKey),
+    privateKey: bytesToBase64(pair.privateKey)
   };
 };
 
@@ -42,7 +43,7 @@ export const deriveCurve25519SharedSecretBytes = (
   privateKeyBase64: string,
   publicKeyBase64: string
 ): Uint8Array =>
-  x25519.getSharedSecret(
+  sodium.crypto_scalarmult(
     base64ToBytes(privateKeyBase64),
     base64ToBytes(publicKeyBase64)
   );
@@ -59,7 +60,7 @@ export const signEnvelope = async (
   payload: string,
   privateKeyBase64: string
 ): Promise<SignedEnvelope> => {
-  const signature = ed25519.sign(
+  const signature = sodium.crypto_sign_detached(
     utf8ToBytes(payload),
     base64ToBytes(privateKeyBase64)
   );
@@ -75,7 +76,7 @@ export const verifyEnvelopeSignature = async (
   signatureBase64: string,
   publicKeyBase64: string
 ): Promise<boolean> =>
-  ed25519.verify(
+  sodium.crypto_sign_verify_detached(
     base64ToBytes(signatureBase64),
     utf8ToBytes(payload),
     base64ToBytes(publicKeyBase64)

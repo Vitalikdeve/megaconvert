@@ -17,6 +17,7 @@ export const messageEnvelopeSchema = z.object({
   sessionId: z.string().min(1),
   ratchetCounter: z.number().int().nonnegative(),
   iv: z.string().min(1).optional(),
+  nonce: z.string().min(1).optional(),
   senderRatchetPublicKey: z.string().min(1).optional(),
   previousChainLength: z.number().int().nonnegative().optional(),
   contentType: z.enum(["text", "file"]).optional()
@@ -27,6 +28,7 @@ export const sendMessageInputSchema = z.object({
   conversationId: z.string().min(1),
   senderUserId: z.string().min(1),
   senderDeviceId: z.string().min(1),
+  recipientUserIds: z.array(z.string().min(1)).max(64).optional(),
   envelope: messageEnvelopeSchema
 });
 

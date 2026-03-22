@@ -20,7 +20,12 @@ export const registerUploadRoutes = (
     multipartUploadService: S3MultipartUploadService;
   }
 ) => {
-  app.post("/v1/uploads/initiate", async (request, reply) => {
+  app.post(
+    "/v1/uploads/initiate",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request, reply) => {
     const body = initiateUploadSchema.parse(request.body);
     const data = await dependencies.multipartUploadService.initiate(body);
     reply.code(201);
@@ -28,9 +33,31 @@ export const registerUploadRoutes = (
     return {
       data
     };
-  });
+    }
+  );
 
-  app.get("/v1/uploads/:uploadId", async (request) => {
+  app.post(
+    "/upload/start",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request, reply) => {
+      const body = initiateUploadSchema.parse(request.body);
+      const data = await dependencies.multipartUploadService.initiate(body);
+      reply.code(201);
+
+      return {
+        data
+      };
+    }
+  );
+
+  app.get(
+    "/v1/uploads/:uploadId",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request) => {
     const params = uploadParamsSchema.parse(request.params);
     const data = await dependencies.multipartUploadService.getStatus(
       params.uploadId
@@ -39,9 +66,15 @@ export const registerUploadRoutes = (
     return {
       data
     };
-  });
+    }
+  );
 
-  app.post("/v1/uploads/:uploadId/parts/sign", async (request) => {
+  app.post(
+    "/v1/uploads/:uploadId/parts/sign",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request) => {
     const params = uploadParamsSchema.parse(request.params);
     const body = signUploadPartsSchema.parse(request.body);
     const data = await dependencies.multipartUploadService.signParts(params.uploadId, body);
@@ -49,9 +82,15 @@ export const registerUploadRoutes = (
     return {
       data
     };
-  });
+    }
+  );
 
-  app.post("/v1/uploads/:uploadId/complete", async (request) => {
+  app.post(
+    "/v1/uploads/:uploadId/complete",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request) => {
     const params = uploadParamsSchema.parse(request.params);
     const body = completeUploadSchema.parse(request.body);
     const data = await dependencies.multipartUploadService.complete(params.uploadId, body);
@@ -59,9 +98,34 @@ export const registerUploadRoutes = (
     return {
       data
     };
-  });
+    }
+  );
 
-  app.post("/v1/uploads/:uploadId/abort", async (request) => {
+  app.post(
+    "/upload/complete",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request) => {
+      const body = completeUploadSchema.parse(request.body);
+      const uploadId = body.uploadId ?? uploadParamsSchema.parse(request.query).uploadId;
+      const data = await dependencies.multipartUploadService.complete(
+        uploadId,
+        body
+      );
+
+      return {
+        data
+      };
+    }
+  );
+
+  app.post(
+    "/v1/uploads/:uploadId/abort",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request) => {
     const params = uploadParamsSchema.parse(request.params);
     const body = abortUploadSchema.parse(request.body);
     const data = await dependencies.multipartUploadService.abort(
@@ -72,9 +136,15 @@ export const registerUploadRoutes = (
     return {
       data
     };
-  });
+    }
+  );
 
-  app.get("/v1/uploads/download-link", async (request) => {
+  app.get(
+    "/v1/uploads/download-link",
+    {
+      preHandler: [app.authenticate]
+    },
+    async (request) => {
     const query = downloadLinkQuerySchema.parse(request.query);
     const data = await dependencies.multipartUploadService.createDownloadLink(
       query.objectKey
@@ -83,5 +153,6 @@ export const registerUploadRoutes = (
     return {
       data
     };
-  });
+    }
+  );
 };

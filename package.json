@@ -1,39 +1,14 @@
 {
-  "name": "superconvert",
+  "name": "mega-messenger",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "prerender": "node scripts/prerender.js",
-    "legal:build": "node scripts/generate_legal_html.js",
-    "build": "npm run prerender && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "test:e2e": "playwright test"
-  },
-  "dependencies": {
-    "firebase": "^12.9.0",
-    "framer-motion": "^12.35.2",
-    "jspdf": "^4.1.0",
-    "lucide-react": "^0.563.0",
-    "pdfjs-dist": "^5.4.624",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@playwright/test": "^1.48.2",
-    "@types/react": "^19.2.5",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "autoprefixer": "^10.4.24",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17",
-    "vite": "^7.2.4"
+    "postinstall": "npm --prefix frontend install",
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "lint": "npm --prefix frontend run lint",
+    "preview": "npm --prefix frontend run preview",
+    "test:e2e": "npm --prefix frontend run test:e2e"
   }
 }

@@ -1,8 +1,0 @@
-{
-  "error.network": "Network error",
-  "error.timeout": "Request timeout",
-  "error.unsupported_format": "Unsupported format",
-  "error.file_too_large": "File too large",
-  "error.conversion_failed": "Conversion failed"
-}
-

@@ -4,6 +4,8 @@ import {
   callIceCandidateSchema,
   callOfferSchema,
   conversationJoinSchema,
+  jwtClaimsSchema,
+  legacyCallEventNames,
   messageEditCommandSchema,
   messageCreatedEventSchema,
   messageDeliveryStatusEventSchema,
@@ -21,8 +23,13 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import type { WebSocket } from "ws";
 
 import type { AppEnv } from "../../../config/env";
+import type { PushNotificationService } from "../../notifications/application/push-notification.service";
+import type { DistributedRateLimitService } from "../../security/application/distributed-rate-limit.service";
+import { CallSignalingService } from "../../calls/application/call-signaling.service";
 import type { EditMessageUseCase, ReactToMessageUseCase } from "../../messaging/application/mutate-message.use-case";
 import type { SendMessageUseCase } from "../../messaging/application/send-message.use-case";
+import type { RealtimeFanoutService } from "../application/realtime-fanout.service";
+import type { UserPresenceService } from "../application/user-presence.service";
 
 export const legacyRealtimeEventNames = {
   sendMessage: "send_message",
@@ -36,12 +43,12 @@ export const registerRealtimeGateway = async (
     sendMessageUseCase: SendMessageUseCase;
     editMessageUseCase: EditMessageUseCase;
     reactToMessageUseCase: ReactToMessageUseCase;
+    rateLimitService: DistributedRateLimitService;
+    realtimeFanoutService: RealtimeFanoutService;
+    userPresenceService: UserPresenceService;
+    pushNotificationService: PushNotificationService;
   }
 ) => {
-  const emitToPeerRoom = (targetUserId: string, eventName: string, payload: unknown) => {
-    io.to(`user:${targetUserId}`).emit(eventName, payload);
-  };
-
   const io = new Server(app.server, {
     path: "/socket.io",
     cors: {
@@ -59,7 +66,73 @@ export const registerRealtimeGateway = async (
     io.adapter(createAdapter(pubClient, subClient));
   }
 
+  const emitFanoutEnvelope = (
+    eventName: string,
+    room: string,
+    payload: unknown
+  ) => {
+    if (dependencies.realtimeFanoutService.distributed) {
+      return dependencies.realtimeFanoutService.publish({
+        room,
+        eventName,
+        payload
+      });
+    }
+
+    dependencies.realtimeFanoutService.emitLocal(io, {
+      room,
+      eventName,
+      payload
+    });
+
+    return Promise.resolve();
+  };
+
+  await dependencies.realtimeFanoutService.subscribe((envelope) => {
+    dependencies.realtimeFanoutService.emitLocal(io, envelope);
+  });
+
+  io.use(async (socket, next) => {
+    const rawToken =
+      (typeof socket.handshake.auth.token === "string"
+        ? socket.handshake.auth.token
+        : undefined) ??
+      (typeof socket.handshake.headers.authorization === "string"
+        ? socket.handshake.headers.authorization
+        : undefined);
+
+    if (!rawToken) {
+      next(new Error("authentication_required"));
+      return;
+    }
+
+    try {
+      const token = rawToken.replace(/^Bearer\s+/i, "");
+      const claims = jwtClaimsSchema.parse(await app.jwt.verify(token));
+      socket.data.auth = claims;
+      socket.data.userId = claims.userId;
+      socket.data.deviceId = claims.deviceId;
+      next();
+    } catch (error) {
+      next(
+        new Error(
+          error instanceof Error ? error.message : "authentication_failed"
+        )
+      );
+    }
+  });
+
+  const callSignalingService = new CallSignalingService(
+    io,
+    dependencies.userPresenceService,
+    dependencies.pushNotificationService
+  );
+
   io.on("connection", (socket) => {
+    const auth = socket.data.auth as { userId: string; deviceId: string };
+    void dependencies.userPresenceService.markConnected(auth.userId, socket.id);
+    socket.join(`user:${auth.userId}`);
+
     socket.on(legacyRealtimeEventNames.sendMessage, (data: unknown) => {
       io.emit(legacyRealtimeEventNames.receiveMessage, data);
     });
@@ -68,8 +141,8 @@ export const registerRealtimeGateway = async (
       try {
         const parsed = conversationJoinSchema.parse(payload);
         socket.join(parsed.conversationId);
-        socket.join(`user:${parsed.userId}`);
-        socket.data.userId = parsed.userId;
+        socket.join(`user:${auth.userId}`);
+        socket.data.userId = auth.userId;
         acknowledge?.({ ok: true });
       } catch (error) {
         acknowledge?.({
@@ -81,17 +154,42 @@ export const registerRealtimeGateway = async (
 
     socket.on(realtimeEventNames.typingStart, (payload: unknown) => {
       const parsed = typingEventSchema.parse(payload);
-      socket.to(parsed.conversationId).emit(realtimeEventNames.typingStart, parsed);
+      socket.to(parsed.conversationId).emit(realtimeEventNames.typingStart, {
+        ...parsed,
+        userId: auth.userId,
+        deviceId: auth.deviceId
+      });
     });
 
     socket.on(realtimeEventNames.typingStop, (payload: unknown) => {
       const parsed = typingEventSchema.parse(payload);
-      socket.to(parsed.conversationId).emit(realtimeEventNames.typingStop, parsed);
+      socket.to(parsed.conversationId).emit(realtimeEventNames.typingStop, {
+        ...parsed,
+        userId: auth.userId,
+        deviceId: auth.deviceId
+      });
     });
 
     socket.on(realtimeEventNames.messageSend, async (payload: unknown, acknowledge?: (value: unknown) => void) => {
       try {
         const parsed = messageSendCommandSchema.parse(payload);
+        const rateLimit = await dependencies.rateLimitService.check(
+          `messages:${auth.userId}`,
+          {
+            limit: dependencies.env.MESSAGE_RATE_LIMIT_MAX,
+            windowSeconds: dependencies.env.MESSAGE_RATE_LIMIT_WINDOW_SECONDS
+          }
+        );
+
+        if (!rateLimit.allowed) {
+          acknowledge?.({
+            ok: false,
+            error: "message_rate_limited",
+            resetAt: rateLimit.resetAt
+          });
+          return;
+        }
+
         const stored = await dependencies.sendMessageUseCase.execute(parsed);
         const createdEvent = messageCreatedEventSchema.parse({
           message: stored
@@ -104,8 +202,24 @@ export const registerRealtimeGateway = async (
           occurredAt: stored.deliveryStatusUpdatedAt
         });
 
-        io.to(parsed.conversationId).emit(realtimeEventNames.messageCreated, createdEvent);
+        await emitFanoutEnvelope(
+          realtimeEventNames.messageCreated,
+          parsed.conversationId,
+          createdEvent
+        );
         socket.emit(realtimeEventNames.messageDeliveryStatus, deliveryEvent);
+        await dependencies.pushNotificationService.notifyUsers(
+          parsed.recipientUserIds ?? [],
+          {
+            title: "New message",
+            body: `${parsed.senderUserId} sent an encrypted message.`,
+            tag: parsed.conversationId,
+            data: {
+              conversationId: parsed.conversationId,
+              messageId: stored.id
+            }
+          }
+        );
         acknowledge?.({ ok: true, data: stored });
       } catch (error) {
         acknowledge?.({
@@ -132,7 +246,11 @@ export const registerRealtimeGateway = async (
           message: updated
         });
 
-        io.to(updated.conversationId).emit(realtimeEventNames.messageEdited, event);
+        await emitFanoutEnvelope(
+          realtimeEventNames.messageEdited,
+          updated.conversationId,
+          event
+        );
         acknowledge?.({
           ok: true,
           data: updated
@@ -164,7 +282,11 @@ export const registerRealtimeGateway = async (
             message: updated
           });
 
-          io.to(updated.conversationId).emit(realtimeEventNames.messageReactionUpdated, event);
+          await emitFanoutEnvelope(
+            realtimeEventNames.messageReactionUpdated,
+            updated.conversationId,
+            event
+          );
           acknowledge?.({
             ok: true,
             data: updated
@@ -178,24 +300,43 @@ export const registerRealtimeGateway = async (
       }
     );
 
-    socket.on(realtimeEventNames.callOffer, (payload: unknown) => {
+    socket.on(realtimeEventNames.callOffer, async (payload: unknown) => {
       const parsed = callOfferSchema.parse(payload);
-      emitToPeerRoom(parsed.toUserId, realtimeEventNames.callOffer, parsed);
+      await callSignalingService.forwardOffer(parsed);
+    });
+
+    socket.on(legacyCallEventNames.callOffer, async (payload: unknown) => {
+      const parsed = callOfferSchema.parse(payload);
+      await callSignalingService.forwardOffer(parsed);
     });
 
     socket.on(realtimeEventNames.callAnswer, (payload: unknown) => {
       const parsed = callAnswerSchema.parse(payload);
-      emitToPeerRoom(parsed.toUserId, realtimeEventNames.callAnswer, parsed);
+      callSignalingService.forwardAnswer(parsed);
+    });
+
+    socket.on(legacyCallEventNames.callAnswer, (payload: unknown) => {
+      const parsed = callAnswerSchema.parse(payload);
+      callSignalingService.forwardAnswer(parsed);
     });
 
     socket.on(realtimeEventNames.callIceCandidate, (payload: unknown) => {
       const parsed = callIceCandidateSchema.parse(payload);
-      emitToPeerRoom(parsed.toUserId, realtimeEventNames.callIceCandidate, parsed);
+      callSignalingService.forwardIceCandidate(parsed);
+    });
+
+    socket.on(legacyCallEventNames.callIceCandidate, (payload: unknown) => {
+      const parsed = callIceCandidateSchema.parse(payload);
+      callSignalingService.forwardIceCandidate(parsed);
     });
 
     socket.on(realtimeEventNames.callEnd, (payload: unknown) => {
       const parsed = callEndSchema.parse(payload);
-      emitToPeerRoom(parsed.toUserId, realtimeEventNames.callEnd, parsed);
+      callSignalingService.forwardEnd(parsed);
+    });
+
+    socket.on("disconnect", () => {
+      void dependencies.userPresenceService.markDisconnected(socket.id);
     });
   });
 

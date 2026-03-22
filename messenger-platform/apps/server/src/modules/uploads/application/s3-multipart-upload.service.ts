@@ -37,6 +37,7 @@ interface UploadSessionRecord {
   uploadId: string;
   objectKey: string;
   conversationId: string;
+  messageId?: string;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
@@ -145,6 +146,7 @@ export class S3MultipartUploadService {
       uploadId: session.uploadId,
       objectKey: session.objectKey,
       conversationId: session.conversationId,
+      messageId: session.messageId,
       fileName: session.fileName,
       mimeType: session.mimeType,
       sizeBytes: session.sizeBytes,
@@ -165,8 +167,19 @@ export class S3MultipartUploadService {
       throw new Error("File exceeds the 10 GB multipart upload limit.");
     }
 
-    const safeName = sanitizeFileName(input.fileName);
-    const objectKey = `${input.conversationId}/${Date.now()}-${randomUUID()}-${safeName}`;
+    const conversationId = input.chatId ?? input.conversationId;
+
+    if (!conversationId) {
+      throw new Error("conversationId or chatId is required.");
+    }
+
+    const safeMessageId = sanitizeFileName(
+      input.messageId ?? `pending-${Date.now()}`
+    );
+    const safeFileId = sanitizeFileName(
+      input.encryption.fileId || randomUUID()
+    );
+    const objectKey = `${conversationId}/${safeMessageId}/${safeFileId}`;
     const chunkSizeBytes = input.chunkSizeBytes ?? DEFAULT_PART_SIZE_BYTES;
 
     const response = await this.client.send(
@@ -176,7 +189,8 @@ export class S3MultipartUploadService {
         ContentType: "application/octet-stream",
         ACL: "private" satisfies ObjectCannedACL,
         Metadata: {
-          conversationId: input.conversationId,
+          conversationId,
+          messageId: input.messageId ?? "",
           originalFileName: input.fileName,
           originalMimeType: input.mimeType,
           fileId: input.encryption.fileId,
@@ -193,7 +207,8 @@ export class S3MultipartUploadService {
     const session: UploadSessionRecord = {
       uploadId: response.UploadId,
       objectKey,
-      conversationId: input.conversationId,
+      conversationId,
+      messageId: input.messageId,
       fileName: input.fileName,
       mimeType: input.mimeType,
       sizeBytes: input.sizeBytes,

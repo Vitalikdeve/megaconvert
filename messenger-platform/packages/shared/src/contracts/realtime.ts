@@ -112,3 +112,9 @@ export const realtimeEventNames = {
   callIceCandidate: "call:ice-candidate",
   callEnd: "call:end"
 } as const;
+
+export const legacyCallEventNames = {
+  callOffer: "call_offer",
+  callAnswer: "call_answer",
+  callIceCandidate: "ice_candidate"
+} as const;

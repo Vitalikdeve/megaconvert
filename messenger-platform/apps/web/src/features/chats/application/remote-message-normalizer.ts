@@ -1,3 +1,5 @@
+import type { StoredMessage } from "@messenger/shared";
+
 import type { RealtimeMessage } from "../domain/realtime-message";
 
 const formatTimestamp = (iso: string) =>
@@ -165,3 +167,27 @@ export const mergeRealtimeMessage = (
 
   return merged.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 };
+
+export const fromStoredMessage = (options: {
+  message: StoredMessage;
+  currentUserId: string;
+  body: string;
+}): RealtimeMessage => ({
+  id: options.message.id,
+  clientMessageId: options.message.clientMessageId,
+  conversationId: options.message.conversationId,
+  senderUserId: options.message.senderUserId,
+  senderDeviceId: options.message.senderDeviceId,
+  author: options.message.senderUserId,
+  role:
+    options.message.senderUserId === options.currentUserId
+      ? "outgoing"
+      : "incoming",
+  body: options.body,
+  createdAt: options.message.createdAt,
+  timestamp: formatTimestamp(options.message.createdAt),
+  reactions: options.message.reactions.map((reaction) => reaction.emoji),
+  reactionDetails: options.message.reactions,
+  deliveryStatus: options.message.deliveryStatus,
+  edited: Boolean(options.message.editedAt)
+});

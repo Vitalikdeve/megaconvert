@@ -47,10 +47,14 @@ const statusLabel: Record<UploadTransferItem["status"], string> = {
 
 export interface EncryptedUploadPanelProps {
   conversationId: string;
+  authToken?: string;
+  deviceId?: string;
 }
 
 export const EncryptedUploadPanel = ({
-  conversationId
+  conversationId,
+  authToken,
+  deviceId
 }: EncryptedUploadPanelProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -61,7 +65,9 @@ export const EncryptedUploadPanel = ({
     cancelUpload,
     refreshDownloadLink
   } = useEncryptedMultipartUpload({
-    conversationId
+    conversationId,
+    authToken,
+    deviceId
   });
 
   return (

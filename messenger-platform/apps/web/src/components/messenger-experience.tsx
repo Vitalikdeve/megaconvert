@@ -119,7 +119,8 @@ export const MessengerExperience = () => {
     logout
   } = useAuthSession();
 
-  const currentUserId = session?.username ?? "you";
+  const currentUserId = session?.userId ?? session?.username ?? "you";
+  const currentDeviceId = session?.deviceId ?? "web-1";
   const callPeerUserId = "nina";
   const scrollViewportRef = useRef<HTMLDivElement | null>(null);
   const initialScrollCompleteRef = useRef(false);
@@ -139,8 +140,9 @@ export const MessengerExperience = () => {
   } = useRealtimeMessenger({
     conversationId: "vision-labs",
     currentUserId,
-    currentDeviceId: "web-1",
-    authToken: session?.token
+    currentDeviceId,
+    authToken: session?.token,
+    peerUserId: session?.userId ?? currentUserId
   });
 
   const {
@@ -165,7 +167,8 @@ export const MessengerExperience = () => {
     toggleScreenShare
   } = useWebRtcCall({
     conversationId: "vision-labs",
-    currentUserId
+    currentUserId,
+    authToken: session?.token
   });
 
   const activeConversation = chatListItems.find((item) => item.active) ?? chatListItems[0];
@@ -808,7 +811,11 @@ export const MessengerExperience = () => {
         title="Encrypted file vault"
         description="Chunked, resumable, parallel uploads stay one click away from the composer."
       >
-        <EncryptedUploadPanel conversationId="vision-labs" />
+        <EncryptedUploadPanel
+          conversationId="vision-labs"
+          authToken={session?.token}
+          deviceId={currentDeviceId}
+        />
       </GlassModal>
 
       <GlassModal

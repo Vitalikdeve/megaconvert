@@ -1,20 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { Socket } from "socket.io-client";
-
-import type { RealtimeMessage } from "./domain/realtime-message";
 import {
+  messageCreatedEventSchema,
+  messageDeliveryStatusEventSchema,
+  messageEditedEventSchema,
+  messageReactionUpdatedEventSchema,
+  realtimeEventNames,
+  typingEventSchema,
+  type StoredMessage
+} from "@messenger/shared";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  fromStoredMessage,
   mergeRealtimeMessage,
-  normalizeRemoteMessage,
   toOptimisticMessage
 } from "./application/remote-message-normalizer";
-import type { RemoteSocketMessagePayload } from "./domain/remote-chat.types";
 import {
-  createMessengerSocket,
-  emitRemoteMessage
-} from "./infrastructure/realtime-socket";
-import { sendRemoteMessage } from "./infrastructure/messages-api";
+  createConversationE2EEClient,
+  decodeLegacyEnvelope
+} from "./e2ee-client";
+import type { RealtimeMessage } from "./domain/realtime-message";
+import { listConversationMessages, sendEncryptedMessage } from "./infrastructure/messages-api";
+import { createMessengerSocket, type MessengerSocket } from "./infrastructure/realtime-socket";
 import { messages as fallbackMessages } from "./mock-data";
 
 const buildFallbackMessages = (
@@ -60,41 +68,127 @@ const buildFallbackMessages = (
     };
   });
 
+const resolveMessageBody = async (
+  message: StoredMessage,
+  currentUserId: string,
+  e2eeClient: ReturnType<typeof createConversationE2EEClient>
+) => {
+  if (message.envelope.version === "legacy-base64") {
+    return decodeLegacyEnvelope(message.envelope.ciphertext);
+  }
+
+  const cached = await e2eeClient.getCachedPlaintext(message);
+
+  if (cached) {
+    return cached;
+  }
+
+  return message.senderUserId === currentUserId
+    ? "Encrypted message"
+    : "Encrypted message";
+};
+
 export interface UseRealtimeMessengerOptions {
   conversationId: string;
   currentUserId: string;
   currentDeviceId: string;
   authToken?: string;
+  peerUserId?: string;
 }
 
 export const useRealtimeMessenger = ({
   conversationId,
   currentUserId,
   currentDeviceId,
-  authToken
+  authToken,
+  peerUserId
 }: UseRealtimeMessengerOptions) => {
   const [connectionState, setConnectionState] = useState<
     "connecting" | "online" | "offline"
-  >("connecting");
+  >(authToken ? "connecting" : "offline");
   const [messages, setMessages] = useState<RealtimeMessage[]>(() =>
     buildFallbackMessages(conversationId, currentUserId)
   );
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [typingLabel, setTypingLabel] = useState<string | null>(null);
 
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<MessengerSocket | null>(null);
+  const typingStopTimeoutRef = useRef<number | null>(null);
+  const isTypingRef = useRef(false);
+  const e2eeClient = useMemo(
+    () =>
+      createConversationE2EEClient({
+        conversationId,
+        currentUserId,
+        currentDeviceId
+      }),
+    [conversationId, currentDeviceId, currentUserId]
+  );
 
   useEffect(() => {
-    setMessages(buildFallbackMessages(conversationId, currentUserId));
-  }, [conversationId, currentUserId]);
+    if (!authToken) {
+      setMessages(buildFallbackMessages(conversationId, currentUserId));
+      setConnectionState("offline");
+      return;
+    }
+
+    let cancelled = false;
+
+    const bootstrapHistory = async () => {
+      try {
+        const history = await listConversationMessages({
+          conversationId,
+          token: authToken,
+          deviceId: currentDeviceId
+        });
+
+        const nextMessages = await Promise.all(
+          history.map(async (message) =>
+            fromStoredMessage({
+              message,
+              currentUserId,
+              body: await resolveMessageBody(message, currentUserId, e2eeClient)
+            })
+          )
+        );
+
+        if (!cancelled) {
+          setMessages(nextMessages);
+        }
+      } catch (historyError) {
+        if (!cancelled) {
+          setError(
+            historyError instanceof Error
+              ? historyError.message
+              : "Failed to load encrypted history."
+          );
+        }
+      }
+    };
+
+    void bootstrapHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, conversationId, currentDeviceId, currentUserId, e2eeClient]);
 
   useEffect(() => {
-    const socket = createMessengerSocket();
+    if (!authToken) {
+      return;
+    }
+
+    const socket = createMessengerSocket(authToken);
     socketRef.current = socket;
 
     socket.on("connect", () => {
       setConnectionState("online");
       setError(null);
+      socket.emit(realtimeEventNames.joinConversation, {
+        conversationId,
+        userId: currentUserId
+      });
     });
 
     socket.on("disconnect", () => {
@@ -106,30 +200,161 @@ export const useRealtimeMessenger = ({
       setError(socketError.message);
     });
 
-    socket.on("receive_message", (payload: unknown) => {
-      const normalized = normalizeRemoteMessage({
-        payload,
+    socket.on(realtimeEventNames.messageCreated, async (payload: unknown) => {
+      const event = messageCreatedEventSchema.parse(payload);
+      const body = await resolveMessageBody(
+        event.message,
         currentUserId,
-        fallbackChatId: conversationId
-      });
+        e2eeClient
+      );
 
-      if (!normalized || normalized.conversationId !== conversationId) {
+      setMessages((current) =>
+        mergeRealtimeMessage(
+          current,
+          fromStoredMessage({
+            message: event.message,
+            currentUserId,
+            body
+          })
+        )
+      );
+    });
+
+    socket.on(
+      realtimeEventNames.messageDeliveryStatus,
+      (payload: unknown) => {
+        const event = messageDeliveryStatusEventSchema.parse(payload);
+
+        setMessages((current) =>
+          current.map((message) =>
+            message.clientMessageId === event.clientMessageId ||
+            message.id === event.clientMessageId
+              ? {
+                  ...message,
+                  id: event.messageId,
+                  deliveryStatus: event.status
+                }
+              : message
+          )
+        );
+      }
+    );
+
+    socket.on(realtimeEventNames.messageEdited, async (payload: unknown) => {
+      const event = messageEditedEventSchema.parse(payload);
+      const body = await resolveMessageBody(
+        event.message,
+        currentUserId,
+        e2eeClient
+      );
+
+      setMessages((current) =>
+        mergeRealtimeMessage(
+          current,
+          fromStoredMessage({
+            message: event.message,
+            currentUserId,
+            body
+          })
+        )
+      );
+    });
+
+    socket.on(
+      realtimeEventNames.messageReactionUpdated,
+      async (payload: unknown) => {
+        const event = messageReactionUpdatedEventSchema.parse(payload);
+        const body = await resolveMessageBody(
+          event.message,
+          currentUserId,
+          e2eeClient
+        );
+
+        setMessages((current) =>
+          mergeRealtimeMessage(
+            current,
+            fromStoredMessage({
+              message: event.message,
+              currentUserId,
+              body
+            })
+          )
+        );
+      }
+    );
+
+    socket.on(realtimeEventNames.typingStart, (payload: unknown) => {
+      const event = typingEventSchema.parse(payload);
+
+      if (event.userId === currentUserId) {
         return;
       }
 
-      setMessages((current) => mergeRealtimeMessage(current, normalized));
+      setTypingLabel(`${event.userId} is typing...`);
+    });
+
+    socket.on(realtimeEventNames.typingStop, (payload: unknown) => {
+      const event = typingEventSchema.parse(payload);
+
+      if (event.userId === currentUserId) {
+        return;
+      }
+
+      setTypingLabel(null);
     });
 
     return () => {
       socket.close();
       socketRef.current = null;
     };
-  }, [conversationId, currentUserId]);
+  }, [authToken, conversationId, currentUserId, e2eeClient]);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+
+    if (!socket || !authToken) {
+      return;
+    }
+
+    if (draft.trim().length > 0 && !isTypingRef.current) {
+      isTypingRef.current = true;
+      socket.emit(realtimeEventNames.typingStart, {
+        conversationId,
+        userId: currentUserId,
+        deviceId: currentDeviceId,
+        startedAt: new Date().toISOString()
+      });
+    }
+
+    if (typingStopTimeoutRef.current) {
+      window.clearTimeout(typingStopTimeoutRef.current);
+    }
+
+    typingStopTimeoutRef.current = window.setTimeout(() => {
+      if (!isTypingRef.current) {
+        return;
+      }
+
+      socket.emit(realtimeEventNames.typingStop, {
+        conversationId,
+        userId: currentUserId,
+        deviceId: currentDeviceId,
+        startedAt: new Date().toISOString()
+      });
+      isTypingRef.current = false;
+    }, 1200);
+
+    return () => {
+      if (typingStopTimeoutRef.current) {
+        window.clearTimeout(typingStopTimeoutRef.current);
+      }
+    };
+  }, [authToken, conversationId, currentDeviceId, currentUserId, draft]);
 
   const sendMessage = async () => {
     const trimmed = draft.trim();
 
-    if (trimmed.length === 0) {
+    if (trimmed.length === 0 || !authToken) {
       return;
     }
 
@@ -143,50 +368,76 @@ export const useRealtimeMessenger = ({
       body: trimmed,
       createdAt: now
     });
+    const envelope = await e2eeClient.encryptText(trimmed, {
+      conversationId,
+      senderUserId: currentUserId,
+      senderDeviceId: currentDeviceId,
+      cacheKeys: [clientMessageId]
+    });
 
     setMessages((current) => mergeRealtimeMessage(current, optimisticMessage));
     setDraft("");
     setError(null);
 
-    const socketPayload: RemoteSocketMessagePayload = {
-      chatId: conversationId,
-      text: trimmed,
-      username: currentUserId,
+    const payload = {
       clientMessageId,
-      createdAt: now
+      conversationId,
+      senderUserId: currentUserId,
+      senderDeviceId: currentDeviceId,
+      recipientUserIds: [peerUserId ?? currentUserId],
+      envelope
     };
 
-    if (socketRef.current) {
-      emitRemoteMessage(socketRef.current, socketPayload);
+    const socket = socketRef.current;
+
+    if (socket?.connected) {
+      socket.emit(
+        realtimeEventNames.messageSend,
+        payload,
+        async (result: { ok: boolean; data?: StoredMessage; error?: string }) => {
+          if (!result.ok) {
+            setMessages((current) =>
+              current.map((message) =>
+                message.clientMessageId === clientMessageId
+                  ? {
+                      ...message,
+                      deliveryStatus: "failed"
+                    }
+                  : message
+              )
+            );
+            setError(result.error ?? "Failed to send encrypted message.");
+            return;
+          }
+
+          if (result.data) {
+            await e2eeClient.rememberPlaintext(
+              [clientMessageId, result.data.id],
+              trimmed
+            );
+          }
+        }
+      );
+
+      return;
     }
 
     try {
-      const response = await sendRemoteMessage({
-        chatId: conversationId,
-        text: trimmed,
+      const stored = await sendEncryptedMessage({
+        ...payload,
         token: authToken
       });
-      const normalized =
-        normalizeRemoteMessage({
-          payload: response,
-          currentUserId,
-          fallbackChatId: conversationId
-        }) ??
-        normalizeRemoteMessage({
-          payload: socketPayload,
-          currentUserId,
-          fallbackChatId: conversationId
-        });
-
-      if (normalized) {
-        setMessages((current) =>
-          mergeRealtimeMessage(current, {
-            ...normalized,
-            clientMessageId,
-            deliveryStatus: "sent"
+      await e2eeClient.rememberPlaintext([clientMessageId, stored.id], trimmed);
+      setMessages((current) =>
+        mergeRealtimeMessage(
+          current,
+          fromStoredMessage({
+            message: stored,
+            currentUserId,
+            body: trimmed
           })
-        );
-      }
+        )
+      );
     } catch (sendError) {
       setMessages((current) =>
         current.map((message) =>
@@ -201,12 +452,14 @@ export const useRealtimeMessenger = ({
       setError(
         sendError instanceof Error
           ? sendError.message
-          : "Failed to send message."
+          : "Failed to send encrypted message."
       );
     }
   };
 
   const reactToMessage = (messageId: string, emoji: string) => {
+    const socket = socketRef.current;
+
     setMessages((current) =>
       current.map((message) => {
         if (
@@ -235,14 +488,33 @@ export const useRealtimeMessenger = ({
         };
       })
     );
+
+    if (!socket?.connected) {
+      return;
+    }
+
+    socket.emit(realtimeEventNames.messageReaction, {
+      conversationId,
+      messageId,
+      userId: currentUserId,
+      emoji
+    });
   };
 
   const editMessage = async (messageId: string, nextBody: string) => {
     const trimmed = nextBody.trim();
+    const socket = socketRef.current;
 
-    if (trimmed.length === 0) {
+    if (trimmed.length === 0 || !socket?.connected) {
       return;
     }
+
+    const envelope = await e2eeClient.encryptText(trimmed, {
+      conversationId,
+      senderUserId: currentUserId,
+      senderDeviceId: currentDeviceId,
+      cacheKeys: [messageId]
+    });
 
     setMessages((current) =>
       current.map((message) =>
@@ -255,6 +527,12 @@ export const useRealtimeMessenger = ({
           : message
       )
     );
+
+    socket.emit(realtimeEventNames.messageEdit, {
+      messageId,
+      editorUserId: currentUserId,
+      envelope
+    });
   };
 
   return {
@@ -266,6 +544,6 @@ export const useRealtimeMessenger = ({
     sendMessage,
     reactToMessage,
     editMessage,
-    typingLabel: null
+    typingLabel
   };
 };

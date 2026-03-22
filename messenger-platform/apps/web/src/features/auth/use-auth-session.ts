@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { ensureRegisteredDeviceBundle } from "../encryption/application/device-bundle.service";
 import {
   clearAuthSession,
   persistAuthSession,
@@ -28,6 +29,7 @@ export const useAuthSession = () => {
 
     try {
       const nextSession = await action(credentials);
+      await ensureRegisteredDeviceBundle(nextSession);
       persistAuthSession(nextSession);
       setSession(nextSession);
       return nextSession;
