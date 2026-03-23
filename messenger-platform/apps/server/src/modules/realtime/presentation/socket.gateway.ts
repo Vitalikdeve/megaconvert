@@ -33,7 +33,9 @@ import type { UserPresenceService } from "../application/user-presence.service";
 
 export const legacyRealtimeEventNames = {
   sendMessage: "send_message",
-  receiveMessage: "receive_message"
+  receiveMessage: "receive_message",
+  typing: "typing",
+  userTyping: "user_typing"
 } as const;
 
 export const registerRealtimeGateway = async (
@@ -135,6 +137,10 @@ export const registerRealtimeGateway = async (
 
     socket.on(legacyRealtimeEventNames.sendMessage, (data: unknown) => {
       io.emit(legacyRealtimeEventNames.receiveMessage, data);
+    });
+
+    socket.on(legacyRealtimeEventNames.typing, (data: unknown) => {
+      socket.broadcast.emit(legacyRealtimeEventNames.userTyping, data);
     });
 
     socket.on(realtimeEventNames.joinConversation, (payload: unknown, acknowledge?: (value: unknown) => void) => {
