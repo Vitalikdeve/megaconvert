@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 import ChatPage from './app/chat/index.jsx';
@@ -20,6 +20,8 @@ const MotionDiv = motion.div;
 const SESSION_STORAGE_KEY = 'messenger.session';
 const MESSAGE_STORAGE_KEY = 'messenger.messages';
 const USER_CACHE_STORAGE_KEY = 'messenger.users';
+const TYPING_INDICATOR_TIMEOUT = 2000;
+const TYPING_EMIT_THROTTLE = 1200;
 
 const pageTransition = {
   initial: { opacity: 0, y: 18, filter: 'blur(18px)' },
@@ -376,10 +378,28 @@ const createOptimisticMessage = ({ activeChat, currentUser, text, attachments })
   })),
 });
 
+const getPageTitle = (pathname) => {
+  if (pathname.startsWith('/chat')) {
+    return 'Mega Messenger | Chat';
+  }
+
+  if (pathname.startsWith('/meet')) {
+    return 'Mega Messenger | Meeting';
+  }
+
+  if (pathname.startsWith('/register')) {
+    return 'Mega Messenger | Register';
+  }
+
+  return 'Mega Messenger | Login';
+};
+
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const socketRef = useRef(null);
+  const typingTimeoutsRef = useRef(new Map());
+  const typingEmitRef = useRef(new Map());
   const [session, setSession] = useState(() => readStorage(SESSION_STORAGE_KEY, null));
   const [messagesByChat, setMessagesByChat] = useState(() =>
     readStorage(MESSAGE_STORAGE_KEY, {})
@@ -391,27 +411,71 @@ export default function App() {
   const [usersError, setUsersError] = useState('');
   const [connectionState, setConnectionState] = useState('offline');
   const [activeChatId, setActiveChatId] = useState(null);
+  const [typingByChat, setTypingByChat] = useState({});
+  const [inactiveMessageCount, setInactiveMessageCount] = useState(0);
+
+  const basePageTitle = useMemo(() => getPageTitle(location.pathname), [location.pathname]);
 
   useEffect(() => {
-    const pathname = location.pathname;
-
-    if (pathname.startsWith('/chat')) {
-      document.title = 'Mega Messenger | Chat';
+    if (typeof document === 'undefined') {
       return;
     }
 
-    if (pathname.startsWith('/meet')) {
-      document.title = 'Mega Messenger | Meeting';
+    document.title =
+      inactiveMessageCount > 0
+        ? `(${inactiveMessageCount}) New ${inactiveMessageCount === 1 ? 'message' : 'messages'}`
+        : basePageTitle;
+  }, [basePageTitle, inactiveMessageCount]);
+
+  const clearTypingIndicator = useCallback((chatId) => {
+    const normalizedChatId = String(chatId || '').trim();
+    if (!normalizedChatId) {
       return;
     }
 
-    if (pathname.startsWith('/register')) {
-      document.title = 'Mega Messenger | Register';
-      return;
+    const timeoutId = typingTimeoutsRef.current.get(normalizedChatId);
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+      typingTimeoutsRef.current.delete(normalizedChatId);
     }
 
-    document.title = 'Mega Messenger | Login';
-  }, [location.pathname]);
+    setTypingByChat((currentState) => {
+      if (!currentState[normalizedChatId]) {
+        return currentState;
+      }
+
+      const nextState = { ...currentState };
+      delete nextState[normalizedChatId];
+      return nextState;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setInactiveMessageCount(0);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      typingTimeoutsRef.current.forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      typingTimeoutsRef.current.clear();
+    },
+    []
+  );
 
   useEffect(() => {
     writeStorage(SESSION_STORAGE_KEY, session);
@@ -477,11 +541,45 @@ export default function App() {
     () => (activeChat ? messagesByChat[activeChat.id] ?? [] : []),
     [activeChat, messagesByChat]
   );
+  const activeTypingParticipant = activeChat ? typingByChat[activeChat.id] ?? null : null;
   const activeChatDisplayName = activeChat?.displayName ?? '';
   const activeChatKey = activeChat?.id ?? '';
   const sessionToken = session?.token ?? '';
   const sessionUserId = session?.userId ?? '';
   const sessionUsername = session?.username ?? '';
+
+  const emitTypingEvent = useCallback(
+    (chat) => {
+      if (
+        !chat ||
+        !socketRef.current?.connected ||
+        chat.isSavedMessages ||
+        !chat.userId
+      ) {
+        return;
+      }
+
+      const chatId = String(chat.id || '').trim();
+      if (!chatId) {
+        return;
+      }
+
+      const now = Date.now();
+      const lastEmittedAt = typingEmitRef.current.get(chatId) ?? 0;
+      if (now - lastEmittedAt < TYPING_EMIT_THROTTLE) {
+        return;
+      }
+
+      typingEmitRef.current.set(chatId, now);
+      socketRef.current.emit('typing', {
+        chatId,
+        senderName: session?.username,
+        toUserId: String(chat.userId),
+        username: session?.username,
+      });
+    },
+    [session?.username]
+  );
 
   useEffect(() => {
     if (!session) {
@@ -503,6 +601,12 @@ export default function App() {
     if (!session) {
       setUsers([]);
       setUsersError('');
+      setTypingByChat({});
+      typingEmitRef.current.clear();
+      typingTimeoutsRef.current.forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      typingTimeoutsRef.current.clear();
       return;
     }
 
@@ -633,23 +737,69 @@ export default function App() {
           normalized
         ),
       }));
+
+      clearTypingIndicator(normalized.chatId);
+
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState !== 'visible' &&
+        normalized.senderId !== String(session.userId)
+      ) {
+        setInactiveMessageCount((currentCount) => currentCount + 1);
+      }
+    };
+
+    const handleUserTyping = (payload) => {
+      const senderId = String(payload?.senderId ?? '');
+      const chatId = String(
+        payload?.chatId ?? (senderId ? chatIdForUser(senderId) : '')
+      ).trim();
+
+      if (!chatId || !senderId || senderId === String(session.userId)) {
+        return;
+      }
+
+      const senderName =
+        String(payload?.senderName ?? payload?.username ?? 'Someone').trim() ||
+        'Someone';
+
+      const existingTimeoutId = typingTimeoutsRef.current.get(chatId);
+      if (existingTimeoutId) {
+        window.clearTimeout(existingTimeoutId);
+      }
+
+      setTypingByChat((currentState) => ({
+        ...currentState,
+        [chatId]: {
+          senderId,
+          senderName,
+        },
+      }));
+
+      const timeoutId = window.setTimeout(() => {
+        clearTypingIndicator(chatId);
+      }, TYPING_INDICATOR_TIMEOUT);
+
+      typingTimeoutsRef.current.set(chatId, timeoutId);
     };
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.on('receive_message', handleReceiveMessage);
+    socket.on('user_typing', handleUserTyping);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
       socket.off('receive_message', handleReceiveMessage);
+      socket.off('user_typing', handleUserTyping);
       socket.disconnect();
       socket.auth = {};
       socketRef.current = null;
     };
-  }, [session]);
+  }, [clearTypingIndicator, session]);
 
   const handleLogin = async (credentials) => {
     setAuthBusy(true);
@@ -690,11 +840,18 @@ export default function App() {
   const handleLogout = () => {
     socketRef.current?.disconnect();
     socketRef.current = null;
+    typingTimeoutsRef.current.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    typingTimeoutsRef.current.clear();
+    typingEmitRef.current.clear();
     setSession(null);
     setMessagesByChat({});
     setUsers([]);
     setUsersError('');
     setConnectionState('offline');
+    setTypingByChat({});
+    setInactiveMessageCount(0);
     navigate('/login');
   };
 
@@ -832,6 +989,8 @@ export default function App() {
                     onLogout={handleLogout}
                     onSelectChat={setActiveChatId}
                     onSendMessage={handleSendMessage}
+                    onTyping={emitTypingEvent}
+                    typingParticipant={activeTypingParticipant}
                     users={users}
                     usersError={usersError}
                     usersLoading={usersLoading}

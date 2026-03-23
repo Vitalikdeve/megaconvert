@@ -19,6 +19,8 @@ export default function ChatPage({
   onLogout,
   onSelectChat,
   onSendMessage,
+  onTyping,
+  typingParticipant,
   users,
   usersError,
   usersLoading,
@@ -57,6 +59,14 @@ export default function ChatPage({
     });
     setComposerValue('');
     setAttachments([]);
+  };
+
+  const handleComposerValueChange = (nextValue) => {
+    setComposerValue(nextValue);
+
+    if (nextValue.trim()) {
+      onTyping?.(activeChat);
+    }
   };
 
   const handleCreateMeeting = () => {
@@ -100,6 +110,7 @@ export default function ChatPage({
           currentUser={currentUser}
           messages={messages}
           onBack={() => setIsMobileThreadOpen(false)}
+          typingParticipant={typingParticipant}
         />
 
         <MessageInput
@@ -114,7 +125,7 @@ export default function ChatPage({
             )
           }
           onSend={handleSend}
-          onValueChange={setComposerValue}
+          onValueChange={handleComposerValueChange}
           value={composerValue}
         />
       </MotionSection>

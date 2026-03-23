@@ -1,3 +1,4 @@
+import { AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Check,
@@ -277,7 +278,10 @@ export default function MeetPage({ currentUser }) {
   const copyTimeoutRef = useRef(null);
   const liveKitRoomRef = useRef(null);
   const mediaRecorderRef = useRef(null);
+  const meetingChatPanelRef = useRef(null);
   const meetingChatRef = useRef(null);
+  const meetingChatInputRef = useRef(null);
+  const meetingControlsRef = useRef(null);
   const reactionTimeoutsRef = useRef(new Map());
   const recordedChunksRef = useRef([]);
 
@@ -288,6 +292,7 @@ export default function MeetPage({ currentUser }) {
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
   const [meetingMessages, setMeetingMessages] = useState([]);
   const [meetingDraft, setMeetingDraft] = useState('');
   const [floatingReactions, setFloatingReactions] = useState([]);
@@ -313,13 +318,20 @@ export default function MeetPage({ currentUser }) {
   const participantCount = participantTiles.length;
   const remoteParticipantCount = Math.max(participantCount - 1, 0);
   const gridLayoutClass =
-    participantCount <= 1
-      ? 'meeting-grid meeting-grid--solo'
-      : participantCount === 2
-        ? 'meeting-grid meeting-grid--duo'
-        : participantCount <= 4
-          ? 'meeting-grid meeting-grid--quad'
-          : 'meeting-grid meeting-grid--crowd';
+    participantCount <= 1 ? 'meeting-grid meeting-grid--solo' : 'meeting-grid';
+  const meetingGridStyle = useMemo(
+    () => ({
+      '--meeting-grid-min':
+        participantCount <= 1
+          ? '100%'
+          : participantCount === 2
+            ? '320px'
+            : participantCount <= 4
+              ? '280px'
+              : '250px',
+    }),
+    [participantCount]
+  );
 
   const syncParticipantTiles = useCallback(
     (room) => {
@@ -470,6 +482,19 @@ export default function MeetPage({ currentUser }) {
     }
   }, [meetingUrl]);
 
+  const focusMeetingChat = useCallback(() => {
+    setIsReactionPickerOpen(false);
+    meetingChatPanelRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
+    });
+
+    window.requestAnimationFrame(() => {
+      meetingChatInputRef.current?.focus();
+    });
+  }, []);
+
   const sendMeetingMessage = useCallback(
     (event) => {
       event?.preventDefault?.();
@@ -524,6 +549,10 @@ export default function MeetPage({ currentUser }) {
     },
     [currentUser.username, roomId]
   );
+
+  const toggleReactionPicker = useCallback(() => {
+    setIsReactionPickerOpen((currentState) => !currentState);
+  }, []);
 
   const toggleMute = useCallback(async () => {
     const room = liveKitRoomRef.current;
@@ -589,11 +618,31 @@ export default function MeetPage({ currentUser }) {
   }, [meetingMessages]);
 
   useEffect(() => {
+    if (!isReactionPickerOpen || typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      if (meetingControlsRef.current?.contains(event.target)) {
+        return;
+      }
+
+      setIsReactionPickerOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [isReactionPickerOpen]);
+
+  useEffect(() => {
     let isMounted = true;
 
     setMeetingMessages([]);
     setMeetingDraft('');
     setFloatingReactions([]);
+    setIsReactionPickerOpen(false);
 
     if (!socket.connected) {
       socket.connect();
@@ -809,6 +858,15 @@ export default function MeetPage({ currentUser }) {
               {isCopied ? <Check size={18} /> : <Copy size={18} />}
               {isCopied ? 'Copied' : 'Copy meeting link'}
             </button>
+
+            <button
+              className={`glass-button ${isRecording ? 'glass-button--primary' : 'glass-button--ghost'}`}
+              onClick={toggleMeetingRecording}
+              type="button"
+            >
+              <Circle size={18} />
+              {isRecording ? 'Stop recording' : 'Record meeting'}
+            </button>
           </div>
         </div>
 
@@ -822,29 +880,6 @@ export default function MeetPage({ currentUser }) {
               : meetingState === 'joining'
                 ? 'Connecting to LiveKit room...'
                 : 'LiveKit connection requires attention'}
-        </div>
-
-        <div className="meeting-reaction-bar">
-          <div className="meeting-reaction-bar__copy">
-            <Laugh size={16} />
-            <span>Quick reactions</span>
-          </div>
-
-          <div className="meeting-reaction-bar__actions">
-            {meetingReactionOptions.map((reaction) => (
-              <button
-                aria-label={reaction.label}
-                className="meeting-reaction-bar__button"
-                key={reaction.emoji}
-                onClick={() => {
-                  sendReaction(reaction.emoji);
-                }}
-                type="button"
-              >
-                {reaction.emoji}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="meeting-content">
@@ -877,14 +912,14 @@ export default function MeetPage({ currentUser }) {
               </div>
             ) : null}
 
-            <div className={gridLayoutClass}>
+            <div className={gridLayoutClass} style={meetingGridStyle}>
               {participantTiles.map((tile) => (
                 <MeetingTile key={tile.id} tile={tile} />
               ))}
             </div>
           </div>
 
-          <aside className="meeting-chat">
+          <aside className="meeting-chat" ref={meetingChatPanelRef}>
             <div className="meeting-chat__header">
               <div>
                 <h2>Meeting chat</h2>
@@ -936,6 +971,7 @@ export default function MeetPage({ currentUser }) {
                   setMeetingDraft(event.target.value);
                 }}
                 placeholder="Send a message to everyone in the room"
+                ref={meetingChatInputRef}
                 type="text"
                 value={meetingDraft}
               />
@@ -952,57 +988,91 @@ export default function MeetPage({ currentUser }) {
         </div>
       </div>
 
-      <div className="meeting-controls">
-        <button
-          className={`meeting-control ${isMuted ? 'meeting-control--off' : ''}`}
-          onClick={() => {
-            void toggleMute();
-          }}
-          type="button"
-        >
-          {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
-          {isMuted ? 'Unmute' : 'Mute'}
-        </button>
+      <div className="meeting-controls" ref={meetingControlsRef}>
+        <div className="meeting-controls__panel">
+          <AnimatePresence>
+            {isReactionPickerOpen ? (
+              <div className="meeting-reaction-picker">
+                {meetingReactionOptions.map((reaction) => (
+                  <button
+                    aria-label={reaction.label}
+                    className="meeting-reaction-picker__button"
+                    key={reaction.emoji}
+                    onClick={() => {
+                      sendReaction(reaction.emoji);
+                      setIsReactionPickerOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <span>{reaction.emoji}</span>
+                    {reaction.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </AnimatePresence>
 
-        <button
-          className={`meeting-control ${!isCameraEnabled ? 'meeting-control--off' : ''}`}
-          onClick={() => {
-            void toggleCamera();
-          }}
-          type="button"
-        >
-          {isCameraEnabled ? <Video size={18} /> : <VideoOff size={18} />}
-          {isCameraEnabled ? 'Camera on' : 'Camera off'}
-        </button>
+          <button
+            className={`meeting-control ${isMuted ? 'meeting-control--off' : ''}`}
+            onClick={() => {
+              void toggleMute();
+            }}
+            type="button"
+          >
+            {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+            {isMuted ? 'Unmute' : 'Mute'}
+          </button>
 
-        <button
-          className={`meeting-control ${isScreenSharing ? 'meeting-control--active' : ''}`}
-          onClick={() => {
-            void toggleScreenShare();
-          }}
-          type="button"
-        >
-          <MonitorUp size={18} />
-          {isScreenSharing ? 'Stop sharing' : 'Share Screen'}
-        </button>
+          <button
+            className={`meeting-control ${!isCameraEnabled ? 'meeting-control--off' : ''}`}
+            onClick={() => {
+              void toggleCamera();
+            }}
+            type="button"
+          >
+            {isCameraEnabled ? <Video size={18} /> : <VideoOff size={18} />}
+            {isCameraEnabled ? 'Camera on' : 'Camera off'}
+          </button>
 
-        <button
-          className={`meeting-control ${isRecording ? 'meeting-control--active' : ''}`}
-          onClick={toggleMeetingRecording}
-          type="button"
-        >
-          <Circle size={18} />
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
-        </button>
+          <button
+            className={`meeting-control ${isScreenSharing ? 'meeting-control--active' : ''}`}
+            onClick={() => {
+              void toggleScreenShare();
+            }}
+            type="button"
+          >
+            <MonitorUp size={18} />
+            {isScreenSharing ? 'Stop sharing' : 'Share screen'}
+          </button>
 
-        <button
-          className="meeting-control meeting-control--danger"
-          onClick={leaveMeeting}
-          type="button"
-        >
-          <PhoneOff size={18} />
-          Leave Meeting
-        </button>
+          <button
+            className="meeting-control"
+            onClick={focusMeetingChat}
+            type="button"
+          >
+            <MessageSquare size={18} />
+            Chat
+          </button>
+
+          <button
+            aria-expanded={isReactionPickerOpen}
+            className={`meeting-control ${isReactionPickerOpen ? 'meeting-control--active' : ''}`}
+            onClick={toggleReactionPicker}
+            type="button"
+          >
+            <Laugh size={18} />
+            Reactions
+          </button>
+
+          <button
+            className="meeting-control meeting-control--danger"
+            onClick={leaveMeeting}
+            type="button"
+          >
+            <PhoneOff size={18} />
+            Leave meeting
+          </button>
+        </div>
       </div>
     </div>
   );
