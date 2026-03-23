@@ -24,10 +24,6 @@
       "destination": "http://35.202.253.153:4000/:match*"
     },
     {
-      "source": "/socket.io/:match*",
-      "destination": "http://35.202.253.153:4001/socket.io/:match*"
-    },
-    {
       "source": "/robots.txt",
       "destination": "/robots.txt"
     },

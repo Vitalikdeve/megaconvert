@@ -6,5 +6,8 @@ export const createSocketClient = () =>
   io(SOCKET_URL, {
     autoConnect: true,
     path: SOCKET_PATH,
-    transports: ['websocket', 'polling'],
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 2000,
   });
