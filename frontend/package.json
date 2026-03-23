@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint src/App.jsx src/main.jsx src/app src/components/ChatSidebar.jsx src/components/ChatWindow.jsx src/components/MessageInput.jsx src/components/MessageBubble.jsx src/config src/services --ext .js,.jsx",
+    "lint": "eslint src/App.jsx src/main.jsx src/app src/components src/config src/services --ext .js,.jsx",
     "preview": "vite preview",
     "test:e2e": "echo \"No e2e tests configured for the messenger frontend yet.\""
   },

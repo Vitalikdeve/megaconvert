@@ -70,6 +70,80 @@ const toSocketError = (error, fallbackCode, fallbackMessage) => ({
   message: String(error?.message || fallbackMessage || 'Внутренняя ошибка')
 });
 
+const resolveTargetUserId = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const candidates = [
+    payload.toUserId,
+    payload.receiverId,
+    payload.contactId,
+    payload.targetUserId,
+    payload.to
+  ];
+
+  for (const value of candidates) {
+    if (!value) continue;
+    const normalized = String(value).trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return '';
+};
+
+const relayPeerEvent = ({ eventName, payload, socket, userId, callback }) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      const error = new Error('Некорректный payload');
+      error.code = 'VALIDATION_ERROR';
+      throw error;
+    }
+
+    const targetUserId = resolveTargetUserId(payload);
+    if (!targetUserId) {
+      const error = new Error('toUserId обязателен');
+      error.code = 'TARGET_USER_REQUIRED';
+      throw error;
+    }
+
+    if (targetUserId === userId) {
+      const error = new Error('Нельзя отправить сигнал самому себе');
+      error.code = 'SELF_SIGNAL_NOT_ALLOWED';
+      throw error;
+    }
+
+    const forwardedPayload = {
+      ...payload,
+      fromUserId: userId
+    };
+
+    io.to(`user_${targetUserId}`).emit(eventName, forwardedPayload);
+
+    if (typeof callback === 'function') {
+      callback({
+        ok: true,
+        event: eventName,
+        toUserId: targetUserId
+      });
+    }
+  } catch (error) {
+    const errorPayload = toSocketError(
+      error,
+      'PEER_SIGNAL_FAILED',
+      'Не удалось отправить WebRTC сигнал'
+    );
+
+    if (typeof callback === 'function') {
+      callback(errorPayload);
+    } else {
+      socket.emit(`${eventName}-error`, errorPayload);
+    }
+  }
+};
+
 const normalizeEncryptedPayload = (rawValue) => {
   if (!rawValue) {
     return { ciphertext: '', iv: null };
@@ -355,6 +429,26 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     console.log(`[socket] user disconnected: ${userId}, reason=${reason}`);
+  });
+
+  socket.on('call-user', (payload, callback) => {
+    relayPeerEvent({ eventName: 'call-user', payload, socket, userId, callback });
+  });
+
+  socket.on('call-offer', (payload, callback) => {
+    relayPeerEvent({ eventName: 'call-offer', payload, socket, userId, callback });
+  });
+
+  socket.on('call-answer', (payload, callback) => {
+    relayPeerEvent({ eventName: 'call-answer', payload, socket, userId, callback });
+  });
+
+  socket.on('ice-candidate', (payload, callback) => {
+    relayPeerEvent({ eventName: 'ice-candidate', payload, socket, userId, callback });
+  });
+
+  socket.on('end-call', (payload, callback) => {
+    relayPeerEvent({ eventName: 'end-call', payload, socket, userId, callback });
   });
 
   socket.on('join-chat-room', async (payload, callback) => {

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import ChatSidebar from '../../components/ChatSidebar.jsx';
 import ChatWindow from '../../components/ChatWindow.jsx';
 import MessageInput from '../../components/MessageInput.jsx';
+import VideoCall from '../../components/VideoCall.jsx';
 
 const MotionDiv = motion.div;
 const MotionSection = motion.section;
@@ -59,7 +60,11 @@ export default function ChatPage({
 
   return (
     <div className={`messenger-shell ${isMobileThreadOpen ? 'messenger-shell--thread-open' : ''}`}>
-      <MotionDiv animate={{ opacity: 1, x: 0 }} initial={{ opacity: 0, x: -18 }}>
+      <MotionDiv
+        animate={{ opacity: 1, x: 0 }}
+        className="messenger-shell__sidebar"
+        initial={{ opacity: 0, x: -18 }}
+      >
         <ChatSidebar
           chats={chats}
           connectionState={connectionState}
@@ -86,6 +91,7 @@ export default function ChatPage({
         <ChatWindow
           activeChat={activeChat}
           currentUser={currentUser}
+          headerActions={<VideoCall activeChat={activeChat} currentUser={currentUser} />}
           messages={messages}
           onBack={() => setIsMobileThreadOpen(false)}
         />

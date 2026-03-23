@@ -28,8 +28,8 @@ const formatFileSize = (size) => {
 
 export default function MessageBubble({ isOwn, message }) {
   return (
-    <div className={`message-bubble-wrap ${isOwn ? 'message-bubble-wrap--own' : ''}`}>
-      <div className={`message-bubble ${isOwn ? 'message-bubble--own' : ''}`}>
+    <div className={`message-row ${isOwn ? 'me' : 'other'}`}>
+      <div className={`message-bubble ${isOwn ? 'me' : 'other'}`}>
         <div className="message-bubble__meta">
           <span>{isOwn ? 'You' : message.senderName}</span>
           <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>

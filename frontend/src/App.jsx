@@ -467,6 +467,7 @@ export default function App() {
 
   useEffect(() => {
     if (!session) {
+      socket.auth = {};
       socket.disconnect();
       socketRef.current = null;
       setConnectionState('offline');
@@ -474,6 +475,10 @@ export default function App() {
     }
 
     socketRef.current = socket;
+    socket.auth = {
+      userId: String(session.userId),
+      username: session.username,
+    };
     socket.connect();
 
     const handleConnect = () => {
@@ -511,6 +516,7 @@ export default function App() {
       socket.off('connect_error', handleConnectError);
       socket.off('receive_message', handleReceiveMessage);
       socket.disconnect();
+      socket.auth = {};
       socketRef.current = null;
     };
   }, [session]);

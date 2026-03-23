@@ -6,6 +6,7 @@ import MessageBubble from './MessageBubble.jsx';
 export default function ChatWindow({
   activeChat,
   currentUser,
+  headerActions,
   messages,
   onBack,
 }) {
@@ -49,10 +50,14 @@ export default function ChatWindow({
           </div>
         </div>
 
-        <span className="status-pill status-pill--connected">
-          <ShieldCheck size={14} />
-          {activeChat.isSavedMessages ? 'Encrypted notes' : 'Realtime channel'}
-        </span>
+        <div className="chat-window__actions">
+          {headerActions}
+
+          <span className="status-pill status-pill--connected">
+            <ShieldCheck size={14} />
+            {activeChat.isSavedMessages ? 'Encrypted notes' : 'Realtime channel'}
+          </span>
+        </div>
       </header>
 
       <div className="message-list">

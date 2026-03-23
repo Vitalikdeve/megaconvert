@@ -13,6 +13,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, HeadBuc
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const nacl = require('tweetnacl');
 const { customAlphabet } = require('nanoid');
 const { TOOL_EXT, TOOL_IDS, TOOL_META } = require('../shared/tools');
@@ -30,6 +31,7 @@ for (const envPath of envCandidates) {
 }
 
 const storageMode = (process.env.STORAGE_MODE || 's3').toLowerCase();
+const SESSION_JWT_SECRET = process.env.JWT_SESSION_SECRET || process.env.JWT_SECRET || 'dev-session-secret-change-me';
 const required = ['REDIS_URL'];
 if (storageMode === 's3') {
   required.push('S3_ENDPOINT', 'S3_REGION', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'S3_BUCKET');
@@ -1086,10 +1088,39 @@ function requireAdminAuthIfEnabled(req, res, next) {
   return requireAdminAuth(req, res, next);
 }
 
+function extractBearerTokenFromRequest(req) {
+  const authHeaderRaw = req.headers.authorization;
+  const authHeader = Array.isArray(authHeaderRaw) ? authHeaderRaw[0] : authHeaderRaw;
+  const value = String(authHeader || '').trim();
+  if (!value.toLowerCase().startsWith('bearer ')) {
+    return '';
+  }
+  return value.slice(7).trim();
+}
+
+function getSessionUserIdFromRequest(req) {
+  const token = extractBearerTokenFromRequest(req);
+  if (!token) return '';
+
+  try {
+    const payload = jwt.verify(token, SESSION_JWT_SECRET);
+    if (payload?.type !== 'session' || !payload?.sub) {
+      return '';
+    }
+    return String(payload.sub).trim();
+  } catch {
+    return '';
+  }
+}
+
 function getRequestUserId(req) {
   const raw = req.headers['x-user-id'];
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return String(value || '').trim();
+  const userId = String(value || '').trim();
+  if (userId) {
+    return userId;
+  }
+  return getSessionUserIdFromRequest(req);
 }
 
 function sanitizeTestModeAlias(rawValue) {
@@ -1283,6 +1314,15 @@ function requireApiKeyAuth(req, res, next) {
   return next();
 }
 
+function requireUserOrApiKeyAuth(req, res, next) {
+  const userId = getRequestUserId(req);
+  if (userId) {
+    req.user = { id: userId };
+    return next();
+  }
+  return requireApiKeyAuth(req, res, next);
+}
+
 async function enforceApiKeyLimits(req, res, next) {
   try {
     const redis = await ensureRedisAvailable(req.requestId);
@@ -1346,6 +1386,25 @@ function apiKeyUsageTracker(req, res, next) {
     });
   });
   return next();
+}
+
+function isFileApiRequest(req) {
+  const requestPath = String(req.originalUrl || req.url || '')
+    .split('?')[0]
+    .trim();
+
+  return requestPath === '/api/files'
+    || requestPath.startsWith('/api/files/')
+    || requestPath === '/api/uploads'
+    || requestPath.startsWith('/api/uploads/');
+}
+
+function requireProtectedApiAccess(req, res, next) {
+  if (isFileApiRequest(req)) {
+    return requireUserOrApiKeyAuth(req, res, next);
+  }
+
+  return requireApiKeyAuth(req, res, next);
 }
 
 function normalizeAccountProvider(rawProvider) {
@@ -3268,6 +3327,13 @@ function removeSocketFromMegaMeetRoom(socket, reason = 'left_room') {
   if (room.participants.size === 0) {
     megaMeetRooms.delete(room.id);
   }
+}
+
+async function enforceApiKeyLimitsIfPresent(req, res, next) {
+  if (!req.apiKey?.id) {
+    return next();
+  }
+  return enforceApiKeyLimits(req, res, next);
 }
 
 function normalizeMegaDropRoomCode(value) {
@@ -14329,7 +14395,7 @@ app.post('/auth/2fa/verify-token', (req, res) => {
 // Public user auth routes must be above API-key protection middleware.
 app.use('/api/auth', createAuthRouter());
 
-app.use('/api', requireApiKeyAuth, enforceApiKeyLimits, apiKeyUsageTracker);
+app.use('/api', requireProtectedApiAccess, enforceApiKeyLimitsIfPresent, apiKeyUsageTracker);
 
 app.get('/api/keys/me', (req, res) => {
   return res.json({ ok: true, api_key: mapApiKeyPublic(req.apiKey) });
