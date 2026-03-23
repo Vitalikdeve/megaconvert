@@ -3,7 +3,6 @@ import {
   LoaderCircle,
   Mic,
   MicOff,
-  PhoneIncoming,
   PhoneOff,
   Video,
   VideoOff,
@@ -11,6 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { socket } from '../services/socket.js';
+import IncomingCallModal from './IncomingCallModal.jsx';
 
 const MotionDiv = motion.div;
 
@@ -20,7 +20,8 @@ const configuration = {
 
 const createCallId = () => `call-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 
-const getCallDescription = (payload) => payload?.description ?? payload?.offer ?? payload?.answer ?? null;
+const getCallDescription = (payload) =>
+  payload?.description ?? payload?.offer ?? payload?.answer ?? null;
 
 const getReadableError = (error, fallbackMessage) => {
   if (error instanceof Error && error.message) {
@@ -28,6 +29,14 @@ const getReadableError = (error, fallbackMessage) => {
   }
 
   return fallbackMessage;
+};
+
+const createAvatarFallback = (value) =>
+  String(value || '?').trim().slice(0, 1).toUpperCase() || '?';
+
+const resolveAvatarToken = (avatar, fallbackName) => {
+  const rawAvatar = String(avatar || '').trim();
+  return rawAvatar || createAvatarFallback(fallbackName);
 };
 
 export default function VideoCall({ activeChat, currentUser }) {
@@ -50,6 +59,16 @@ export default function VideoCall({ activeChat, currentUser }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraEnabled, setIsCameraEnabled] = useState(true);
 
+  const currentUserId = String(currentUser?.userId || '');
+  const currentCallerAvatar = useMemo(
+    () =>
+      resolveAvatarToken(
+        currentUser?.avatar ?? currentUser?.avatarUrl,
+        currentUser?.username
+      ),
+    [currentUser?.avatar, currentUser?.avatarUrl, currentUser?.username]
+  );
+
   const canCallActiveChat = Boolean(
     activeChat &&
       !activeChat.isSavedMessages &&
@@ -58,12 +77,12 @@ export default function VideoCall({ activeChat, currentUser }) {
   );
 
   const displayParticipantName = useMemo(() => {
-    if (incomingCall?.fromUsername) {
-      return incomingCall.fromUsername;
-    }
-
     if (remoteParticipant?.name) {
       return remoteParticipant.name;
+    }
+
+    if (incomingCall?.callerName) {
+      return incomingCall.callerName;
     }
 
     if (activeChat?.displayName) {
@@ -71,7 +90,7 @@ export default function VideoCall({ activeChat, currentUser }) {
     }
 
     return 'Unknown contact';
-  }, [activeChat?.displayName, incomingCall?.fromUsername, remoteParticipant?.name]);
+  }, [activeChat?.displayName, incomingCall?.callerName, remoteParticipant?.name]);
 
   useEffect(() => {
     callPhaseRef.current = callPhase;
@@ -120,59 +139,72 @@ export default function VideoCall({ activeChat, currentUser }) {
     peerConnectionRef.current = null;
   }, []);
 
-  const emitEndCall = useCallback(({
-    callId,
-    chatId,
-    toUserId,
-    reason = 'ended',
-  }) => {
-    if (!callId || !toUserId) {
-      return;
-    }
+  const emitPeerSignal = useCallback(
+    (eventName, payload) => {
+      const targetUserId = String(payload?.toUserId || '').trim();
+      const callId = String(payload?.callId || '').trim();
 
-    socket.emit('end-call', {
-      callId,
-      chatId,
-      fromUserId: String(currentUser.userId),
-      fromUsername: currentUser.username,
-      toUserId: String(toUserId),
-      reason,
-      createdAt: new Date().toISOString(),
-    });
-  }, [currentUser.userId, currentUser.username]);
+      if (!targetUserId || !callId) {
+        return;
+      }
 
-  const resetCallSession = useCallback(({
-    shouldEmitEnd = false,
-    reason = 'ended',
-    preserveError = false,
-  } = {}) => {
-    const activeCall = activeCallRef.current;
-    const pendingIncoming = incomingCallRef.current;
+      socket.emit(eventName, {
+        ...payload,
+        callId,
+        toUserId: targetUserId,
+        fromUserId: currentUserId,
+        fromUsername: currentUser.username,
+        callerName: payload?.callerName ?? currentUser.username,
+        callerAvatar: payload?.callerAvatar ?? currentCallerAvatar,
+        createdAt: payload?.createdAt ?? new Date().toISOString(),
+      });
+    },
+    [currentCallerAvatar, currentUser.username, currentUserId]
+  );
 
-    if (shouldEmitEnd) {
-      emitEndCall({
-        callId: activeCall?.callId ?? pendingIncoming?.callId,
-        chatId: activeCall?.chatId ?? pendingIncoming?.chatId,
-        toUserId: activeCall?.peerUserId ?? pendingIncoming?.fromUserId,
+  const emitEndCall = useCallback(
+    ({ callId, chatId, toUserId, reason = 'ended' }) => {
+      emitPeerSignal('end-call', {
+        callId,
+        chatId,
+        toUserId,
         reason,
       });
-    }
+    },
+    [emitPeerSignal]
+  );
 
-    pendingIceCandidatesRef.current = [];
-    activeCallRef.current = null;
-    setIncomingCall(null);
-    setRemoteParticipant(null);
-    setCallPhase('idle');
-    if (!preserveError) {
-      setCallError('');
-    }
+  const resetCallSession = useCallback(
+    ({ shouldEmitEnd = false, reason = 'ended', preserveError = false } = {}) => {
+      const activeCall = activeCallRef.current;
+      const pendingIncoming = incomingCallRef.current;
 
-    destroyPeerConnection();
-    stopRemoteStream();
-    stopLocalStream();
-  }, [destroyPeerConnection, emitEndCall, stopLocalStream, stopRemoteStream]);
+      if (shouldEmitEnd) {
+        emitEndCall({
+          callId: activeCall?.callId ?? pendingIncoming?.callId,
+          chatId: activeCall?.chatId ?? pendingIncoming?.chatId,
+          toUserId: activeCall?.peerUserId ?? pendingIncoming?.fromUserId,
+          reason,
+        });
+      }
 
-  async function ensureLocalStream() {
+      pendingIceCandidatesRef.current = [];
+      activeCallRef.current = null;
+      setIncomingCall(null);
+      setRemoteParticipant(null);
+      setCallPhase('idle');
+      if (!preserveError) {
+        setCallError('');
+      }
+
+      destroyPeerConnection();
+      stopRemoteStream();
+      stopLocalStream();
+    },
+    [destroyPeerConnection, emitEndCall, stopLocalStream, stopRemoteStream]
+  );
+
+  const ensureLocalStream = useCallback(async () => {
     if (
       localStreamRef.current &&
       localStreamRef.current.getTracks().some((track) => track.readyState === 'live')
@@ -180,10 +212,7 @@ export default function VideoCall({ activeChat, currentUser }) {
       return localStreamRef.current;
     }
 
-    if (
-      typeof navigator === 'undefined' ||
-      !navigator.mediaDevices?.getUserMedia
-    ) {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new Error('Camera access is not available in this browser.');
     }
 
@@ -197,9 +226,9 @@ export default function VideoCall({ activeChat, currentUser }) {
     setIsMuted(stream.getAudioTracks().every((track) => !track.enabled));
     setIsCameraEnabled(stream.getVideoTracks().every((track) => track.enabled));
     return stream;
-  }
+  }, []);
 
-  function ensureRemoteMediaStream() {
+  const ensureRemoteMediaStream = useCallback(() => {
     if (remoteStreamRef.current) {
       return remoteStreamRef.current;
     }
@@ -208,92 +237,98 @@ export default function VideoCall({ activeChat, currentUser }) {
     remoteStreamRef.current = stream;
     setRemoteStream(stream);
     return stream;
-  }
+  }, []);
 
-  function createPeerConnection({ callId, chatId, peerUserId, peerName }) {
-    if (peerConnectionRef.current) {
-      return peerConnectionRef.current;
-    }
+  const createPeerConnection = useCallback(
+    ({ callId, chatId, peerUserId, peerName, peerAvatar }) => {
+      if (peerConnectionRef.current) {
+        return peerConnectionRef.current;
+      }
 
-    const connection = new RTCPeerConnection(configuration);
+      const connection = new RTCPeerConnection(configuration);
 
-    activeCallRef.current = {
-      callId,
-      chatId,
-      peerUserId: String(peerUserId),
-      peerName,
-    };
+      activeCallRef.current = {
+        ...(activeCallRef.current ?? {}),
+        callId,
+        chatId,
+        peerUserId: String(peerUserId),
+        peerName,
+        peerAvatar,
+      };
 
-    setRemoteParticipant({
-      id: String(peerUserId),
-      name: peerName,
-    });
+      setRemoteParticipant({
+        id: String(peerUserId),
+        name: peerName,
+        avatar: peerAvatar,
+      });
 
-    connection.ontrack = (event) => {
-      const targetStream = ensureRemoteMediaStream();
-      const tracks = event.streams?.[0]?.getTracks?.() ?? [event.track];
+      connection.ontrack = (event) => {
+        const targetStream = ensureRemoteMediaStream();
+        const tracks = event.streams?.[0]?.getTracks?.() ?? [event.track];
 
-      tracks.forEach((track) => {
-        const alreadyAttached = targetStream
-          .getTracks()
-          .some((existingTrack) => existingTrack.id === track.id);
+        tracks.forEach((track) => {
+          const alreadyAttached = targetStream
+            .getTracks()
+            .some((existingTrack) => existingTrack.id === track.id);
 
-        if (!alreadyAttached) {
-          targetStream.addTrack(track);
+          if (!alreadyAttached) {
+            targetStream.addTrack(track);
+          }
+        });
+
+        setRemoteStream(targetStream);
+      };
+
+      connection.onicecandidate = (event) => {
+        if (!event.candidate || !activeCallRef.current) {
+          return;
         }
-      });
 
-      setRemoteStream(targetStream);
-    };
+        emitPeerSignal('ice-candidate', {
+          callId: activeCallRef.current.callId,
+          chatId: activeCallRef.current.chatId,
+          toUserId: activeCallRef.current.peerUserId,
+          candidate:
+            typeof event.candidate.toJSON === 'function'
+              ? event.candidate.toJSON()
+              : event.candidate,
+        });
+      };
 
-    connection.onicecandidate = (event) => {
-      if (!event.candidate || !activeCallRef.current) {
-        return;
-      }
+      connection.onconnectionstatechange = () => {
+        if (connection.connectionState === 'connected') {
+          setCallPhase('connected');
+          return;
+        }
 
-      socket.emit('ice-candidate', {
-        callId: activeCallRef.current.callId,
-        chatId: activeCallRef.current.chatId,
-        fromUserId: String(currentUser.userId),
-        fromUsername: currentUser.username,
-        toUserId: activeCallRef.current.peerUserId,
-        candidate:
-          typeof event.candidate.toJSON === 'function'
-            ? event.candidate.toJSON()
-            : event.candidate,
-      });
-    };
+        if (
+          connection.connectionState === 'connecting' ||
+          connection.connectionState === 'new'
+        ) {
+          setCallPhase((currentPhase) =>
+            currentPhase === 'requesting-media' || currentPhase === 'calling'
+              ? 'connecting'
+              : currentPhase
+          );
+          return;
+        }
 
-    connection.onconnectionstatechange = () => {
-      if (connection.connectionState === 'connected') {
-        setCallPhase('connected');
-        return;
-      }
+        if (
+          connection.connectionState === 'disconnected' ||
+          connection.connectionState === 'failed'
+        ) {
+          setCallError('Call connection was lost.');
+          resetCallSession({ shouldEmitEnd: false, preserveError: true });
+        }
+      };
 
-      if (
-        connection.connectionState === 'connecting' ||
-        connection.connectionState === 'new'
-      ) {
-        setCallPhase((currentPhase) =>
-          currentPhase === 'incoming' ? 'connecting' : currentPhase
-        );
-        return;
-      }
+      peerConnectionRef.current = connection;
+      return connection;
+    },
+    [emitPeerSignal, ensureRemoteMediaStream, resetCallSession]
+  );
 
-      if (
-        connection.connectionState === 'disconnected' ||
-        connection.connectionState === 'failed'
-      ) {
-        setCallError('Call connection was lost.');
-        resetCallSession({ shouldEmitEnd: false, preserveError: true });
-      }
-    };
-
-    peerConnectionRef.current = connection;
-    return connection;
-  }
-
-  function addLocalTracks(connection, stream) {
+  const addLocalTracks = useCallback((connection, stream) => {
     const existingTrackIds = new Set(
       connection
         .getSenders()
@@ -306,9 +341,9 @@ export default function VideoCall({ activeChat, currentUser }) {
         connection.addTrack(track, stream);
       }
     });
-  }
+  }, []);
 
-  async function flushPendingIceCandidates(connection) {
+  const flushPendingIceCandidates = useCallback(async (connection) => {
     if (!pendingIceCandidatesRef.current.length) {
       return;
     }
@@ -323,43 +358,44 @@ export default function VideoCall({ activeChat, currentUser }) {
         // Ignore malformed or stale ICE candidates.
       }
     }
-  }
+  }, []);
 
-  async function startCall() {
-    if (!canCallActiveChat || callPhaseRef.current !== 'idle') {
+  const startOutgoingOffer = useCallback(async () => {
+    const activeCall = activeCallRef.current;
+    if (
+      !activeCall ||
+      activeCall.direction !== 'outgoing' ||
+      activeCall.offerSent
+    ) {
       return;
     }
 
     if (typeof RTCPeerConnection === 'undefined') {
       setCallError('WebRTC is not supported in this browser.');
+      resetCallSession({ shouldEmitEnd: false, preserveError: true });
       return;
     }
 
-    const callId = createCallId();
+    activeCallRef.current = {
+      ...activeCall,
+      offerSent: true,
+      accepted: true,
+    };
 
     setCallError('');
-    setIncomingCall(null);
     setCallPhase('requesting-media');
 
     try {
       const stream = await ensureLocalStream();
       const connection = createPeerConnection({
-        callId,
-        chatId: activeChat.id,
-        peerUserId: activeChat.userId,
-        peerName: activeChat.displayName,
+        callId: activeCall.callId,
+        chatId: activeCall.chatId,
+        peerUserId: activeCall.peerUserId,
+        peerName: activeCall.peerName,
+        peerAvatar: activeCall.peerAvatar,
       });
 
       addLocalTracks(connection, stream);
-
-      socket.emit('call-user', {
-        callId,
-        chatId: activeChat.id,
-        fromUserId: String(currentUser.userId),
-        fromUsername: currentUser.username,
-        toUserId: String(activeChat.userId),
-        createdAt: new Date().toISOString(),
-      });
 
       const offer = await connection.createOffer({
         offerToReceiveAudio: true,
@@ -368,26 +404,78 @@ export default function VideoCall({ activeChat, currentUser }) {
 
       await connection.setLocalDescription(offer);
 
-      socket.emit('call-offer', {
-        callId,
-        chatId: activeChat.id,
-        fromUserId: String(currentUser.userId),
-        fromUsername: currentUser.username,
-        toUserId: String(activeChat.userId),
+      emitPeerSignal('call-offer', {
+        callId: activeCall.callId,
+        chatId: activeCall.chatId,
+        toUserId: activeCall.peerUserId,
         description: offer,
         offer,
       });
 
-      setCallPhase('calling');
+      setCallPhase('connecting');
     } catch (error) {
       setCallError(getReadableError(error, 'Unable to start the video call.'));
+      activeCallRef.current = {
+        ...activeCallRef.current,
+        offerSent: false,
+      };
       resetCallSession({ shouldEmitEnd: false, preserveError: true });
     }
-  }
+  }, [
+    addLocalTracks,
+    createPeerConnection,
+    emitPeerSignal,
+    ensureLocalStream,
+    resetCallSession,
+  ]);
 
-  async function answerCall() {
-    if (!incomingCallRef.current?.description) {
-      setCallError('Waiting for the call offer to finish arriving.');
+  const startCall = useCallback(() => {
+    if (!canCallActiveChat || callPhaseRef.current !== 'idle') {
+      return;
+    }
+
+    const callId = createCallId();
+    const peerName = String(activeChat.displayName || activeChat.username || 'Unknown contact');
+    const peerAvatar = resolveAvatarToken(activeChat.avatar, peerName);
+
+    activeCallRef.current = {
+      callId,
+      chatId: activeChat.id,
+      peerUserId: String(activeChat.userId),
+      peerName,
+      peerAvatar,
+      direction: 'outgoing',
+      accepted: false,
+      offerSent: false,
+    };
+
+    setCallError('');
+    setIncomingCall(null);
+    setRemoteParticipant({
+      id: String(activeChat.userId),
+      name: peerName,
+      avatar: peerAvatar,
+    });
+    setCallPhase('calling');
+
+    emitPeerSignal('call-user', {
+      callId,
+      chatId: activeChat.id,
+      toUserId: String(activeChat.userId),
+      callerName: currentUser.username,
+      callerAvatar: currentCallerAvatar,
+    });
+  }, [
+    activeChat,
+    canCallActiveChat,
+    currentCallerAvatar,
+    currentUser.username,
+    emitPeerSignal,
+  ]);
+
+  const acceptIncomingCall = useCallback(async () => {
+    const pendingCall = incomingCallRef.current;
+    if (!pendingCall) {
       return;
     }
 
@@ -401,50 +489,71 @@ export default function VideoCall({ activeChat, currentUser }) {
 
     try {
       const stream = await ensureLocalStream();
-      const incoming = incomingCallRef.current;
       const connection = createPeerConnection({
-        callId: incoming.callId,
-        chatId: incoming.chatId,
-        peerUserId: incoming.fromUserId,
-        peerName: incoming.fromUsername,
+        callId: pendingCall.callId,
+        chatId: pendingCall.chatId,
+        peerUserId: pendingCall.fromUserId,
+        peerName: pendingCall.callerName,
+        peerAvatar: pendingCall.callerAvatar,
       });
 
       addLocalTracks(connection, stream);
-      await connection.setRemoteDescription(
-        new RTCSessionDescription(incoming.description)
-      );
-      await flushPendingIceCandidates(connection);
 
-      const answer = await connection.createAnswer();
-      await connection.setLocalDescription(answer);
+      activeCallRef.current = {
+        ...(activeCallRef.current ?? {}),
+        callId: pendingCall.callId,
+        chatId: pendingCall.chatId,
+        peerUserId: pendingCall.fromUserId,
+        peerName: pendingCall.callerName,
+        peerAvatar: pendingCall.callerAvatar,
+        direction: 'incoming',
+        accepted: true,
+        offerSent: false,
+      };
 
-      socket.emit('call-answer', {
-        callId: incoming.callId,
-        chatId: incoming.chatId,
-        fromUserId: String(currentUser.userId),
-        fromUsername: currentUser.username,
-        toUserId: String(incoming.fromUserId),
-        description: answer,
-        answer,
+      emitPeerSignal('call-accepted', {
+        callId: pendingCall.callId,
+        chatId: pendingCall.chatId,
+        toUserId: pendingCall.fromUserId,
       });
 
+      await flushPendingIceCandidates(connection);
       setIncomingCall(null);
       setCallPhase('connecting');
     } catch (error) {
       setCallError(getReadableError(error, 'Unable to answer the call.'));
       resetCallSession({ shouldEmitEnd: false, preserveError: true });
     }
-  }
+  }, [
+    addLocalTracks,
+    createPeerConnection,
+    emitPeerSignal,
+    ensureLocalStream,
+    flushPendingIceCandidates,
+    resetCallSession,
+  ]);
 
-  function declineCall() {
-    resetCallSession({ shouldEmitEnd: true, reason: 'declined' });
-  }
+  const declineIncomingCall = useCallback(() => {
+    const pendingCall = incomingCallRef.current;
+    if (!pendingCall) {
+      return;
+    }
 
-  function endCall() {
+    emitPeerSignal('call-declined', {
+      callId: pendingCall.callId,
+      chatId: pendingCall.chatId,
+      toUserId: pendingCall.fromUserId,
+      reason: 'declined',
+    });
+
+    resetCallSession({ shouldEmitEnd: false });
+  }, [emitPeerSignal, resetCallSession]);
+
+  const endCall = useCallback(() => {
     resetCallSession({ shouldEmitEnd: true, reason: 'ended' });
-  }
+  }, [resetCallSession]);
 
-  function toggleMute() {
+  const toggleMute = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) {
       return;
@@ -455,9 +564,9 @@ export default function VideoCall({ activeChat, currentUser }) {
       track.enabled = !nextMuted;
     });
     setIsMuted(nextMuted);
-  }
+  }, [isMuted]);
 
-  function toggleCamera() {
+  const toggleCamera = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) {
       return;
@@ -468,14 +577,12 @@ export default function VideoCall({ activeChat, currentUser }) {
       track.enabled = nextCameraEnabled;
     });
     setIsCameraEnabled(nextCameraEnabled);
-  }
+  }, [isCameraEnabled]);
 
   useEffect(() => {
-    if (!currentUser?.userId) {
+    if (!currentUserId) {
       return undefined;
     }
-
-    const currentUserId = String(currentUser.userId);
 
     const handleCallUser = (payload) => {
       if (
@@ -485,11 +592,9 @@ export default function VideoCall({ activeChat, currentUser }) {
         return;
       }
 
-      if (
-        activeCallRef.current &&
-        activeCallRef.current.callId !== payload.callId
-      ) {
-        emitEndCall({
+      const activeCall = activeCallRef.current;
+      if (activeCall || incomingCallRef.current || callPhaseRef.current !== 'idle') {
+        emitPeerSignal('call-declined', {
           callId: payload.callId,
           chatId: payload.chatId,
           toUserId: payload.fromUserId,
@@ -498,24 +603,71 @@ export default function VideoCall({ activeChat, currentUser }) {
         return;
       }
 
+      const callerName = String(
+        payload?.callerName ?? payload?.fromUsername ?? payload?.fromUserId ?? 'Unknown contact'
+      );
+      const callerAvatar = resolveAvatarToken(payload?.callerAvatar, callerName);
+
       setCallError('');
       setRemoteParticipant({
         id: String(payload.fromUserId),
-        name: String(payload.fromUsername ?? payload.fromUserId ?? 'Unknown contact'),
+        name: callerName,
+        avatar: callerAvatar,
       });
-      setIncomingCall((currentCall) => ({
+      setIncomingCall({
         callId: String(payload.callId),
         chatId: String(payload.chatId ?? `dm:${String(payload.fromUserId)}`),
         fromUserId: String(payload.fromUserId),
-        fromUsername: String(payload.fromUsername ?? payload.fromUserId ?? 'Unknown contact'),
-        description: currentCall?.description ?? null,
-      }));
-      setCallPhase((currentPhase) =>
-        currentPhase === 'idle' ? 'incoming' : currentPhase
-      );
+        callerName,
+        callerAvatar,
+      });
+      setCallPhase('incoming');
     };
 
-    const handleCallOffer = (payload) => {
+    const handleCallAccepted = (payload) => {
+      if (
+        String(payload?.toUserId ?? '') !== currentUserId ||
+        String(payload?.fromUserId ?? '') === currentUserId
+      ) {
+        return;
+      }
+
+      const activeCall = activeCallRef.current;
+      if (
+        !activeCall ||
+        activeCall.direction !== 'outgoing' ||
+        activeCall.callId !== String(payload?.callId ?? '')
+      ) {
+        return;
+      }
+
+      void startOutgoingOffer();
+    };
+
+    const handleCallDeclined = (payload) => {
+      if (
+        String(payload?.toUserId ?? '') !== currentUserId ||
+        String(payload?.fromUserId ?? '') === currentUserId
+      ) {
+        return;
+      }
+
+      const activeCallId =
+        activeCallRef.current?.callId ?? incomingCallRef.current?.callId;
+      if (activeCallId && String(payload?.callId ?? '') !== String(activeCallId)) {
+        return;
+      }
+
+      const reason = String(payload?.reason ?? 'declined');
+      setCallError(
+        reason === 'busy'
+          ? 'The other user is already in another call.'
+          : 'The call was declined.'
+      );
+      resetCallSession({ shouldEmitEnd: false, preserveError: true });
+    };
+
+    const handleCallOffer = async (payload) => {
       if (
         String(payload?.toUserId ?? '') !== currentUserId ||
         String(payload?.fromUserId ?? '') === currentUserId
@@ -528,47 +680,71 @@ export default function VideoCall({ activeChat, currentUser }) {
         return;
       }
 
+      const activeCall = activeCallRef.current;
       if (
-        activeCallRef.current &&
-        activeCallRef.current.callId !== payload.callId
+        !activeCall ||
+        activeCall.direction !== 'incoming' ||
+        !activeCall.accepted ||
+        activeCall.callId !== String(payload?.callId ?? '')
       ) {
-        emitEndCall({
-          callId: payload.callId,
-          chatId: payload.chatId,
-          toUserId: payload.fromUserId,
-          reason: 'busy',
-        });
+        pendingIceCandidatesRef.current = [];
         return;
       }
 
-      setCallError('');
-      setRemoteParticipant({
-        id: String(payload.fromUserId),
-        name: String(payload.fromUsername ?? payload.fromUserId ?? 'Unknown contact'),
-      });
-      setIncomingCall({
-        callId: String(payload.callId),
-        chatId: String(payload.chatId ?? `dm:${String(payload.fromUserId)}`),
-        fromUserId: String(payload.fromUserId),
-        fromUsername: String(payload.fromUsername ?? payload.fromUserId ?? 'Unknown contact'),
-        description,
-      });
-      setCallPhase((currentPhase) =>
-        currentPhase === 'idle' ? 'incoming' : currentPhase
-      );
+      try {
+        const connection =
+          peerConnectionRef.current ??
+          createPeerConnection({
+            callId: activeCall.callId,
+            chatId: activeCall.chatId,
+            peerUserId: activeCall.peerUserId,
+            peerName: activeCall.peerName,
+            peerAvatar: activeCall.peerAvatar,
+          });
+
+        await connection.setRemoteDescription(
+          new RTCSessionDescription(description)
+        );
+        await flushPendingIceCandidates(connection);
+
+        const answer = await connection.createAnswer();
+        await connection.setLocalDescription(answer);
+
+        emitPeerSignal('call-answer', {
+          callId: activeCall.callId,
+          chatId: activeCall.chatId,
+          toUserId: activeCall.peerUserId,
+          description: answer,
+          answer,
+        });
+
+        setCallPhase('connecting');
+      } catch (error) {
+        setCallError(getReadableError(error, 'Unable to answer the call.'));
+        resetCallSession({ shouldEmitEnd: false, preserveError: true });
+      }
     };
 
     const handleCallAnswer = async (payload) => {
       if (
         String(payload?.toUserId ?? '') !== currentUserId ||
-        String(payload?.fromUserId ?? '') === currentUserId ||
-        activeCallRef.current?.callId !== String(payload?.callId ?? '')
+        String(payload?.fromUserId ?? '') === currentUserId
+      ) {
+        return;
+      }
+
+      const activeCall = activeCallRef.current;
+      if (
+        !activeCall ||
+        activeCall.direction !== 'outgoing' ||
+        activeCall.callId !== String(payload?.callId ?? '') ||
+        !peerConnectionRef.current
       ) {
         return;
       }
 
       const description = getCallDescription(payload);
-      if (!description || !peerConnectionRef.current) {
+      if (!description) {
         return;
       }
 
@@ -587,13 +763,17 @@ export default function VideoCall({ activeChat, currentUser }) {
     const handleIceCandidate = async (payload) => {
       if (
         String(payload?.toUserId ?? '') !== currentUserId ||
-        String(payload?.fromUserId ?? '') === currentUserId ||
-        activeCallRef.current?.callId !== String(payload?.callId ?? '')
+        String(payload?.fromUserId ?? '') === currentUserId
       ) {
         return;
       }
 
-      if (!payload?.candidate) {
+      const activeCallId = activeCallRef.current?.callId;
+      if (
+        !payload?.candidate ||
+        !activeCallId ||
+        activeCallId !== String(payload?.callId ?? '')
+      ) {
         return;
       }
 
@@ -618,24 +798,19 @@ export default function VideoCall({ activeChat, currentUser }) {
         return;
       }
 
-      const activeCallId = activeCallRef.current?.callId ?? incomingCallRef.current?.callId;
+      const activeCallId =
+        activeCallRef.current?.callId ?? incomingCallRef.current?.callId;
       if (activeCallId && String(payload?.callId ?? '') !== String(activeCallId)) {
         return;
       }
 
-      const reason = String(payload?.reason ?? 'ended');
-      const message =
-        reason === 'busy'
-          ? 'The other user is already in another call.'
-          : reason === 'declined'
-            ? 'The call was declined.'
-            : 'Call ended.';
-
-      setCallError(message);
+      setCallError('Call ended.');
       resetCallSession({ shouldEmitEnd: false, preserveError: true });
     };
 
     socket.on('call-user', handleCallUser);
+    socket.on('call-accepted', handleCallAccepted);
+    socket.on('call-declined', handleCallDeclined);
     socket.on('call-offer', handleCallOffer);
     socket.on('call-answer', handleCallAnswer);
     socket.on('ice-candidate', handleIceCandidate);
@@ -643,12 +818,21 @@ export default function VideoCall({ activeChat, currentUser }) {
 
     return () => {
       socket.off('call-user', handleCallUser);
+      socket.off('call-accepted', handleCallAccepted);
+      socket.off('call-declined', handleCallDeclined);
       socket.off('call-offer', handleCallOffer);
       socket.off('call-answer', handleCallAnswer);
       socket.off('ice-candidate', handleIceCandidate);
       socket.off('end-call', handleEndCall);
     };
-  }, [currentUser?.userId, currentUser?.username, emitEndCall, resetCallSession]);
+  }, [
+    createPeerConnection,
+    currentUserId,
+    emitPeerSignal,
+    flushPendingIceCandidates,
+    resetCallSession,
+    startOutgoingOffer,
+  ]);
 
   useEffect(
     () => () => {
@@ -660,19 +844,18 @@ export default function VideoCall({ activeChat, currentUser }) {
   );
 
   const callStateLabel =
-    callPhase === 'requesting-media'
-      ? 'Requesting camera and microphone'
-      : callPhase === 'calling'
-        ? 'Calling'
-        : callPhase === 'incoming'
-          ? 'Incoming call'
-          : callPhase === 'connecting'
-            ? 'Connecting peer channel'
-            : callPhase === 'connected'
-              ? 'Connected'
-              : 'Ready';
+    callPhase === 'calling'
+      ? 'Waiting for the other user to accept'
+      : callPhase === 'requesting-media'
+        ? 'Requesting camera and microphone'
+        : callPhase === 'connecting'
+          ? 'Connecting peer channel'
+          : callPhase === 'connected'
+            ? 'Connected'
+            : 'Ready';
 
-  const isCallVisible = callPhase !== 'idle' || Boolean(incomingCall);
+  const isVideoOverlayVisible =
+    callPhase !== 'idle' && callPhase !== 'incoming';
 
   return (
     <>
@@ -686,12 +869,20 @@ export default function VideoCall({ activeChat, currentUser }) {
           type="button"
         >
           <Video size={17} />
-          Video call
+          Video Call
         </button>
       </div>
 
+      <IncomingCallModal
+        callerAvatar={incomingCall?.callerAvatar}
+        callerName={incomingCall?.callerName ?? 'Unknown contact'}
+        isOpen={callPhase === 'incoming' && Boolean(incomingCall)}
+        onAccept={acceptIncomingCall}
+        onDecline={declineIncomingCall}
+      />
+
       <AnimatePresence>
-        {isCallVisible ? (
+        {isVideoOverlayVisible ? (
           <MotionDiv
             animate={{ opacity: 1 }}
             className="video-call-overlay"
@@ -719,7 +910,9 @@ export default function VideoCall({ activeChat, currentUser }) {
                 ) : (
                   <span className="status-pill status-pill--connected">
                     <Video size={14} />
-                    {callPhase === 'connected' ? 'Live peer connection' : 'WebRTC secure path'}
+                    {callPhase === 'connected'
+                      ? 'Live peer connection'
+                      : 'WebRTC secure path'}
                   </span>
                 )}
               </div>
@@ -736,8 +929,8 @@ export default function VideoCall({ activeChat, currentUser }) {
                     <div className="video-call-placeholder">
                       <Video size={26} />
                       <span>
-                        {callPhase === 'incoming'
-                          ? 'Waiting for you to answer'
+                        {callPhase === 'calling'
+                          ? 'Ringing the other user'
                           : 'Waiting for remote video'}
                       </span>
                     </div>
@@ -762,56 +955,34 @@ export default function VideoCall({ activeChat, currentUser }) {
               </div>
 
               <div className="video-call-actions">
-                {incomingCall ? (
-                  <>
-                    <button
-                      className="glass-button video-call-action video-call-action--accept"
-                      disabled={!incomingCall.description}
-                      onClick={answerCall}
-                      type="button"
-                    >
-                      <PhoneIncoming size={18} />
-                      Answer
-                    </button>
-                    <button
-                      className="glass-button video-call-action video-call-action--hangup"
-                      onClick={declineCall}
-                      type="button"
-                    >
-                      <PhoneOff size={18} />
-                      Decline
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      className="glass-button glass-button--ghost video-call-action"
-                      disabled={!localStream}
-                      onClick={toggleMute}
-                      type="button"
-                    >
-                      {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
-                      {isMuted ? 'Unmute' : 'Mute'}
-                    </button>
-                    <button
-                      className="glass-button glass-button--ghost video-call-action"
-                      disabled={!localStream}
-                      onClick={toggleCamera}
-                      type="button"
-                    >
-                      {isCameraEnabled ? <Video size={18} /> : <VideoOff size={18} />}
-                      {isCameraEnabled ? 'Camera on' : 'Camera off'}
-                    </button>
-                    <button
-                      className="glass-button video-call-action video-call-action--hangup"
-                      onClick={endCall}
-                      type="button"
-                    >
-                      <PhoneOff size={18} />
-                      End call
-                    </button>
-                  </>
-                )}
+                <button
+                  className="glass-button glass-button--ghost video-call-action"
+                  disabled={!localStream}
+                  onClick={toggleMute}
+                  type="button"
+                >
+                  {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+                  {isMuted ? 'Unmute' : 'Mute'}
+                </button>
+
+                <button
+                  className="glass-button glass-button--ghost video-call-action"
+                  disabled={!localStream}
+                  onClick={toggleCamera}
+                  type="button"
+                >
+                  {isCameraEnabled ? <Video size={18} /> : <VideoOff size={18} />}
+                  {isCameraEnabled ? 'Camera on' : 'Camera off'}
+                </button>
+
+                <button
+                  className="glass-button video-call-action video-call-action--hangup"
+                  onClick={endCall}
+                  type="button"
+                >
+                  <PhoneOff size={18} />
+                  End call
+                </button>
               </div>
             </MotionDiv>
           </MotionDiv>

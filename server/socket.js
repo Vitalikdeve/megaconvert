@@ -435,6 +435,14 @@ io.on('connection', (socket) => {
     relayPeerEvent({ eventName: 'call-user', payload, socket, userId, callback });
   });
 
+  socket.on('call-accepted', (payload, callback) => {
+    relayPeerEvent({ eventName: 'call-accepted', payload, socket, userId, callback });
+  });
+
+  socket.on('call-declined', (payload, callback) => {
+    relayPeerEvent({ eventName: 'call-declined', payload, socket, userId, callback });
+  });
+
   socket.on('call-offer', (payload, callback) => {
     relayPeerEvent({ eventName: 'call-offer', payload, socket, userId, callback });
   });
