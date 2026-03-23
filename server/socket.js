@@ -94,6 +94,28 @@ const resolveTargetUserId = (payload) => {
   return '';
 };
 
+const getUsernameFromSocket = (socket) => {
+  const auth = socket.handshake.auth || {};
+  const query = socket.handshake.query || {};
+
+  const candidates = [
+    auth.username,
+    auth.handle,
+    query.username,
+    query.handle
+  ];
+
+  for (const value of candidates) {
+    if (!value) continue;
+    const normalized = String(value).trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return 'guest';
+};
+
 const relayPeerEvent = ({ eventName, payload, socket, userId, callback }) => {
   try {
     if (!payload || typeof payload !== 'object') {
@@ -140,6 +162,214 @@ const relayPeerEvent = ({ eventName, payload, socket, userId, callback }) => {
       callback(errorPayload);
     } else {
       socket.emit(`${eventName}-error`, errorPayload);
+    }
+  }
+};
+
+const meetingRooms = new Map();
+
+const normalizeMeetingRoomId = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
+
+const getMeetingRoomKey = (roomId) => `meet_${roomId}`;
+
+const getMeetingRoomParticipants = (roomId) =>
+  Array.from(meetingRooms.get(roomId)?.values() ?? []);
+
+const addMeetingParticipant = ({ roomId, participant }) => {
+  if (!meetingRooms.has(roomId)) {
+    meetingRooms.set(roomId, new Map());
+  }
+
+  meetingRooms.get(roomId).set(participant.peerId, participant);
+};
+
+const removeMeetingParticipant = ({ roomId, peerId }) => {
+  const room = meetingRooms.get(roomId);
+  if (!room) {
+    return;
+  }
+
+  room.delete(peerId);
+  if (room.size === 0) {
+    meetingRooms.delete(roomId);
+  }
+};
+
+const relayMeetingSignal = ({ eventName, payload, socket, userId, username, callback }) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      const error = new Error('Некорректный payload');
+      error.code = 'VALIDATION_ERROR';
+      throw error;
+    }
+
+    const roomId = normalizeMeetingRoomId(payload.roomId);
+    const toPeerId = String(payload.toPeerId || '').trim();
+    if (!roomId) {
+      const error = new Error('roomId обязателен');
+      error.code = 'ROOM_ID_REQUIRED';
+      throw error;
+    }
+
+    if (!toPeerId) {
+      const error = new Error('toPeerId обязателен');
+      error.code = 'TARGET_PEER_REQUIRED';
+      throw error;
+    }
+
+    io.to(toPeerId).emit(eventName, {
+      ...payload,
+      roomId,
+      fromPeerId: socket.id,
+      fromUserId: userId,
+      fromUsername: username
+    });
+
+    if (typeof callback === 'function') {
+      callback({ ok: true, roomId, toPeerId, event: eventName });
+    }
+  } catch (error) {
+    const errorPayload = toSocketError(
+      error,
+      'MEETING_SIGNAL_FAILED',
+      'Не удалось отправить сигнал участнику встречи'
+    );
+
+    if (typeof callback === 'function') {
+      callback(errorPayload);
+    } else {
+      socket.emit(`${eventName}-error`, errorPayload);
+    }
+  }
+};
+
+const relayMeetingMessage = ({ payload, socket, userId, username, callback }) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      const error = new Error('Некорректный payload');
+      error.code = 'VALIDATION_ERROR';
+      throw error;
+    }
+
+    const roomId = normalizeMeetingRoomId(payload.roomId);
+    const message = String(payload.message || payload.text || '').trim();
+    if (!roomId) {
+      const error = new Error('roomId обязателен');
+      error.code = 'ROOM_ID_REQUIRED';
+      throw error;
+    }
+
+    if (!message) {
+      const error = new Error('message обязателен');
+      error.code = 'MESSAGE_REQUIRED';
+      throw error;
+    }
+
+    const activeMeetingRoomId = normalizeMeetingRoomId(socket.data?.meetingRoomId);
+    if (!activeMeetingRoomId || activeMeetingRoomId !== roomId) {
+      const error = new Error('Сначала войдите в комнату встречи');
+      error.code = 'MEETING_ROOM_REQUIRED';
+      throw error;
+    }
+
+    const outgoingMessage = {
+      id: `meeting_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
+      roomId,
+      message,
+      sender: {
+        userId,
+        username: username || String(payload.sender || 'guest').trim() || 'guest'
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    io.to(getMeetingRoomKey(roomId)).emit('meeting-message', outgoingMessage);
+
+    if (typeof callback === 'function') {
+      callback({
+        ok: true,
+        roomId,
+        message: outgoingMessage
+      });
+    }
+  } catch (error) {
+    const errorPayload = toSocketError(
+      error,
+      'MEETING_MESSAGE_FAILED',
+      'Не удалось отправить сообщение встречи'
+    );
+
+    if (typeof callback === 'function') {
+      callback(errorPayload);
+    } else {
+      socket.emit('meeting-message-error', errorPayload);
+    }
+  }
+};
+
+const relayMeetingReaction = ({ payload, socket, userId, username, callback }) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      const error = new Error('Некорректный payload');
+      error.code = 'VALIDATION_ERROR';
+      throw error;
+    }
+
+    const roomId = normalizeMeetingRoomId(payload.roomId);
+    const emoji = String(payload.emoji || '').trim();
+    if (!roomId) {
+      const error = new Error('roomId обязателен');
+      error.code = 'ROOM_ID_REQUIRED';
+      throw error;
+    }
+
+    if (!emoji) {
+      const error = new Error('emoji обязателен');
+      error.code = 'EMOJI_REQUIRED';
+      throw error;
+    }
+
+    const activeMeetingRoomId = normalizeMeetingRoomId(socket.data?.meetingRoomId);
+    if (!activeMeetingRoomId || activeMeetingRoomId !== roomId) {
+      const error = new Error('Сначала войдите в комнату встречи');
+      error.code = 'MEETING_ROOM_REQUIRED';
+      throw error;
+    }
+
+    const outgoingReaction = {
+      id: `reaction_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
+      roomId,
+      emoji,
+      sender: {
+        userId,
+        username: username || String(payload.sender || 'guest').trim() || 'guest'
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    io.to(getMeetingRoomKey(roomId)).emit('reaction', outgoingReaction);
+
+    if (typeof callback === 'function') {
+      callback({
+        ok: true,
+        roomId,
+        reaction: outgoingReaction
+      });
+    }
+  } catch (error) {
+    const errorPayload = toSocketError(
+      error,
+      'MEETING_REACTION_FAILED',
+      'Не удалось отправить реакцию встречи'
+    );
+
+    if (typeof callback === 'function') {
+      callback(errorPayload);
+    } else {
+      socket.emit('reaction-error', errorPayload);
     }
   }
 };
@@ -416,6 +646,7 @@ const processChatMessage = async ({ payload, userId }) => {
 
 io.on('connection', (socket) => {
   const userId = getUserIdFromSocket(socket);
+  const username = getUsernameFromSocket(socket);
 
   if (!userId) {
     socket.emit('error', { code: 'UNAUTHENTICATED', message: 'userId is required to connect' });
@@ -428,7 +659,157 @@ io.on('connection', (socket) => {
   console.log(`[socket] user connected: ${userId}, joined room ${roomName}`);
 
   socket.on('disconnect', (reason) => {
+    const activeMeetingRoomId = normalizeMeetingRoomId(socket.data?.meetingRoomId);
+    if (activeMeetingRoomId) {
+      removeMeetingParticipant({ roomId: activeMeetingRoomId, peerId: socket.id });
+      io.to(getMeetingRoomKey(activeMeetingRoomId)).emit('room-user-left', {
+        roomId: activeMeetingRoomId,
+        peerId: socket.id,
+        userId
+      });
+    }
     console.log(`[socket] user disconnected: ${userId}, reason=${reason}`);
+  });
+
+  socket.on('join-room', (payload, callback) => {
+    try {
+      const roomId = normalizeMeetingRoomId(payload?.roomId ?? payload);
+      if (!roomId) {
+        const error = new Error('roomId обязателен');
+        error.code = 'ROOM_ID_REQUIRED';
+        throw error;
+      }
+
+      const previousRoomId = normalizeMeetingRoomId(socket.data?.meetingRoomId);
+      if (previousRoomId && previousRoomId !== roomId) {
+        removeMeetingParticipant({ roomId: previousRoomId, peerId: socket.id });
+        socket.leave(getMeetingRoomKey(previousRoomId));
+        io.to(getMeetingRoomKey(previousRoomId)).emit('room-user-left', {
+          roomId: previousRoomId,
+          peerId: socket.id,
+          userId
+        });
+      }
+
+      const existingParticipants = getMeetingRoomParticipants(roomId).filter(
+        (participant) => participant.peerId !== socket.id
+      );
+      const participant = {
+        peerId: socket.id,
+        userId,
+        username
+      };
+
+      socket.join(getMeetingRoomKey(roomId));
+      socket.data.meetingRoomId = roomId;
+      addMeetingParticipant({ roomId, participant });
+
+      socket.to(getMeetingRoomKey(roomId)).emit('room-user-joined', {
+        roomId,
+        participant
+      });
+
+      if (typeof callback === 'function') {
+        callback({
+          ok: true,
+          roomId,
+          selfPeerId: socket.id,
+          participants: existingParticipants
+        });
+      }
+    } catch (error) {
+      if (typeof callback === 'function') {
+        callback(toSocketError(error, 'JOIN_ROOM_FAILED', 'Не удалось войти во встречу'));
+      } else {
+        socket.emit('join-room-error', toSocketError(error, 'JOIN_ROOM_FAILED', 'Не удалось войти во встречу'));
+      }
+    }
+  });
+
+  socket.on('leave-room', (payload, callback) => {
+    const roomId = normalizeMeetingRoomId(payload?.roomId ?? payload);
+    if (!roomId) {
+      const errorPayload = {
+        ok: false,
+        code: 'ROOM_ID_REQUIRED',
+        message: 'roomId обязателен'
+      };
+      if (typeof callback === 'function') {
+        callback(errorPayload);
+      } else {
+        socket.emit('leave-room-error', errorPayload);
+      }
+      return;
+    }
+
+    removeMeetingParticipant({ roomId, peerId: socket.id });
+    socket.leave(getMeetingRoomKey(roomId));
+    if (socket.data?.meetingRoomId === roomId) {
+      delete socket.data.meetingRoomId;
+    }
+
+    io.to(getMeetingRoomKey(roomId)).emit('room-user-left', {
+      roomId,
+      peerId: socket.id,
+      userId
+    });
+
+    if (typeof callback === 'function') {
+      callback({ ok: true, roomId });
+    }
+  });
+
+  socket.on('room-offer', (payload, callback) => {
+    relayMeetingSignal({
+      eventName: 'room-offer',
+      payload,
+      socket,
+      userId,
+      username,
+      callback
+    });
+  });
+
+  socket.on('room-answer', (payload, callback) => {
+    relayMeetingSignal({
+      eventName: 'room-answer',
+      payload,
+      socket,
+      userId,
+      username,
+      callback
+    });
+  });
+
+  socket.on('room-ice-candidate', (payload, callback) => {
+    relayMeetingSignal({
+      eventName: 'room-ice-candidate',
+      payload,
+      socket,
+      userId,
+      username,
+      callback
+    });
+  });
+
+  socket.on('meeting-message', (payload, callback) => {
+    relayMeetingMessage({
+      payload,
+      socket,
+      userId,
+      username,
+      callback
+    });
+  });
+
+  socket.on('reaction', (payload, callback) => {
+    relayMeetingReaction({
+      payload,
+      socket,
+      userId,
+      username,
+      callback
+    });
   });
 
   socket.on('call-user', (payload, callback) => {

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import ChatSidebar from '../../components/ChatSidebar.jsx';
 import ChatWindow from '../../components/ChatWindow.jsx';
@@ -23,6 +24,7 @@ export default function ChatPage({
   usersError,
   usersLoading,
 }) {
+  const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState('');
   const [composerValue, setComposerValue] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -58,6 +60,11 @@ export default function ChatPage({
     setAttachments([]);
   };
 
+  const handleCreateMeeting = () => {
+    const roomId = Math.random().toString(36).slice(2, 9);
+    navigate(`/meet/${roomId}`);
+  };
+
   return (
     <div className={`messenger-shell ${isMobileThreadOpen ? 'messenger-shell--thread-open' : ''}`}>
       <MotionDiv
@@ -70,6 +77,7 @@ export default function ChatPage({
           connectionState={connectionState}
           currentUser={currentUser}
           isComposerOpen={isComposerOpen}
+          onCreateMeeting={handleCreateMeeting}
           onCreateChat={handleCreateChat}
           onLogout={onLogout}
           onSearchChange={setSearchValue}

@@ -1,4 +1,4 @@
-import { LogOut, MessageCirclePlus, Search, Wifi, WifiOff } from 'lucide-react';
+import { LogOut, MessageCirclePlus, Search, Video, Wifi, WifiOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const MotionDiv = motion.div;
@@ -37,6 +37,7 @@ export default function ChatSidebar({
   connectionState,
   currentUser,
   isComposerOpen,
+  onCreateMeeting,
   onCreateChat,
   onLogout,
   onSearchChange,
@@ -106,6 +107,14 @@ export default function ChatSidebar({
       </div>
 
       <div className="sidebar-tools" style={{ marginBottom: '1rem', marginLeft: 0 }}>
+        <button
+          className="glass-button glass-button--ghost"
+          onClick={onCreateMeeting}
+          type="button"
+        >
+          <Video size={16} />
+          Create Meeting
+        </button>
         <button
           className="glass-button glass-button--ghost"
           onClick={onToggleComposer}

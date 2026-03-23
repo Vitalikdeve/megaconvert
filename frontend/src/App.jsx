@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 
 import ChatPage from './app/chat/index.jsx';
 import LoginPage from './app/login/index.jsx';
+import MeetPage from './app/meet/index.jsx';
 import RegisterPage from './app/register/index.jsx';
 import { fetchUsers, loginUser, registerUser } from './services/api.js';
 import { socket } from './services/socket.js';
@@ -84,6 +85,14 @@ const normalizeAuthSession = (payload, fallbackUsername) => {
       data.accessToken ??
       data.jwt ??
       nestedUser.token ??
+      null,
+    liveKitToken:
+      data.liveKitToken ??
+      data.livekitToken ??
+      data.participantToken ??
+      nestedUser.liveKitToken ??
+      nestedUser.livekitToken ??
+      nestedUser.participantToken ??
       null,
     userId: String(
       nestedUser.id ??
@@ -327,6 +336,11 @@ export default function App() {
 
     if (pathname.startsWith('/chat')) {
       document.title = 'Mega Messenger | Chat';
+      return;
+    }
+
+    if (pathname.startsWith('/meet')) {
+      document.title = 'Mega Messenger | Meeting';
       return;
     }
 
@@ -674,6 +688,18 @@ export default function App() {
                     usersError={usersError}
                     usersLoading={usersLoading}
                   />
+                </MotionDiv>
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/meet/:roomId"
+            element={
+              session ? (
+                <MotionDiv {...pageTransition}>
+                  <MeetPage currentUser={session} />
                 </MotionDiv>
               ) : (
                 <Navigate to="/login" replace />
