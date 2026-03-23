@@ -54,3 +54,20 @@ export const fetchUsers = (token) =>
   request('/users', {
     token,
   });
+
+export const fetchChatMessages = (chatId, token) =>
+  request(`/api/messages?chatId=${encodeURIComponent(chatId)}`, {
+    token,
+  });
+
+export const sendChatMessage = ({ attachments = [], chatId, clientMessageId, text }, token) =>
+  request('/api/messages', {
+    method: 'POST',
+    token,
+    body: {
+      attachments,
+      chatId,
+      clientMessageId,
+      text,
+    },
+  });

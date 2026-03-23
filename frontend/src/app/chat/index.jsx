@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import ChatSidebar from '../../components/ChatSidebar.jsx';
 import ChatWindow from '../../components/ChatWindow.jsx';
 import MessageInput from '../../components/MessageInput.jsx';
-import VideoCall from '../../components/VideoCall.jsx';
 
 const MotionDiv = motion.div;
 const MotionSection = motion.section;
@@ -48,7 +47,7 @@ export default function ChatPage({
   };
 
   const handleSend = () => {
-    if (!composerValue.trim()) {
+    if (!composerValue.trim() && attachments.length === 0) {
       return;
     }
 
@@ -99,7 +98,6 @@ export default function ChatPage({
         <ChatWindow
           activeChat={activeChat}
           currentUser={currentUser}
-          headerActions={<VideoCall activeChat={activeChat} currentUser={currentUser} />}
           messages={messages}
           onBack={() => setIsMobileThreadOpen(false)}
         />

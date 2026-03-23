@@ -70,6 +70,16 @@ const toSocketError = (error, fallbackCode, fallbackMessage) => ({
   message: String(error?.message || fallbackMessage || 'Внутренняя ошибка')
 });
 
+const normalizeMessageAttachments = (attachments) =>
+  Array.isArray(attachments)
+    ? attachments.filter(Boolean).map((attachment, index) => ({
+        id: String(attachment.id || attachment.name || `attachment-${index}`),
+        name: String(attachment.name || attachment.fileName || `Attachment ${index + 1}`),
+        size: Number(attachment.size || 0),
+        type: String(attachment.type || attachment.mimeType || 'application/octet-stream')
+      }))
+    : [];
+
 const resolveTargetUserId = (payload) => {
   if (!payload || typeof payload !== 'object') {
     return '';
@@ -92,6 +102,116 @@ const resolveTargetUserId = (payload) => {
   }
 
   return '';
+};
+
+const relayRealtimeMessage = ({ payload, socket, userId, username, callback }) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      const error = new Error('Некорректный payload');
+      error.code = 'VALIDATION_ERROR';
+      throw error;
+    }
+
+    const targetUserId = resolveTargetUserId(payload);
+    const text = String(payload.text || payload.message || '').trim();
+    const attachments = normalizeMessageAttachments(payload.attachments);
+    if (!text && attachments.length === 0) {
+      const error = new Error('Текст сообщения или вложения обязательны');
+      error.code = 'MESSAGE_REQUIRED';
+      throw error;
+    }
+
+    const baseMessage = {
+      attachments,
+      chatId: String(payload.chatId || '').trim(),
+      clientMessageId: payload.clientMessageId || null,
+      createdAt: payload.createdAt || new Date().toISOString(),
+      id: String(
+        payload.id || `message_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`
+      ),
+      senderId: String(payload.senderId || userId),
+      senderName: String(payload.senderName || payload.username || username || 'guest').trim() || 'guest',
+      text
+    };
+
+    if (targetUserId && targetUserId !== userId) {
+      io.to(`user_${targetUserId}`).emit('receive_message', {
+        ...baseMessage,
+        chatId: baseMessage.chatId.startsWith('saved:')
+          ? `dm:${userId}`
+          : `dm:${userId}`,
+        toUserId: targetUserId
+      });
+    }
+
+    socket.to(`user_${userId}`).emit('receive_message', {
+      ...baseMessage,
+      toUserId: targetUserId || userId
+    });
+
+    if (typeof callback === 'function') {
+      callback({
+        ok: true,
+        message: {
+          ...baseMessage,
+          toUserId: targetUserId || userId
+        }
+      });
+    }
+  } catch (error) {
+    const errorPayload = toSocketError(
+      error,
+      'REALTIME_MESSAGE_FAILED',
+      'Не удалось переслать сообщение'
+    );
+
+    if (typeof callback === 'function') {
+      callback(errorPayload);
+    } else {
+      socket.emit('send_message-error', errorPayload);
+    }
+  }
+};
+
+const relayTypingIndicator = ({ payload, socket, userId, username, callback }) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      const error = new Error('Некорректный payload');
+      error.code = 'VALIDATION_ERROR';
+      throw error;
+    }
+
+    const targetUserId = resolveTargetUserId(payload);
+    if (!targetUserId || targetUserId === userId) {
+      if (typeof callback === 'function') {
+        callback({ ok: true });
+      }
+      return;
+    }
+
+    io.to(`user_${targetUserId}`).emit('user_typing', {
+      chatId: String(payload.chatId || `dm:${userId}`).trim() || `dm:${userId}`,
+      senderId: userId,
+      senderName: String(payload.senderName || payload.username || username || 'guest').trim() || 'guest',
+      toUserId: targetUserId
+    });
+
+    if (typeof callback === 'function') {
+      callback({ ok: true });
+    }
+  } catch (error) {
+    const errorPayload = toSocketError(
+      error,
+      'TYPING_RELAY_FAILED',
+      'Не удалось передать индикатор набора'
+    );
+
+    if (typeof callback === 'function') {
+      callback(errorPayload);
+    } else {
+      socket.emit('typing-error', errorPayload);
+    }
+  }
 };
 
 const getUsernameFromSocket = (socket) => {
@@ -804,6 +924,26 @@ io.on('connection', (socket) => {
 
   socket.on('reaction', (payload, callback) => {
     relayMeetingReaction({
+      payload,
+      socket,
+      userId,
+      username,
+      callback
+    });
+  });
+
+  socket.on('send_message', (payload, callback) => {
+    relayRealtimeMessage({
+      payload,
+      socket,
+      userId,
+      username,
+      callback
+    });
+  });
+
+  socket.on('typing', (payload, callback) => {
+    relayTypingIndicator({
       payload,
       socket,
       userId,

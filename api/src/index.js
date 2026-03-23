@@ -18,6 +18,8 @@ const nacl = require('tweetnacl');
 const { customAlphabet } = require('nanoid');
 const { TOOL_EXT, TOOL_IDS, TOOL_META } = require('../shared/tools');
 const { createAuthRouter } = require('./auth.controller');
+const { createLivekitRouter } = require('./routes/livekit');
+const { createMessagesRouter } = require('./routes/messages');
 
 const envCandidates = [
   path.join(__dirname, '..', '.env'),
@@ -14394,6 +14396,8 @@ app.post('/auth/2fa/verify-token', (req, res) => {
 
 // Public user auth routes must be above API-key protection middleware.
 app.use('/api/auth', createAuthRouter());
+app.use('/api', createLivekitRouter());
+app.use('/api', createMessagesRouter({ getPgPool, requireUserAuth }));
 
 app.use('/api', requireProtectedApiAccess, enforceApiKeyLimitsIfPresent, apiKeyUsageTracker);
 

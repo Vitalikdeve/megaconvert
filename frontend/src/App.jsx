@@ -6,7 +6,13 @@ import ChatPage from './app/chat/index.jsx';
 import LoginPage from './app/login/index.jsx';
 import MeetPage from './app/meet/index.jsx';
 import RegisterPage from './app/register/index.jsx';
-import { fetchUsers, loginUser, registerUser } from './services/api.js';
+import {
+  fetchChatMessages,
+  fetchUsers,
+  loginUser,
+  registerUser,
+  sendChatMessage,
+} from './services/api.js';
 import { socket } from './services/socket.js';
 
 const MotionDiv = motion.div;
@@ -279,6 +285,61 @@ const mergeMessage = (currentMessages, nextMessage) => {
   );
 };
 
+const normalizeStoredMessage = (payload, { activeChat, session }) => {
+  const senderId = String(
+    payload?.senderId ??
+      payload?.sender_id ??
+      payload?.fromUserId ??
+      payload?.userId ??
+      session.userId
+  );
+  const senderName =
+    senderId === String(session.userId)
+      ? session.username
+      : String(payload?.senderName ?? activeChat?.displayName ?? senderId);
+
+  return {
+    id: String(payload?.id ?? `${activeChat?.id ?? 'chat'}-${payload?.createdAt ?? Date.now()}`),
+    clientMessageId:
+      payload?.clientMessageId ??
+      payload?.client_message_id ??
+      payload?.encryptedContent?.clientMessageId ??
+      null,
+    chatId: String(payload?.chatId ?? activeChat?.id ?? ''),
+    text: String(
+      payload?.text ??
+        payload?.message ??
+        payload?.body ??
+        payload?.ciphertext ??
+        payload?.encryptedContent?.ciphertext ??
+        ''
+    ).trim(),
+    senderId,
+    senderName,
+    createdAt: payload?.createdAt ?? new Date().toISOString(),
+    attachments: normalizeAttachments(
+      payload?.attachments ?? payload?.encryptedContent?.attachments
+    ),
+  };
+};
+
+const normalizeStoredMessagesPayload = (payload, context) => {
+  const source =
+    payload?.messages ??
+    payload?.items ??
+    payload?.data ??
+    payload ??
+    [];
+
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  return source
+    .map((entry) => normalizeStoredMessage(entry, context))
+    .filter((message) => message.text || message.attachments.length > 0);
+};
+
 const ensureChatFromMessage = (chats, message) => {
   if (chats.some((chat) => chat.id === message.chatId)) {
     return chats;
@@ -416,6 +477,11 @@ export default function App() {
     () => (activeChat ? messagesByChat[activeChat.id] ?? [] : []),
     [activeChat, messagesByChat]
   );
+  const activeChatDisplayName = activeChat?.displayName ?? '';
+  const activeChatKey = activeChat?.id ?? '';
+  const sessionToken = session?.token ?? '';
+  const sessionUserId = session?.userId ?? '';
+  const sessionUsername = session?.username ?? '';
 
   useEffect(() => {
     if (!session) {
@@ -478,6 +544,56 @@ export default function App() {
       isMounted = false;
     };
   }, [session]);
+
+  useEffect(() => {
+    if (!sessionToken || !activeChatKey || !sessionUserId || !sessionUsername) {
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    const loadMessages = async () => {
+      try {
+        const payload = await fetchChatMessages(activeChatKey, sessionToken);
+        if (!isMounted) {
+          return;
+        }
+
+        const persistedMessages = normalizeStoredMessagesPayload(payload, {
+          activeChat: {
+            displayName: activeChatDisplayName,
+            id: activeChatKey,
+          },
+          session: {
+            token: sessionToken,
+            userId: sessionUserId,
+            username: sessionUsername,
+          },
+        });
+
+        setMessagesByChat((currentState) => ({
+          ...currentState,
+          [activeChatKey]: persistedMessages,
+        }));
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('Failed to load persisted messages', error);
+        }
+      }
+    };
+
+    void loadMessages();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    activeChatDisplayName,
+    activeChatKey,
+    sessionToken,
+    sessionUserId,
+    sessionUsername,
+  ]);
 
   useEffect(() => {
     if (!session) {
@@ -592,8 +708,8 @@ export default function App() {
     setActiveChatId(nextChatId);
   };
 
-  const handleSendMessage = ({ text, attachments }) => {
-    if (!session || !activeChat || !text.trim()) {
+  const handleSendMessage = async ({ text, attachments }) => {
+    if (!session || !activeChat || (!text.trim() && attachments.length === 0)) {
       return;
     }
 
@@ -612,17 +728,49 @@ export default function App() {
       ),
     }));
 
-    socketRef.current?.emit('send_message', {
-      id: optimisticMessage.id,
-      clientMessageId: optimisticMessage.clientMessageId,
-      chatId: activeChat.id,
-      text: optimisticMessage.text,
-      username: session.username,
-      senderId: session.userId,
-      toUserId: activeChat.userId,
-      createdAt: optimisticMessage.createdAt,
-      attachments: optimisticMessage.attachments,
-    });
+    try {
+      const payload = await sendChatMessage(
+        {
+          attachments: optimisticMessage.attachments,
+          chatId: activeChat.id,
+          clientMessageId: optimisticMessage.clientMessageId,
+          text: optimisticMessage.text,
+        },
+        session.token
+      );
+
+      const persistedMessage = normalizeStoredMessage(payload?.message ?? payload, {
+        activeChat,
+        session,
+      });
+
+      setMessagesByChat((currentState) => ({
+        ...currentState,
+        [activeChat.id]: mergeMessage(
+          currentState[activeChat.id] ?? [],
+          persistedMessage
+        ),
+      }));
+
+      if (!activeChat.isSavedMessages && activeChat.userId) {
+        socketRef.current?.emit('send_message', {
+          attachments: persistedMessage.attachments,
+          chatId: persistedMessage.chatId,
+          clientMessageId: persistedMessage.clientMessageId,
+          createdAt: persistedMessage.createdAt,
+          id: persistedMessage.id,
+          senderId: session.userId,
+          senderName: persistedMessage.senderName,
+          text: persistedMessage.text,
+          toUserId: activeChat.userId,
+          username: session.username,
+        });
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Failed to persist message', error);
+      }
+    }
   };
 
   return (

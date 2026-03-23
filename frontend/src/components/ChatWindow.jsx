@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react';
 
 import MessageBubble from './MessageBubble.jsx';
 
+const AUTO_SCROLL_THRESHOLD = 96;
+
 export default function ChatWindow({
   activeChat,
   currentUser,
@@ -10,10 +12,38 @@ export default function ChatWindow({
   messages,
   onBack,
 }) {
-  const messageEndRef = useRef(null);
+  const messageListRef = useRef(null);
+  const previousChatIdRef = useRef(activeChat?.id ?? null);
+  const previousMessageCountRef = useRef(messages.length);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const messageListNode = messageListRef.current;
+    if (!messageListNode) {
+      return;
+    }
+
+    const nextChatId = activeChat?.id ?? null;
+    const previousChatId = previousChatIdRef.current;
+    const previousMessageCount = previousMessageCountRef.current;
+    const isChatChanged = nextChatId !== previousChatId;
+    const isNearBottom =
+      messageListNode.scrollHeight -
+        messageListNode.scrollTop -
+        messageListNode.clientHeight <=
+      AUTO_SCROLL_THRESHOLD;
+
+    if (isChatChanged || (messages.length > previousMessageCount && isNearBottom)) {
+      window.requestAnimationFrame(() => {
+        if (!messageListRef.current) {
+          return;
+        }
+
+        messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      });
+    }
+
+    previousChatIdRef.current = nextChatId;
+    previousMessageCountRef.current = messages.length;
   }, [activeChat?.id, messages]);
 
   if (!activeChat) {
@@ -60,7 +90,7 @@ export default function ChatWindow({
         </div>
       </header>
 
-      <div className="message-list">
+      <div className="message-list" ref={messageListRef}>
         {messages.length === 0 ? (
           <div className="empty-state">
             Send the first message to {activeChat.isSavedMessages ? 'yourself' : activeChat.displayName}.
@@ -74,8 +104,6 @@ export default function ChatWindow({
             message={message}
           />
         ))}
-
-        <div ref={messageEndRef} />
       </div>
     </div>
   );
