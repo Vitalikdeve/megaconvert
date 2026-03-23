@@ -1,13 +1,13 @@
 import { io } from 'socket.io-client';
 
-import { SOCKET_PATH, SOCKET_URL } from '../config/api.js';
+const websocketUrl = import.meta.env.VITE_WS_URL;
 
-export const createSocketClient = () =>
-  io(SOCKET_URL, {
-    autoConnect: true,
-    path: SOCKET_PATH,
-    transports: ['websocket'],
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 2000,
-  });
+export const socket = io(websocketUrl, {
+  autoConnect: false,
+  path: '/socket.io',
+  transports: ['websocket'],
+  withCredentials: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 2000,
+});

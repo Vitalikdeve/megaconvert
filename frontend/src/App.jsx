@@ -6,7 +6,7 @@ import ChatPage from './app/chat/index.jsx';
 import LoginPage from './app/login/index.jsx';
 import RegisterPage from './app/register/index.jsx';
 import { fetchUsers, loginUser, registerUser } from './services/api.js';
-import { createSocketClient } from './services/socket.js';
+import { socket } from './services/socket.js';
 
 const MotionDiv = motion.div;
 
@@ -467,14 +467,14 @@ export default function App() {
 
   useEffect(() => {
     if (!session) {
-      socketRef.current?.disconnect();
+      socket.disconnect();
       socketRef.current = null;
       setConnectionState('offline');
       return undefined;
     }
 
-    const socket = createSocketClient();
     socketRef.current = socket;
+    socket.connect();
 
     const handleConnect = () => {
       setConnectionState('connected');
