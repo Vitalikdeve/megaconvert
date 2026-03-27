@@ -1,0 +1,37 @@
+{
+  "name": "@megaconvert/database",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "clean": "rimraf dist",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "db:migrate": "tsx src/cli/run-migrations.ts",
+    "db:seed": "tsx src/cli/run-seeds.ts",
+    "drizzle:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "drizzle:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.package.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@megaconvert/config": "workspace:^",
+    "@megaconvert/contracts": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.5",
+    "drizzle-kit": "^0.31.4"
+  }
+}

@@ -1,0 +1,1 @@
+export const AUDIT_TRAIL_WRITER = Symbol('AUDIT_TRAIL_WRITER');

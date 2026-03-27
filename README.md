@@ -1,6 +1,6 @@
 # Mega Messenger
 
-Messenger-first frontend wired to the existing VPS backend.
+Messenger-first frontend with a local-first development stack and remote-compatible rewrites.
 
 ## Target Structure
 ```text
@@ -43,7 +43,7 @@ messenger-platform/
 - API: `http://35.202.253.153:4000`
 - Socket.io: `http://35.202.253.153:4001`
 
-## Local Commands
+## Local Development
 From the repo root:
 
 ```powershell
@@ -51,7 +51,29 @@ npm install
 ```
 
 ```powershell
+npm run dev:local
+```
+
+This starts:
+- Docker infra for Postgres, Redis, MinIO, and LiveKit
+- local REST API on `http://127.0.0.1:3000`
+- local Socket.io realtime server on `http://127.0.0.1:4000`
+- Vite frontend on `http://localhost:5173`
+
+If Docker Desktop networking gives you trouble with LiveKit media on Windows, stop the `livekit` container and run `livekit-server --dev --bind 0.0.0.0` natively instead.
+
+Useful commands:
+
+```powershell
 npm run dev
+```
+
+```powershell
+npm run dev:infra
+```
+
+```powershell
+npm run dev:infra:stop
 ```
 
 ```powershell
@@ -64,5 +86,6 @@ npm run lint
 
 ## Notes
 - The frontend sends `send_message` over Socket.io and updates the chat UI optimistically.
-- The backend API server, backend routes, Docker setup, and database schemas were intentionally left unchanged.
+- Local messenger auth stores users in the running API process, so create at least two accounts in two browser sessions if you want to test direct chats end-to-end.
+- Meeting rooms now request a scoped LiveKit token from the local API instead of trying to reuse the auth session token.
 

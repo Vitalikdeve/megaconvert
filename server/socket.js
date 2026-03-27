@@ -4,7 +4,13 @@ const { Server } = require('socket.io');
 const { Pool } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const port = Number(process.env.SOCKET_PORT || process.env.PORT || 4000);
+const IS_LOCAL_DEVELOPMENT =
+  !process.env.VERCEL &&
+  String(process.env.NODE_ENV || 'development').trim().toLowerCase() !== 'production';
+const DEFAULT_LOCAL_DATABASE_URL = String(
+  process.env.LOCAL_DATABASE_URL_FALLBACK || 'postgresql://megaconvert:megaconvert@127.0.0.1:5432/megaconvert'
+).trim();
+const port = Number(process.env.SOCKET_PORT || 4000);
 const CHANNEL_ADMIN_ROLES = new Set(['owner', 'admin']);
 const SYSTEM_MESSAGES_RU = {
   channelCreated: (adminName, channelName) => `${adminName} создал канал ${channelName}`,
@@ -16,6 +22,7 @@ const resolveDbConnectionString = () => {
     process.env.DATABASE_URL
       || process.env.POSTGRES_URL
       || process.env.POSTGRES_PRISMA_URL
+      || (IS_LOCAL_DEVELOPMENT ? DEFAULT_LOCAL_DATABASE_URL : '')
       || ''
   ).trim();
 };

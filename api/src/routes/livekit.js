@@ -1,10 +1,16 @@
 const { Router } = require('express');
 const { AccessToken } = require('livekit-server-sdk');
 
-const LIVEKIT_API_KEY = String(process.env.LIVEKIT_API_KEY || 'megakey').trim() || 'megakey';
+const IS_LOCAL_DEVELOPMENT =
+  !process.env.VERCEL &&
+  String(process.env.NODE_ENV || 'development').trim().toLowerCase() !== 'production';
+const LIVEKIT_API_KEY = String(
+  process.env.LIVEKIT_API_KEY || (IS_LOCAL_DEVELOPMENT ? 'devkey' : 'megakey')
+).trim() || (IS_LOCAL_DEVELOPMENT ? 'devkey' : 'megakey');
 const LIVEKIT_API_SECRET = String(
-  process.env.LIVEKIT_API_SECRET || 'supersecretkey12345678901234567890'
-).trim() || 'supersecretkey12345678901234567890';
+  process.env.LIVEKIT_API_SECRET ||
+    (IS_LOCAL_DEVELOPMENT ? 'secret' : 'supersecretkey12345678901234567890')
+).trim() || (IS_LOCAL_DEVELOPMENT ? 'secret' : 'supersecretkey12345678901234567890');
 const LIVEKIT_TOKEN_TTL_SECONDS = Math.max(
   60,
   Number(process.env.LIVEKIT_TOKEN_TTL_SECONDS || 60 * 60)

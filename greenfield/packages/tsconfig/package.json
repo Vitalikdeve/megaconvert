@@ -1,0 +1,12 @@
+{
+  "name": "@megaconvert/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./base.json": "./base.json",
+    "./nest-app.json": "./nest-app.json",
+    "./next-app.json": "./next-app.json",
+    "./node-library.json": "./node-library.json",
+    "./react-library.json": "./react-library.json"
+  }
+}

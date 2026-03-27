@@ -1,0 +1,14 @@
+port: 7880
+rtc:
+  port_range_end: 50010
+  port_range_start: 50000
+keys:
+  devkey: devsecret
+logging:
+  level: info
+redis:
+  address: redis:6379
+turn:
+  enabled: true
+  tls_port: 0
+  udp_port: 3478

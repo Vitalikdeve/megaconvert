@@ -1,0 +1,21 @@
+{
+  "name": "@megaconvert/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "peerDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@next/eslint-plugin-next": "^16.0.0",
+    "eslint": "^9.35.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.4.0",
+    "typescript-eslint": "^8.43.0"
+  }
+}

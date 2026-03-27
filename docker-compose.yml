@@ -121,6 +121,17 @@ services:
     mem_limit: 220m
     mem_reservation: 120m
     pids_limit: 150
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --dev --bind 0.0.0.0
+    restart: unless-stopped
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    mem_limit: 256m
+    mem_reservation: 128m
+    pids_limit: 150
   redis:
     image: redis:7
     command: >

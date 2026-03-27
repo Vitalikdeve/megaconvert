@@ -4,11 +4,23 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "postinstall": "npm --prefix frontend install",
+    "postinstall": "npm --prefix frontend install && npm --prefix api install",
     "dev": "npm --prefix frontend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:api": "npm --prefix api start",
+    "dev:socket": "node server/socket.js",
+    "dev:infra": "docker compose up -d postgres redis minio minio-init livekit",
+    "dev:infra:stop": "docker compose stop postgres redis minio minio-init livekit",
+    "dev:local": "npm run dev:infra && concurrently -k -n api,socket,frontend \"npm run dev:api\" \"npm run dev:socket\" \"npm run dev:frontend\"",
     "build": "npm --prefix frontend run build",
     "lint": "npm --prefix frontend run lint",
     "preview": "npm --prefix frontend run preview",
     "test:e2e": "npm --prefix frontend run test:e2e"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "dotenv": "^16.6.1",
+    "pg": "^8.16.3",
+    "socket.io": "^4.8.1"
   }
 }

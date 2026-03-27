@@ -1,0 +1,23 @@
+{
+  "name": "@megaconvert/shared-kernel",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "clean": "rimraf dist",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "lint": "eslint .",
+    "test": "vitest run --config ../../vitest.package.config.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}

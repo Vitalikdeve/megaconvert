@@ -17,7 +17,7 @@ const jwt = require('jsonwebtoken');
 const nacl = require('tweetnacl');
 const { customAlphabet } = require('nanoid');
 const { TOOL_EXT, TOOL_IDS, TOOL_META } = require('../shared/tools');
-const { createAuthRouter } = require('./auth.controller');
+const { createAuthRouter, users: authUsers } = require('./auth.controller');
 const { createLivekitRouter } = require('./routes/livekit');
 const { createMessagesRouter } = require('./routes/messages');
 
@@ -261,6 +261,10 @@ const ANALYTICS_FALLBACK_FILE = String(
 const ANALYTICS_FALLBACK_MAX_ROWS = Math.max(1000, Number(process.env.ANALYTICS_FALLBACK_MAX_ROWS || 50000));
 const ANALYTICS_FALLBACK_MAX_LATENCY_POINTS = Math.max(100, Number(process.env.ANALYTICS_FALLBACK_MAX_LATENCY_POINTS || 10000));
 const ANALYTICS_FALLBACK_INGEST_ENABLED = parseEnvBoolean(process.env.ANALYTICS_FALLBACK_INGEST_ENABLED, true);
+const IS_LOCAL_DEVELOPMENT = !process.env.VERCEL && String(process.env.NODE_ENV || 'development').trim().toLowerCase() !== 'production';
+const DEFAULT_LOCAL_DATABASE_URL = String(
+  process.env.LOCAL_DATABASE_URL_FALLBACK || 'postgresql://megaconvert:megaconvert@127.0.0.1:5432/megaconvert'
+).trim();
 const DATABASE_ENV_CANDIDATES = [
   'DATABASE_URL',
   'POSTGRES_URL',
@@ -268,7 +272,9 @@ const DATABASE_ENV_CANDIDATES = [
   'POSTGRES_URL_NON_POOLING',
   'PG_CONNECTION_STRING'
 ];
-const { key: DATABASE_URL_SOURCE, value: DATABASE_URL } = readFirstEnvValue(DATABASE_ENV_CANDIDATES);
+const { key: resolvedDatabaseUrlSource, value: resolvedDatabaseUrl } = readFirstEnvValue(DATABASE_ENV_CANDIDATES);
+const DATABASE_URL = resolvedDatabaseUrl || (IS_LOCAL_DEVELOPMENT ? DEFAULT_LOCAL_DATABASE_URL : '');
+const DATABASE_URL_SOURCE = resolvedDatabaseUrlSource || (DATABASE_URL ? 'local_default' : null);
 const PROMO_CODES_ENABLED = parseEnvBoolean(process.env.PROMO_CODES_ENABLED, true);
 const PROMO_QUERY_TIMEOUT_MS = Math.max(500, Number(process.env.PROMO_QUERY_TIMEOUT_MS || 5000));
 const PROMO_DB_POOL_MAX = Math.max(1, Number(process.env.PROMO_DB_POOL_MAX || 10));
@@ -14398,6 +14404,32 @@ app.post('/auth/2fa/verify-token', (req, res) => {
 app.use('/api/auth', createAuthRouter());
 app.use('/api', createLivekitRouter());
 app.use('/api', createMessagesRouter({ getPgPool, requireUserAuth }));
+app.get('/api/users', requireUserAuth, (req, res) => {
+  const currentUserId = String(req.user?.id || '').trim();
+  const users = authUsers
+    .filter(Boolean)
+    .map((user) => {
+      const username =
+        String(user?.name || user?.username || user?.email || '').trim() ||
+        `user-${String(user?.id || 'local')}`;
+
+      return {
+        id: String(user?.id || username),
+        username,
+        displayName: username,
+        subtitle: 'Local development account',
+        status: 'online',
+        avatarUrl: null
+      };
+    })
+    .filter((user) => user.id !== currentUserId)
+    .sort((left, right) => left.username.localeCompare(right.username));
+
+  return res.json({
+    ok: true,
+    users
+  });
+});
 
 app.use('/api', requireProtectedApiAccess, enforceApiKeyLimitsIfPresent, apiKeyUsageTracker);
 

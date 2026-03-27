@@ -20,6 +20,26 @@
   ],
   "rewrites": [
     {
+      "source": "/api/auth/login",
+      "destination": "http://35.202.253.153:4000/login"
+    },
+    {
+      "source": "/api/auth/register",
+      "destination": "http://35.202.253.153:4000/register"
+    },
+    {
+      "source": "/api/users",
+      "destination": "http://35.202.253.153:4000/users"
+    },
+    {
+      "source": "/api/messages",
+      "destination": "http://35.202.253.153:4000/api/messages"
+    },
+    {
+      "source": "/api/livekit-token",
+      "destination": "http://35.202.253.153:4000/api/livekit-token"
+    },
+    {
       "source": "/api/backend/:match*",
       "destination": "http://35.202.253.153:4000/:match*"
     },

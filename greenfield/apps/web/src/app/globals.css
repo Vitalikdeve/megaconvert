@@ -1,0 +1,72 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-accent: var(--mc-color-accent);
+  --color-accent-soft: var(--mc-color-accent-soft);
+  --color-canvas: var(--mc-color-canvas);
+  --color-canvas-alt: var(--mc-color-canvas-alt);
+  --color-danger: var(--mc-color-danger);
+  --color-highlight: var(--mc-color-highlight);
+  --color-ink: var(--mc-color-ink);
+  --color-ink-muted: var(--mc-color-ink-muted);
+  --color-ink-subtle: var(--mc-color-ink-subtle);
+  --color-panel: var(--mc-color-panel);
+  --color-success: var(--mc-color-success);
+  --color-surface: var(--mc-color-surface);
+  --color-surface-raised: var(--mc-color-surface-raised);
+  --color-surface-strong: var(--mc-color-surface-strong);
+  --color-warning: var(--mc-color-warning);
+  --color-outline-soft: var(--mc-outline-soft);
+  --color-outline-strong: var(--mc-outline-strong);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+  --shadow-panel: var(--mc-shadow-card);
+  --shadow-soft: var(--mc-shadow-soft);
+}
+
+html {
+  min-height: 100%;
+  background: var(--mc-color-canvas);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-body), sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--mc-color-accent) 18%, transparent);
+}
+
+.shell-page {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6rem);
+}
+
+@media (min-width: 1024px) {
+  .shell-page {
+    padding-bottom: 0;
+  }
+}

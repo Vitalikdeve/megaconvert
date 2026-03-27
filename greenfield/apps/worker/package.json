@@ -1,0 +1,29 @@
+{
+  "name": "@megaconvert/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rimraf dist tsconfig.tsbuildinfo tsconfig.build.tsbuildinfo",
+    "dev": "tsx watch --clear-screen=false --include ../../packages/**/dist/**/*.js src/main.ts",
+    "lint": "eslint .",
+    "start": "node dist/main.js",
+    "test": "jest --config ./jest.config.cjs --runInBand",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@megaconvert/config": "workspace:*",
+    "@megaconvert/contracts": "workspace:*",
+    "@megaconvert/database": "workspace:*",
+    "@megaconvert/server-kit": "workspace:*",
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-fastify": "^11.1.6",
+    "fastify": "^5.6.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.1.6"
+  }
+}
